@@ -6,24 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type parseResult struct {
-	output   []string
-	callback P4dOutputCallback
-}
-
-func newResult() *parseResult {
-	var pr parseResult
-	pr.output = []string{}
-	pr.callback = func(o string) {
-		pr.output = append(pr.output, o)
+func getResult(output chan string) []string {
+	lines := []string{}
+	for line := range output {
+		lines = append(lines, line)
 	}
-	return &pr
+	return lines
 }
 
 func TestLogParse(t *testing.T) {
 	opts := new(P4dParseOptions)
-	result := newResult()
-	fp := NewP4dFileParser(result.callback)
+	outchan := make(chan string)
+	fp := NewP4dFileParser(outchan)
 	opts.testInput = `
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 robert@robert-test 127.0.0.1 [Microsoft Visual Studio 2013/12.0.21005.1] 'user-sync //...'
@@ -31,44 +25,47 @@ Perforce server info:
 	2015/09/02 15:23:09 pid 1616 compute end .031s
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .031s`
-	fp.P4LogParseFile(*opts)
+	go fp.P4LogParseFile(*opts)
+	output := getResult(outchan)
 	assert.Equal(t, `{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":1,"user":"robert","workspace":"robert-test","computeLapse":"0.031","completedLapse":"0.031","ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
-		result.output[0])
+		output[0])
 
-	// Sames as above with invalud Unicode strings
-	result = newResult()
-	fp = NewP4dFileParser(result.callback)
+	// Sames as above with invalid Unicode strings
+	outchan = make(chan string)
+	fp = NewP4dFileParser(outchan)
 	opts.testInput = `Perforce server info:
 	2015/09/02 15:23:09 pid 1616 robert@robert-test 127.0.0.1 [Microsoft® Visual Studio® 2013/12.0.21005.1] 'user-sync //...'
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 compute end .031s
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .031s`
-	fp.P4LogParseFile(*opts)
+	go fp.P4LogParseFile(*opts)
+	output = getResult(outchan)
 	assert.Equal(t, `{"processKey":"1f360d628fb2c9fe5354b8cf5022f7bd","cmd":"user-sync","pid":1616,"lineNo":1,"user":"robert","workspace":"robert-test","computeLapse":"0.031","completedLapse":"0.031","ip":"127.0.0.1","app":"Microsoft® Visual Studio® 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
-		result.output[0])
+		output[0])
 
 }
 
 func TestLogParseSwarm(t *testing.T) {
 	opts := new(P4dParseOptions)
-	result := newResult()
-	fp := NewP4dFileParser(result.callback)
+	outchan := make(chan string)
+	fp := NewP4dFileParser(outchan)
 	opts.testInput = `
 Perforce server info:
 	2016/12/21 08:39:39 pid 14769 perforce@~tmp.1482305462.13038.585a2fb6041cc1.60954329 192.168.18.31 [SWARM/2016.2/1446446] 'user-counter -u swarm-activity-fffec3dd {"type":"change","link":["change",{"change":1005814}],"user":"sahaltran05","action":"committed","target":"change 1005814","preposition":"into","description":"Mac address filtering and fixing the naming collision for the SSH and telnet libraries\n","details":null,"topic":"changes\/1005814","depotFile":null,"time":1482305978,"behalfOf":null,"projects":{"sah-automation":["sah-tests"]},"streams":["user-sahaltran05","personal-sahaltran05","project-sah-automation","group-p4altran","group-sah_app","group-sah_commun_modules","group-sah_components","group-sah_demo","group-sah_hardco","group-sah_nanterre","group-sah_nanterre_opensource","group-sah_opensource","group-sah_stbconfig","group-sah_stbconfig_dev","group-sah_system","group-sah_third_party","group-sah_validation","group-sah_wijgmaal","personal-sah4011"],"change":1005814}'
 Perforce server info:
 	2016/12/21 08:39:39 pid 14769 completed .003s 4+0us 0+16io 0+0net 6432k 0pf
 	`
-	fp.P4LogParseFile(*opts)
+	go fp.P4LogParseFile(*opts)
+	output := getResult(outchan)
 	assert.Equal(t, `{"processKey":"d0ae06fd40d95180ca403a9c30084a66","cmd":"user-counter","pid":14769,"lineNo":1,"user":"perforce","workspace":"~tmp.1482305462.13038.585a2fb6041cc1.60954329","computeLapse":"","completedLapse":"0.003","ip":"192.168.18.31","app":"SWARM/2016.2/1446446","args":"-u swarm-activity-fffec3dd","startTime":"2016/12/21 08:39:39","endTime":"2016/12/21 08:39:39"}`,
-		result.output[0])
+		output[0])
 }
 
 func TestLogParseGitFusion(t *testing.T) {
 	opts := new(P4dParseOptions)
-	result := newResult()
-	fp := NewP4dFileParser(result.callback)
+	outchan := make(chan string)
+	fp := NewP4dFileParser(outchan)
 	opts.testInput = `
 Perforce server info:
 	2016/10/19 12:01:08 pid 10664 git-fusion-user@GF-TRIGGER-567d67de-962 10.100.104.199 [p4/2016.1/NTX64/1396108] 'user-key git-fusion-reviews-common-lock-owner {"server_id": "p4gf_submit_trigger", "process_id": 5068, "start_time": "2016-10-19 12:01:08"}'
@@ -96,15 +93,16 @@ Perforce server info:
 ---   total lock wait+held read/write 0ms+641ms/0ms+0ms
 Perforce server info:
 	2016/10/19 12:01:09 pid 10664 completed .844s`
-	fp.P4LogParseFile(*opts)
+	go fp.P4LogParseFile(*opts)
+	output := getResult(outchan)
 	assert.Equal(t, `{"processKey":"1eec998ae9cc1ce44058f4503a01f2c0","cmd":"user-key","pid":10664,"lineNo":1,"user":"git-fusion-user","workspace":"GF-TRIGGER-567d67de-962","computeLapse":"","completedLapse":"0.844","ip":"10.100.104.199","app":"p4/2016.1/NTX64/1396108","args":"git-fusion-reviews-common-lock-owner","startTime":"2016/10/19 12:01:08","endTime":"2016/10/19 12:01:09"}`,
-		result.output[0])
+		output[0])
 }
 
 func TestLogParseMulti(t *testing.T) {
 	opts := new(P4dParseOptions)
-	result := newResult()
-	fp := NewP4dFileParser(result.callback)
+	outchan := make(chan string)
+	fp := NewP4dFileParser(outchan)
 	opts.testInput = `
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 robert@robert-test 127.0.0.1 [p4/2016.2/LINUX26X86_64/1598668] 'user-sync //...'
@@ -118,18 +116,19 @@ Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .031s
 Perforce server info:
 	2015/09/02 15:23:09 pid 1534 completed .041s`
-	fp.P4LogParseFile(*opts)
-	assert.Equal(t, 2, len(result.output))
+	go fp.P4LogParseFile(*opts)
+	output := getResult(outchan)
+	assert.Equal(t, 2, len(output))
 	assert.Equal(t, `{"processKey":"f9a64670da4d77a44225be236974bc8b","cmd":"user-sync","pid":1616,"lineNo":1,"user":"robert","workspace":"robert-test","computeLapse":"0.031","completedLapse":"0.031","ip":"127.0.0.1","app":"p4/2016.2/LINUX26X86_64/1598668","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
-		result.output[0])
+		output[0])
 	assert.Equal(t, `{"processKey":"2908cdb35e4b82dae3d0b403ef0c3bbf","cmd":"user-sync","pid":1534,"lineNo":5,"user":"fred","workspace":"fred-test","computeLapse":"0.021","completedLapse":"0.041","ip":"127.0.0.1","app":"p4/2016.2/LINUX26X86_64/1598668","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
-		result.output[1])
+		output[1])
 }
 
 func TestLogParseSubmit(t *testing.T) {
 	opts := new(P4dParseOptions)
-	result := newResult()
-	fp := NewP4dFileParser(result.callback)
+	outchan := make(chan string)
+	fp := NewP4dFileParser(outchan)
 	opts.testInput = `
 Perforce server info:
 	2018/06/10 23:30:06 pid 25568 fred@lon_ws 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'user-submit -i'
@@ -167,12 +166,13 @@ Perforce server info:
 ---   total lock wait+held read/write 0ms+0ms/0ms+780ms
 
 `
-	fp.P4LogParseFile(*opts)
-	assert.Equal(t, 3, len(result.output))
+	go fp.P4LogParseFile(*opts)
+	output := getResult(outchan)
+	assert.Equal(t, 3, len(output))
 	assert.Equal(t, `{"processKey":"465f0a630b021d3c695e90924a757b75","cmd":"user-submit","pid":25568,"lineNo":1,"user":"fred","workspace":"lon_ws","computeLapse":"","completedLapse":"0.178","ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"-i","startTime":"2018/06/10 23:30:06","endTime":"2018/06/10 23:30:07"}`,
-		result.output[0])
+		output[0])
 	assert.Equal(t, `{"processKey":"78dbd54644e624a9c6f5c338a0864d2a","cmd":"dm-SubmitChange","pid":25568,"lineNo":6,"user":"fred","workspace":"lon_ws","computeLapse":"0.252","completedLapse":"1.38","ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:07","endTime":"2018/06/10 23:30:08"}`,
-		result.output[1])
+		output[1])
 	assert.Equal(t, `{"processKey":"128e10d7fe570c2d2f5f7f03e1186827","cmd":"dm-CommitSubmit","pid":25568,"lineNo":14,"user":"fred","workspace":"lon_ws","computeLapse":"","completedLapse":"1.38","ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:08","endTime":"2018/06/10 23:30:09"}`,
-		result.output[2])
+		output[2])
 }

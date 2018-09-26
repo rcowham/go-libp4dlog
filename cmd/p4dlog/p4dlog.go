@@ -10,21 +10,6 @@ import (
 	"github.com/rcowham/go-libp4dlog"
 )
 
-type parseResult struct {
-	buf      bufio.Writer
-	callback p4dlog.P4dOutputCallback
-}
-
-func newResult() *parseResult {
-	var pr parseResult
-	buf := bufio.NewWriterSize(os.Stdout, 1024*1024)
-	defer buf.Flush()
-	pr.callback = func(output string) {
-		fmt.Fprintf(buf, "%s\n", output)
-	}
-	return &pr
-}
-
 func main() {
 	// CPU profiling by default
 	defer profile.Start().Stop()
@@ -38,7 +23,14 @@ func main() {
 	}
 	opts := new(p4dlog.P4dParseOptions)
 	opts.File = *filename
-	presult := newResult()
-	fp := p4dlog.NewP4dFileParser(presult.callback)
-	fp.P4LogParseFile(*opts)
+	outchan := make(chan string)
+	fp := p4dlog.NewP4dFileParser(outchan)
+	go fp.P4LogParseFile(*opts)
+
+	buf := bufio.NewWriterSize(os.Stdout, 1024*1024)
+	defer buf.Flush()
+	for line := range outchan {
+		fmt.Fprintf(buf, "%s\n", line)
+	}
+
 }

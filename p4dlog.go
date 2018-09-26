@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/elastic/beats/libbeat/logp"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -35,6 +36,8 @@ var reCmdNoarg = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid 
 var reCompute = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) compute end ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reCompleted = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) completed ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reJSONCmdargs = regexp.MustCompile(`^(.*) \{.*\}$`)
+
+var infoBlock = []byte("Perforce server info:")
 
 func toInt64(buf []byte) (n int64) {
 	for _, v := range buf {
@@ -131,28 +134,27 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 }
 
 func (c *Command) updateFrom(cmd *Command) {
-	// Do Nothing
+	// Do nothing for now
 }
 
-// P4dOutputCallback is function to output JSON objects
-type P4dOutputCallback func(output string)
-
-// P4dFileParser manages state
+// P4dFileParser - manages state
 type P4dFileParser struct {
 	lineNo             int64
 	cmds               map[int64]*Command
-	output             P4dOutputCallback
+	output             chan string
 	currStartTime      time.Time
 	pidsSeenThisSecond map[int64]bool
 	running            int
+	block              *Block
 }
 
 // NewP4dFileParser - create and initialise properly
-func NewP4dFileParser(callback P4dOutputCallback) *P4dFileParser {
+func NewP4dFileParser(output chan string) *P4dFileParser {
 	var fp P4dFileParser
 	fp.cmds = make(map[int64]*Command)
 	fp.pidsSeenThisSecond = make(map[int64]bool)
-	fp.output = callback
+	fp.output = output
+	fp.block = new(Block)
 	return &fp
 }
 
@@ -192,11 +194,12 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 
 // Output a single command to callback
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
+	logp.Debug("outputCmd Called", "")
 	if fp.output != nil {
 		lines := []string{}
 		lines = append(lines, fmt.Sprintf("%v", cmd))
 		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.output(strings.Join(lines, `\n`))
+			fp.output <- strings.Join(lines, `\n`)
 		}
 	}
 }
@@ -319,6 +322,35 @@ func blockEnd(line []byte) bool {
 	return false
 }
 
+// P4LogParseLine - interface for incremental parsing
+func (fp *P4dFileParser) P4LogParseLine(line []byte) {
+	if blockEnd(line) {
+		if len(fp.block.lines) > 0 {
+			if bytes.Equal(fp.block.lines[0], infoBlock) {
+				fp.processInfoBlock(fp.block)
+			} else if blankLine(fp.block.lines[0]) {
+				fp.outputCompletedCommands()
+			}
+		}
+		fp.block = new(Block)
+		fp.block.addLine(line, fp.lineNo)
+	} else {
+		fp.block.addLine(line, fp.lineNo)
+	}
+	fp.lineNo++
+}
+
+// P4LogParseFinish - interface for incremental parsing
+func (fp *P4dFileParser) P4LogParseFinish() {
+	if len(fp.block.lines) > 0 {
+		if bytes.Equal(fp.block.lines[0], infoBlock) {
+			fp.processInfoBlock(fp.block)
+		}
+	}
+	fp.outputRemainingCommands()
+	close(fp.output)
+}
+
 // P4LogParseFile - interface for parsing a specified file
 func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions) {
 	var scanner *bufio.Scanner
@@ -336,31 +368,11 @@ func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions) {
 		scanner = bufio.NewScanner(reader)
 	}
 	fp.lineNo = 0
-	infoBlock := []byte("Perforce server info:")
-	block := new(Block)
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if blockEnd(line) {
-			if len(block.lines) > 0 {
-				if bytes.Equal(block.lines[0], infoBlock) {
-					fp.processInfoBlock(block)
-				} else if blankLine(block.lines[0]) {
-					fp.outputCompletedCommands()
-				}
-			}
-			block = new(Block)
-			block.addLine(line, fp.lineNo)
-		} else {
-			block.addLine(line, fp.lineNo)
-		}
-		fp.lineNo++
+		fp.P4LogParseLine(line)
 	}
-	if len(block.lines) > 0 {
-		if bytes.Equal(block.lines[0], infoBlock) {
-			fp.processInfoBlock(block)
-		}
-	}
-	fp.outputRemainingCommands()
+	fp.P4LogParseFinish()
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "reading file %s:%s\n", opts.File, err)
 	}
