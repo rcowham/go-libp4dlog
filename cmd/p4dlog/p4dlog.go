@@ -23,8 +23,9 @@ func main() {
 	}
 	opts := new(p4dlog.P4dParseOptions)
 	opts.File = *filename
+	inchan := make(chan []byte)
 	outchan := make(chan string)
-	fp := p4dlog.NewP4dFileParser(outchan)
+	fp := p4dlog.NewP4dFileParser(inchan, outchan)
 	go fp.P4LogParseFile(*opts)
 
 	buf := bufio.NewWriterSize(os.Stdout, 1024*1024)

@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elastic/beats/libbeat/logp"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -141,7 +140,8 @@ func (c *Command) updateFrom(cmd *Command) {
 type P4dFileParser struct {
 	lineNo             int64
 	cmds               map[int64]*Command
-	output             chan string
+	inchan             chan []byte
+	outchan            chan string
 	currStartTime      time.Time
 	pidsSeenThisSecond map[int64]bool
 	running            int
@@ -149,11 +149,12 @@ type P4dFileParser struct {
 }
 
 // NewP4dFileParser - create and initialise properly
-func NewP4dFileParser(output chan string) *P4dFileParser {
+func NewP4dFileParser(inchan chan []byte, outchan chan string) *P4dFileParser {
 	var fp P4dFileParser
 	fp.cmds = make(map[int64]*Command)
 	fp.pidsSeenThisSecond = make(map[int64]bool)
-	fp.output = output
+	fp.inchan = inchan
+	fp.outchan = outchan
 	fp.block = new(Block)
 	return &fp
 }
@@ -188,18 +189,18 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		}
 		fp.pidsSeenThisSecond[newCmd.Pid] = true
 		fp.running++
-		fp.outputCompletedCommands()
 	}
+	fp.outputCompletedCommands()
 }
 
 // Output a single command to callback
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
-	logp.Debug("outputCmd Called", "")
-	if fp.output != nil {
+	fmt.Printf("outputCmd: %v\n", fp.outchan)
+	if fp.outchan != nil {
 		lines := []string{}
 		lines = append(lines, fmt.Sprintf("%v", cmd))
 		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.output <- strings.Join(lines, `\n`)
+			fp.outchan <- strings.Join(lines, `\n`)
 		}
 	}
 }
@@ -247,6 +248,7 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, complet
 		cmd.setEndTime(endTime)
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
 		cmd.CompletedLapse = []byte(strconv.FormatFloat(f, 'f', -1, 32))
+		cmd.completed = true
 	}
 }
 
@@ -323,7 +325,7 @@ func blockEnd(line []byte) bool {
 }
 
 // P4LogParseLine - interface for incremental parsing
-func (fp *P4dFileParser) P4LogParseLine(line []byte) {
+func (fp *P4dFileParser) parseLine(line []byte) {
 	if blockEnd(line) {
 		if len(fp.block.lines) > 0 {
 			if bytes.Equal(fp.block.lines[0], infoBlock) {
@@ -338,17 +340,28 @@ func (fp *P4dFileParser) P4LogParseLine(line []byte) {
 		fp.block.addLine(line, fp.lineNo)
 	}
 	fp.lineNo++
+	fmt.Printf("parseLine: no %d, len cmds %d\n", fp.lineNo, len(fp.cmds))
 }
 
 // P4LogParseFinish - interface for incremental parsing
-func (fp *P4dFileParser) P4LogParseFinish() {
+func (fp *P4dFileParser) parseFinish() {
 	if len(fp.block.lines) > 0 {
 		if bytes.Equal(fp.block.lines[0], infoBlock) {
 			fp.processInfoBlock(fp.block)
 		}
 	}
 	fp.outputRemainingCommands()
-	close(fp.output)
+	close(fp.outchan)
+}
+
+// LogParser - interface to be run on a go routine
+func (fp *P4dFileParser) LogParser() {
+	for line := range fp.inchan {
+		fmt.Printf("Line: |%s|\n", line)
+		fp.parseLine(line)
+	}
+	fmt.Printf("parseFinish\n")
+	fp.parseFinish()
 }
 
 // P4LogParseFile - interface for parsing a specified file
@@ -370,9 +383,9 @@ func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions) {
 	fp.lineNo = 0
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		fp.P4LogParseLine(line)
+		fp.parseLine(line)
 	}
-	fp.P4LogParseFinish()
+	fp.parseFinish()
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "reading file %s:%s\n", opts.File, err)
 	}
