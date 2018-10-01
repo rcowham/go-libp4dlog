@@ -23,11 +23,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
-// Ref format: Mon Jan 2 15:04:05 -0700 MST 2006
+// GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
 const p4timeformat = "2006/01/02 15:04:05"
 
 var reCmd = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[([^\]]*)\] \'([\w-]+) (.*)\'.*`)
@@ -74,8 +72,8 @@ type Command struct {
 	Workspace      []byte    `json:"workspace"`
 	StartTime      time.Time `json:"startTime"`
 	EndTime        time.Time `json:"endTime"`
-	ComputeLapse   []byte    `json:"computeLapse"`
-	CompletedLapse []byte    `json:"completedLapse"`
+	ComputeLapse   float32   `json:"computeLapse"`
+	CompletedLapse float32   `json:"completedLapse"`
 	IP             []byte    `json:"ip"`
 	App            []byte    `json:"app"`
 	Args           []byte    `json:"args"`
@@ -86,7 +84,6 @@ type Command struct {
 }
 
 func (c *Command) String() string {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	j, _ := json.Marshal(c)
 	return string(j)
 }
@@ -102,19 +99,19 @@ func (c *Command) setEndTime(t []byte) {
 // MarshalJSON - handle time formatting
 func (c *Command) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		ProcessKey     string `json:"processKey"`
-		Cmd            string `json:"cmd"`
-		Pid            int64  `json:"pid"`
-		LineNo         int64  `json:"lineNo"`
-		User           string `json:"user"`
-		Workspace      string `json:"workspace"`
-		ComputeLapse   string `json:"computeLapse"`
-		CompletedLapse string `json:"completedLapse"`
-		IP             string `json:"ip"`
-		App            string `json:"app"`
-		Args           string `json:"args"`
-		StartTime      string `json:"startTime"`
-		EndTime        string `json:"endTime"`
+		ProcessKey     string  `json:"processKey"`
+		Cmd            string  `json:"cmd"`
+		Pid            int64   `json:"pid"`
+		LineNo         int64   `json:"lineNo"`
+		User           string  `json:"user"`
+		Workspace      string  `json:"workspace"`
+		ComputeLapse   float32 `json:"computeLapse"`
+		CompletedLapse float32 `json:"completedLapse"`
+		IP             string  `json:"ip"`
+		App            string  `json:"app"`
+		Args           string  `json:"args"`
+		StartTime      string  `json:"startTime"`
+		EndTime        string  `json:"endTime"`
 	}{
 		ProcessKey:     c.ProcessKey,
 		Cmd:            string(c.Cmd),
@@ -122,8 +119,8 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		LineNo:         c.LineNo,
 		User:           string(c.User),
 		Workspace:      string(c.Workspace),
-		ComputeLapse:   string(c.ComputeLapse),
-		CompletedLapse: string(c.CompletedLapse),
+		ComputeLapse:   c.ComputeLapse,
+		CompletedLapse: c.CompletedLapse,
 		IP:             string(c.IP),
 		App:            string(c.App),
 		Args:           string(c.Args),
@@ -132,8 +129,24 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (c *Command) updateFrom(cmd *Command) {
-	// Do nothing for now
+var blankTime time.Time
+
+func (c *Command) updateFrom(other *Command) {
+	if other.EndTime != blankTime {
+		c.EndTime = other.EndTime
+	}
+	if other.ComputeLapse > 0 {
+		c.ComputeLapse = other.ComputeLapse
+	}
+	if other.CompletedLapse > 0 {
+		c.CompletedLapse = other.CompletedLapse
+	}
+	// Others to consider
+	// "uCpu",
+	// "sCpu", "diskIn", "diskOut", "ipcIn", "ipcOut", "maxRss",
+	// "pageFaults", "rpcMsgsIn", "rpcMsgsOut", "rpcSizeOut",
+	// "rpcSizeIn", "rpcHimarkFwd", "rpcHimarkRev", "error",
+	// "rpcSnd", "rpcRcv"]:
 }
 
 // P4dFileParser - manages state
@@ -149,12 +162,10 @@ type P4dFileParser struct {
 }
 
 // NewP4dFileParser - create and initialise properly
-func NewP4dFileParser(inchan chan []byte, outchan chan string) *P4dFileParser {
+func NewP4dFileParser() *P4dFileParser {
 	var fp P4dFileParser
 	fp.cmds = make(map[int64]*Command)
 	fp.pidsSeenThisSecond = make(map[int64]bool)
-	fp.inchan = inchan
-	fp.outchan = outchan
 	fp.block = new(Block)
 	return &fp
 }
@@ -166,7 +177,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		fp.pidsSeenThisSecond = make(map[int64]bool)
 	}
 	if cmd, ok := fp.cmds[newCmd.Pid]; ok {
-		if cmd.ProcessKey == newCmd.ProcessKey {
+		if cmd.ProcessKey != newCmd.ProcessKey {
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 		} else if bytes.Equal(newCmd.Cmd, []byte("rmt-FileFetch")) ||
@@ -193,9 +204,54 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	fp.outputCompletedCommands()
 }
 
-// Output a single command to callback
+var trackStart = []byte("---")
+var trackLapse = []byte("--- lapse ")
+
+// From Python version:
+// self.tables = {}
+// # Use line number from original cmd if appropriate
+// if cmd.pid in self.cmds and cmd.processKey == self.cmds[cmd.pid].processKey:
+// 	cmd.lineNumber = self.cmds[cmd.pid].lineNumber
+// tablesTracked = []
+// trackProcessor = TrackProcessor(self.logger)
+// trackProcessor.processTrackLines(cmd, lines, self.tables, tablesTracked)
+// if cmd.completedLapse is not None:
+// 	cmd.setEndTime(dateAdd(cmd.startTime, float(cmd.completedLapse)))
+// else:
+// 	cmd.setEndTime(cmd.startTime)
+// # Don't set tracked info if is one of the special commands which can occur multiple times and
+// # which don't indicate the completion of the command
+// hasTrackInfo = False
+// for t in tablesTracked:
+// 	if not t.startswith("meta_") and not t.startswith("changes_") and not t.startswith("clients_"):
+// 		hasTrackInfo = True
+// self.addCommand(cmd, hasTrackInfo=hasTrackInfo)
+// if hasTrackInfo:
+// 	self.cmd_tables_insert(cmd, self.tables)
+// else:
+// 	# Save special tables for processing when cmd is completed
+// 	for t in self.tables.keys():
+// 		self.cmds[cmd.pid].tables[t] = self.tables[t]
+
+func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
+	// Currently a null op - we can ignore tracked records
+	cmd.hasTrackInfo = true
+	for _, line := range lines {
+		if bytes.Equal(trackLapse, line[:len(trackLapse)]) {
+			val := line[len(trackLapse):]
+			i := bytes.IndexByte(val, '.')
+			j := bytes.IndexByte(val, 's')
+			if i >= 0 && j > 0 {
+				f, _ := strconv.ParseFloat(string(val[i:j-i]), 32)
+				cmd.CompletedLapse = float32(f)
+			}
+		}
+	}
+	fp.addCommand(cmd, true)
+}
+
+// Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
-	fmt.Printf("outputCmd: %v\n", fp.outchan)
 	if fp.outchan != nil {
 		lines := []string{}
 		lines = append(lines, fmt.Sprintf("%v", cmd))
@@ -212,7 +268,8 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second) {
 			completed = true
 		}
-		if !completed && (cmd.hasTrackInfo && fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second) {
+		if !completed && (cmd.hasTrackInfo && cmd.EndTime != blankTime &&
+			fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second) {
 			completed = true
 		}
 		if completed {
@@ -232,22 +289,19 @@ func (fp *P4dFileParser) outputRemainingCommands() {
 }
 
 func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse []byte) {
-	sum := 0.0
 	if cmd, ok := fp.cmds[pid]; ok {
 		// sum all compute values for same command
-		sum, _ = strconv.ParseFloat(string(cmd.ComputeLapse), 32)
 		f, _ := strconv.ParseFloat(string(computeLapse), 32)
-		cmd.ComputeLapse = []byte(strconv.FormatFloat(sum+f, 'f', -1, 32))
+		cmd.ComputeLapse = cmd.ComputeLapse + float32(f)
 	}
 
 }
 
 func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, completedLapse []byte) {
 	if cmd, ok := fp.cmds[pid]; ok {
-		cmd.CompletedLapse = endTime
 		cmd.setEndTime(endTime)
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
-		cmd.CompletedLapse = []byte(strconv.FormatFloat(f, 'f', -1, 32))
+		cmd.CompletedLapse = float32(f)
 		cmd.completed = true
 	}
 }
@@ -258,6 +312,11 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 	i := 0
 	for _, line := range block.lines[1:] {
 		i++
+		if cmd != nil && bytes.Equal(trackStart, line[:3]) {
+			fp.processTrackRecords(cmd, block.lines[i:])
+			break // Block has been processed
+		}
+
 		m := reCmd.FindSubmatch(line)
 		if len(m) == 0 {
 			m = reCmdNoarg.FindSubmatch(line)
@@ -324,7 +383,7 @@ func blockEnd(line []byte) bool {
 	return false
 }
 
-// P4LogParseLine - interface for incremental parsing
+// parseLine - interface for incremental parsing
 func (fp *P4dFileParser) parseLine(line []byte) {
 	if blockEnd(line) {
 		if len(fp.block.lines) > 0 {
@@ -340,7 +399,6 @@ func (fp *P4dFileParser) parseLine(line []byte) {
 		fp.block.addLine(line, fp.lineNo)
 	}
 	fp.lineNo++
-	fmt.Printf("parseLine: no %d, len cmds %d\n", fp.lineNo, len(fp.cmds))
 }
 
 // P4LogParseFinish - interface for incremental parsing
@@ -355,17 +413,28 @@ func (fp *P4dFileParser) parseFinish() {
 }
 
 // LogParser - interface to be run on a go routine
-func (fp *P4dFileParser) LogParser() {
-	for line := range fp.inchan {
-		fmt.Printf("Line: |%s|\n", line)
-		fp.parseLine(line)
+func (fp *P4dFileParser) LogParser(inchan chan []byte, outchan chan string) {
+	fp.inchan = inchan
+	fp.outchan = outchan
+	timer := time.NewTimer(time.Second * 1)
+	for {
+		select {
+		case <-timer.C:
+			fp.outputCompletedCommands()
+		case line, ok := <-fp.inchan:
+			if ok {
+				fp.parseLine(line)
+			} else {
+				fp.parseFinish()
+				return
+			}
+		}
 	}
-	fmt.Printf("parseFinish\n")
-	fp.parseFinish()
 }
 
 // P4LogParseFile - interface for parsing a specified file
-func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions) {
+func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan string) {
+	fp.outchan = outchan
 	var scanner *bufio.Scanner
 	if len(opts.testInput) > 0 {
 		scanner = bufio.NewScanner(strings.NewReader(opts.testInput))
