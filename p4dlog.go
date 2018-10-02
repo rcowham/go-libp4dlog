@@ -363,6 +363,10 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 					cmd.Args = sm[1]
 				}
 			}
+			//TODO - proper trigger support - for now just remove
+			if i := bytes.Index(line, []byte("' trigger ")); i >= 0 {
+				line = line[:i+1]
+			}
 			h := md5.Sum(line)
 			cmd.ProcessKey = hex.EncodeToString(h[:])
 			fp.addCommand(cmd, false)

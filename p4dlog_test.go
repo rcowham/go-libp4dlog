@@ -321,3 +321,29 @@ Perforce server info:
 	assert.Equal(t, `{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c.18","cmd":"user-change","pid":4496,"lineNo":18,"user":"lcheng","workspace":"lcheng","computeLapse":0,"completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48"}`,
 		output[1])
 }
+
+func TestLogTriggerEntries(t *testing.T) {
+	opts := new(P4dParseOptions)
+	outchan := make(chan string)
+	fp := NewP4dFileParser()
+	opts.testInput = `
+Perforce server info:
+	2017/12/07 15:00:21 pid 148469 Fred@LONWS 10.40.16.14/10.40.48.29 [3DSMax/1.0.0.0] 'user-change -i' trigger swarm.changesave
+lapse .044s
+Perforce server info:
+	2017/12/07 15:00:21 pid 148469 completed .413s 7+4us 0+584io 0+0net 4580k 0pf
+Perforce server info:
+	2017/12/07 15:00:21 pid 148469 Fred@LONWS 10.40.16.14/10.40.48.29 [3DSMax/1.0.0.0] 'user-change -i'
+--- lapse .413s
+--- usage 7+4us 0+592io 0+0net 4580k 0pf
+--- rpc msgs/size in+out 3+5/0mb+0mb himarks 318788/2096452 snd/rcv .000s/.052s
+--- db.counters
+---   pages in+out+cached 6+3+2
+---   locks read/write 0/2 rows get+pos+scan put+del 2+0+0 1+0
+`
+	go fp.P4LogParseFile(*opts, outchan)
+	output := getResult(outchan)
+	assert.Equal(t, 1, len(output))
+	assert.Equal(t, `{"processKey":"25aeba7a5658170fea61117076fa00d5","cmd":"user-change","pid":148469,"lineNo":2,"user":"Fred","workspace":"LONWS","computeLapse":0,"completedLapse":0.413,"ip":"10.40.16.14/10.40.48.29","app":"3DSMax/1.0.0.0","args":"-i","startTime":"2017/12/07 15:00:21","endTime":"2017/12/07 15:00:21"}`,
+		output[0])
+}
