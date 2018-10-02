@@ -83,6 +83,13 @@ type Command struct {
 	running        int
 }
 
+func (c *Command) getKey() string {
+	if c.duplicateKey {
+		return fmt.Sprintf("%s.%d", c.ProcessKey, c.LineNo)
+	}
+	return c.ProcessKey
+}
+
 func (c *Command) String() string {
 	j, _ := json.Marshal(c)
 	return string(j)
@@ -113,7 +120,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		StartTime      string  `json:"startTime"`
 		EndTime        string  `json:"endTime"`
 	}{
-		ProcessKey:     c.ProcessKey,
+		ProcessKey:     c.getKey(),
 		Cmd:            string(c.Cmd),
 		Pid:            c.Pid,
 		LineNo:         c.LineNo,
@@ -193,6 +200,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		} else {
 			cmd.updateFrom(newCmd)
 		}
+		if hasTrackInfo {
+			cmd.hasTrackInfo = true
+		}
 	} else {
 		fp.cmds[newCmd.Pid] = newCmd
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
@@ -206,6 +216,10 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 
 var trackStart = []byte("---")
 var trackLapse = []byte("--- lapse ")
+var trackDB = []byte("--- db.")
+var trackMeta = []byte("--- meta")
+var trackClients = []byte("--- clients")
+var trackChange = []byte("--- change")
 
 // From Python version:
 // self.tables = {}
@@ -234,8 +248,8 @@ var trackLapse = []byte("--- lapse ")
 // 		self.cmds[cmd.pid].tables[t] = self.tables[t]
 
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
-	// Currently a null op - we can ignore tracked records
-	cmd.hasTrackInfo = true
+	tablesTracked := []string{}
+	hasTrackInfo := false
 	for _, line := range lines {
 		if bytes.Equal(trackLapse, line[:len(trackLapse)]) {
 			val := line[len(trackLapse):]
@@ -245,19 +259,25 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 				f, _ := strconv.ParseFloat(string(val[i:j-i]), 32)
 				cmd.CompletedLapse = float32(f)
 			}
+		} else if bytes.Equal(trackDB, line[:len(trackDB)]) {
+			tablesTracked = append(tablesTracked, string(line[len(trackDB):]))
+			hasTrackInfo = true
+		} else if bytes.Equal(trackMeta, line[:len(trackMeta)]) ||
+			bytes.Equal(trackChange, line[:len(trackChange)]) ||
+			bytes.Equal(trackClients, line[:len(trackClients)]) {
+			// Special tables don't have trackInfo set
 		}
 	}
-	fp.addCommand(cmd, true)
+	cmd.hasTrackInfo = hasTrackInfo
+	fp.addCommand(cmd, hasTrackInfo)
 }
 
 // Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
-	if fp.outchan != nil {
-		lines := []string{}
-		lines = append(lines, fmt.Sprintf("%v", cmd))
-		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.outchan <- strings.Join(lines, `\n`)
-		}
+	lines := []string{}
+	lines = append(lines, fmt.Sprintf("%v", cmd))
+	if len(lines) > 0 && len(lines[0]) > 0 {
+		fp.outchan <- strings.Join(lines, `\n`)
 	}
 }
 
@@ -303,6 +323,8 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, complet
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
 		cmd.CompletedLapse = float32(f)
 		cmd.completed = true
+	} else {
+
 	}
 }
 
@@ -314,7 +336,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 		i++
 		if cmd != nil && bytes.Equal(trackStart, line[:3]) {
 			fp.processTrackRecords(cmd, block.lines[i:])
-			break // Block has been processed
+			return // Block has been processed
 		}
 
 		m := reCmd.FindSubmatch(line)
@@ -417,6 +439,7 @@ func (fp *P4dFileParser) LogParser(inchan chan []byte, outchan chan string) {
 	fp.inchan = inchan
 	fp.outchan = outchan
 	timer := time.NewTimer(time.Second * 1)
+	fp.lineNo = 1
 	for {
 		select {
 		case <-timer.C:
@@ -446,10 +469,13 @@ func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan strin
 			log.Fatal(err)
 		}
 		defer file.Close()
+		const maxCapacity = 1024 * 1024
+		buf := make([]byte, maxCapacity)
 		reader := bufio.NewReaderSize(file, 1024*1024) // Read in chunks
 		scanner = bufio.NewScanner(reader)
+		scanner.Buffer(buf, maxCapacity)
 	}
-	fp.lineNo = 0
+	fp.lineNo = 1
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		fp.parseLine(line)

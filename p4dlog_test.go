@@ -29,13 +29,14 @@ Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .031s`
 	go fp.P4LogParseFile(*opts, outchan)
 	output := getResult(outchan)
-	assert.Equal(t, `{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":1,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
+	assert.Equal(t, `{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
 		output[0])
 
 	// Sames as above with invalid Unicode strings
 	outchan = make(chan string)
 	fp = NewP4dFileParser()
-	opts.testInput = `Perforce server info:
+	opts.testInput = `
+Perforce server info:
 	2015/09/02 15:23:09 pid 1616 robert@robert-test 127.0.0.1 [Microsoft® Visual Studio® 2013/12.0.21005.1] 'user-sync //...'
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 compute end .031s
@@ -43,7 +44,7 @@ Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .031s`
 	go fp.P4LogParseFile(*opts, outchan)
 	output = getResult(outchan)
-	assert.Equal(t, `{"processKey":"1f360d628fb2c9fe5354b8cf5022f7bd","cmd":"user-sync","pid":1616,"lineNo":1,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft® Visual Studio® 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
+	assert.Equal(t, `{"processKey":"1f360d628fb2c9fe5354b8cf5022f7bd","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft® Visual Studio® 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
 		output[0])
 
 }
@@ -60,7 +61,7 @@ Perforce server info:
 	`
 	go fp.P4LogParseFile(*opts, outchan)
 	output := getResult(outchan)
-	assert.Equal(t, `{"processKey":"d0ae06fd40d95180ca403a9c30084a66","cmd":"user-counter","pid":14769,"lineNo":1,"user":"perforce","workspace":"~tmp.1482305462.13038.585a2fb6041cc1.60954329","computeLapse":0,"completedLapse":0.003,"ip":"192.168.18.31","app":"SWARM/2016.2/1446446","args":"-u swarm-activity-fffec3dd","startTime":"2016/12/21 08:39:39","endTime":"2016/12/21 08:39:39"}`,
+	assert.Equal(t, `{"processKey":"d0ae06fd40d95180ca403a9c30084a66","cmd":"user-counter","pid":14769,"lineNo":2,"user":"perforce","workspace":"~tmp.1482305462.13038.585a2fb6041cc1.60954329","computeLapse":0,"completedLapse":0.003,"ip":"192.168.18.31","app":"SWARM/2016.2/1446446","args":"-u swarm-activity-fffec3dd","startTime":"2016/12/21 08:39:39","endTime":"2016/12/21 08:39:39"}`,
 		output[0])
 }
 
@@ -98,7 +99,7 @@ Perforce server info:
 	go fp.P4LogParseFile(*opts, outchan)
 	output := getResult(outchan)
 	assert.Equal(t, 1, len(output))
-	assert.Equal(t, `{"processKey":"1eec998ae9cc1ce44058f4503a01f2c0","cmd":"user-key","pid":10664,"lineNo":1,"user":"git-fusion-user","workspace":"GF-TRIGGER-567d67de-962","computeLapse":0,"completedLapse":0.844,"ip":"10.100.104.199","app":"p4/2016.1/NTX64/1396108","args":"git-fusion-reviews-common-lock-owner","startTime":"2016/10/19 12:01:08","endTime":"2016/10/19 12:01:09"}`,
+	assert.Equal(t, `{"processKey":"1eec998ae9cc1ce44058f4503a01f2c0","cmd":"user-key","pid":10664,"lineNo":2,"user":"git-fusion-user","workspace":"GF-TRIGGER-567d67de-962","computeLapse":0,"completedLapse":0.844,"ip":"10.100.104.199","app":"p4/2016.1/NTX64/1396108","args":"git-fusion-reviews-common-lock-owner","startTime":"2016/10/19 12:01:08","endTime":"2016/10/19 12:01:09"}`,
 		output[0])
 }
 
@@ -116,8 +117,8 @@ Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .031s
 Perforce server info:
 	2015/09/02 15:23:09 pid 1534 completed .041s`
-var multiExp1 = `{"processKey":"f9a64670da4d77a44225be236974bc8b","cmd":"user-sync","pid":1616,"lineNo":1,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"p4/2016.2/LINUX26X86_64/1598668","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`
-var multiExp2 = `{"processKey":"2908cdb35e4b82dae3d0b403ef0c3bbf","cmd":"user-sync","pid":1534,"lineNo":5,"user":"fred","workspace":"fred-test","computeLapse":0.021,"completedLapse":0.041,"ip":"127.0.0.1","app":"p4/2016.2/LINUX26X86_64/1598668","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`
+var multiExp1 = `{"processKey":"f9a64670da4d77a44225be236974bc8b","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"p4/2016.2/LINUX26X86_64/1598668","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`
+var multiExp2 = `{"processKey":"2908cdb35e4b82dae3d0b403ef0c3bbf","cmd":"user-sync","pid":1534,"lineNo":6,"user":"fred","workspace":"fred-test","computeLapse":0.021,"completedLapse":0.041,"ip":"127.0.0.1","app":"p4/2016.2/LINUX26X86_64/1598668","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`
 
 func TestLogParseMulti(t *testing.T) {
 	opts := new(P4dParseOptions)
@@ -156,6 +157,70 @@ func TestLogParseMultiIncremental(t *testing.T) {
 	assert.Equal(t, multiExp1, output[0])
 	assert.Equal(t, multiExp2, output[1])
 }
+
+// func TestLogParseResolve(t *testing.T) {
+// 	opts := new(P4dParseOptions)
+// 	outchan := make(chan string)
+// 	fp := NewP4dFileParser()
+// 	opts.testInput = `
+// Perforce server info:
+// 	2017/12/07 15:00:01 pid 145941 buildernorth@RSGEDIAB23 10.10.16.171/10.10.20.195 [RSG.Pipeline.Automation.ClientWorker/1.0.0.0] 'user-resolve -At -at -c 16730784 //rdr3/assets/processed/levels/rdr3/terrain/instance_placement/r_03__dynamic_instances.xml'
+// Perforce server info:
+// 	2017/12/07 15:00:01 pid 145941 completed .002s 2+0us 0+8io 0+0net 5228k 0pf
+// Perforce server info:
+// 	2017/12/07 15:00:01 pid 145941 buildernorth@RSGEDIAB23 10.10.16.171/10.10.20.195 [RSG.Pipeline.Automation.ClientWorker/1.0.0.0] 'user-resolve -At -at -c 16730784 //rdr3/assets/processed/levels/rdr3/terrain/instance_placement/r_03__dynamic_instances.xml'
+// --- lapse .002s
+// --- usage 2+0us 0+16io 0+0net 5228k 0pf
+// --- rpc msgs/size in+out 0+1/0mb+0mb himarks 318788/2096452 snd/rcv .000s/.000s
+// --- db.user
+// ---   pages in+out+cached 1+0+3
+// ---   locks read/write 1/0 rows get+pos+scan put+del 1+0+0 0+0
+// --- db.group
+// ---   pages in+out+cached 1+0+16
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+20+39 0+0
+// --- db.domain
+// ---   pages in+out+cached 1+0+4
+// ---   locks read/write 1/0 rows get+pos+scan put+del 1+0+0 0+0
+// --- db.view
+// ---   pages in+out+cached 1+0+6
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+1+2 0+0
+// --- db.resolve
+// ---   pages in+out+cached 7+0+6
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+1+1 0+0
+// --- db.revsx
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+0+0 0+0
+// --- db.revsh
+// ---   pages in+out+cached 1+0+1
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+0+0 0+0
+// --- db.rev
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+0+0 0+0
+// --- db.working
+// ---   pages in+out+cached 1+0+14
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+0+0 0+0
+// --- db.protect
+// ---   pages in+out+cached 1+0+13
+// ---   locks read/write 1/0 rows get+pos+scan put+del 0+1+523 0+0
+// ---   total lock wait+held read/write 0ms+1ms/0ms+0ms
+// --- db.monitor
+// ---   pages in+out+cached 2+4+4096
+// ---   locks read/write 0/2 rows get+pos+scan put+del 0+0+0 2+0
+// --- clients/RSGEDIAB23(W)
+// ---   total lock wait+held read/write 0ms+0ms/0ms+1ms
+
+// Perforce server info:
+// 	2017/12/07 15:00:01 pid 144683 svcrsgsanvmbuilder@sanb-nvm05 10.0.16.190/10.0.20.199 [RSG.Pipeline.Automation.ServerHost/1.0.0.0] 'user-describe 16724735'
+// Perforce server info:
+// 	2017/12/07 15:00:01 pid 145941 buildernorth@RSGEDIAB23 10.10.16.171/10.10.20.195 [RSG.Pipeline.Automation.ClientWorker/1.0.0.0] 'user-resolve -At -at -c 16730784 //rdr3/assets/processed/levels/rdr3/terrain/instance_placement/r_03__static_instances.xml'
+// Perforce server info:
+// 	2017/12/07 15:00:01 pid 144683 completed .002s 2+0us 0+0io 0+0net 6040k 0pf
+// `
+// 	go fp.P4LogParseFile(*opts, outchan)
+// 	output := getResult(outchan)
+// 	assert.Equal(t, 3, len(output))
+// 	assert.Equal(t, `{"processKey":"f124e2662a91085aec5093353a0a62dc","cmd":"user-resolve","pid":145941,"lineNo":2,"user":"buildernorth","workspace":"RSGEDIAB23","computeLapse":0,"completedLapse":0.002,"ip":"10.10.16.171/10.10.20.195","app":"RSG.Pipeline.Automation.ClientWorker/1.0.0.0","args":"-At -at -c 16730784 //rdr3/assets/processed/levels/rdr3/terrain/instance_placement/r_03__dynamic_instances.xml","startTime":"2017/12/07 15:00:01","endTime":"2017/12/07 15:00:01"}`,
+// 		output[0])
+
+// }
 
 func TestLogParseSubmit(t *testing.T) {
 	opts := new(P4dParseOptions)
@@ -201,10 +266,58 @@ Perforce server info:
 	go fp.P4LogParseFile(*opts, outchan)
 	output := getResult(outchan)
 	assert.Equal(t, 3, len(output))
-	assert.Equal(t, `{"processKey":"465f0a630b021d3c695e90924a757b75","cmd":"user-submit","pid":25568,"lineNo":1,"user":"fred","workspace":"lon_ws","computeLapse":0,"completedLapse":0.178,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"-i","startTime":"2018/06/10 23:30:06","endTime":"2018/06/10 23:30:07"}`,
+	assert.Equal(t, `{"processKey":"465f0a630b021d3c695e90924a757b75","cmd":"user-submit","pid":25568,"lineNo":2,"user":"fred","workspace":"lon_ws","computeLapse":0,"completedLapse":0.178,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"-i","startTime":"2018/06/10 23:30:06","endTime":"2018/06/10 23:30:07"}`,
 		output[0])
-	assert.Equal(t, `{"processKey":"78dbd54644e624a9c6f5c338a0864d2a","cmd":"dm-SubmitChange","pid":25568,"lineNo":6,"user":"fred","workspace":"lon_ws","computeLapse":0.252,"completedLapse":1.38,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:07","endTime":"2018/06/10 23:30:08"}`,
+	assert.Equal(t, `{"processKey":"78dbd54644e624a9c6f5c338a0864d2a","cmd":"dm-SubmitChange","pid":25568,"lineNo":7,"user":"fred","workspace":"lon_ws","computeLapse":0.252,"completedLapse":1.38,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:07","endTime":"2018/06/10 23:30:08"}`,
 		output[1])
-	assert.Equal(t, `{"processKey":"128e10d7fe570c2d2f5f7f03e1186827","cmd":"dm-CommitSubmit","pid":25568,"lineNo":14,"user":"fred","workspace":"lon_ws","computeLapse":0,"completedLapse":1.38,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:08","endTime":"2018/06/10 23:30:09"}`,
+	assert.Equal(t, `{"processKey":"128e10d7fe570c2d2f5f7f03e1186827","cmd":"dm-CommitSubmit","pid":25568,"lineNo":15,"user":"fred","workspace":"lon_ws","computeLapse":0,"completedLapse":1.38,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:08","endTime":"2018/06/10 23:30:09"}`,
 		output[2])
+	// assert.Equal(t, `asdf`,
+	// 	output[3])
+}
+
+func TestLogDuplicatePids(t *testing.T) {
+	opts := new(P4dParseOptions)
+	outchan := make(chan string)
+	fp := NewP4dFileParser()
+	opts.testInput = `
+Perforce server info:
+	2016/10/19 14:53:48 pid 4496 lcheng@lcheng 10.100.72.195 [P4V/NTX64/2014.1/888424/v76] 'user-change -o'
+
+Perforce server info:
+	2016/10/19 14:53:48 pid 4496 completed .015s
+Perforce server info:
+	2016/10/19 14:53:48 pid 4496 lcheng@lcheng 10.100.72.195 [P4V/NTX64/2014.1/888424/v76] 'user-change -o'
+--- lapse .015s
+--- rpc msgs/size in+out 0+1/0mb+0mb himarks 523588/64836 snd/rcv .000s/.000s
+--- db.user
+---   pages in+out+cached 1+0+3
+---   locks read/write 1/0 rows get+pos+scan put+del 1+0+0 0+0
+--- db.group
+---   pages in+out+cached 1+0+7
+---   locks read/write 1/0 rows get+pos+scan put+del 0+6+11 0+0
+
+Perforce server info:
+	2016/10/19 14:53:48 pid 4496 lcheng@lcheng 10.100.72.195 [P4V/NTX64/2014.1/888424/v76] 'user-change -o'
+
+Perforce server info:
+	2016/10/19 14:53:48 pid 4496 completed .016s
+Perforce server info:
+	2016/10/19 14:53:48 pid 4496 lcheng@lcheng 10.100.72.195 [P4V/NTX64/2014.1/888424/v76] 'user-change -o'
+--- lapse .016s
+--- rpc msgs/size in+out 0+1/0mb+0mb himarks 523588/64836 snd/rcv .000s/.000s
+--- db.user
+---   pages in+out+cached 1+0+3
+---   locks read/write 1/0 rows get+pos+scan put+del 1+0+0 0+0
+--- db.group
+---   pages in+out+cached 1+0+7
+---   locks read/write 1/0 rows get+pos+scan put+del 0+6+11 0+0
+`
+	go fp.P4LogParseFile(*opts, outchan)
+	output := getResult(outchan)
+	assert.Equal(t, 2, len(output))
+	assert.Equal(t, `{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c","cmd":"user-change","pid":4496,"lineNo":2,"user":"lcheng","workspace":"lcheng","computeLapse":0,"completedLapse":0.015,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48"}`,
+		output[0])
+	assert.Equal(t, `{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c.18","cmd":"user-change","pid":4496,"lineNo":18,"user":"lcheng","workspace":"lcheng","computeLapse":0,"completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48"}`,
+		output[1])
 }
