@@ -56,7 +56,10 @@ type Block struct {
 }
 
 func (block *Block) addLine(line []byte, lineNo int64) {
-	block.lines = append(block.lines, line)
+	// Need to copy original line
+	newLine := make([]byte, len(line))
+	copy(newLine, line)
+	block.lines = append(block.lines, newLine)
 	if block.lineNo == 0 {
 		block.lineNo = lineNo
 	}
@@ -475,7 +478,7 @@ func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan strin
 		defer file.Close()
 		const maxCapacity = 1024 * 1024
 		buf := make([]byte, maxCapacity)
-		reader := bufio.NewReaderSize(file, 1024*1024) // Read in chunks
+		reader := bufio.NewReaderSize(file, maxCapacity)
 		scanner = bufio.NewScanner(reader)
 		scanner.Buffer(buf, maxCapacity)
 	}
