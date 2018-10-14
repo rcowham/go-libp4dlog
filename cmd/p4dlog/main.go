@@ -6,13 +6,13 @@ import (
 	"os"
 
 	"github.com/akamensky/argparse"
-	"github.com/pkg/profile"
+	// "github.com/pkg/profile"
 	"github.com/rcowham/go-libp4dlog"
 )
 
 func main() {
 	// CPU profiling by default
-	defer profile.Start().Stop()
+	// defer profile.Start().Stop()
 	// Create new parser object
 	parser := argparse.NewParser("psla", "Perforce Server Log Analyzer - parses standard log file")
 	// Create string flag
