@@ -2,8 +2,12 @@ package p4dlog
 
 import (
 	"bufio"
+	"fmt"
+	"log"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -47,6 +51,39 @@ Perforce server info:
 	assert.Equal(t, `{"processKey":"1f360d628fb2c9fe5354b8cf5022f7bd","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft® Visual Studio® 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
 		output[0])
 
+}
+
+func TestBigLogParse(t *testing.T) {
+	// Write a log > 64k bytes long
+	// opts := new(P4dParseOptions)
+	// outchan := make(chan string)
+	// fp := NewP4dFileParser()
+
+	// testInput :=
+	file, err := os.Create("temp.log")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	sdate, _ := time.Parse("2006/01/02 15:04:05", "2015/09/02 15:23:09")
+	pid := 616
+	for i := 1; i < 300; i++ {
+		strdate := sdate.Format("2006/01/02 15:04:05")
+		sdate = sdate.Add(time.Second * 1)
+		pid = pid + 1
+		fmt.Fprintf(file, `
+Perforce server info:
+	%s pid %d robert@robert-test 127.0.0.1 [Microsoft Visual Studio 2013/12.0.21005.1] 'user-sync //...'
+Perforce server info:
+	%s pid %d compute end .031s
+Perforce server info:
+	%s pid %d completed .031s
+`, strdate, pid, strdate, pid, strdate, pid)
+	}
+	// go fp.P4LogParseFile(*opts, outchan)
+	// output := getResult(outchan)
+	// assert.Equal(t, `{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09"}`,
+	// 	output[0])
 }
 
 func TestLogParseSwarm(t *testing.T) {
