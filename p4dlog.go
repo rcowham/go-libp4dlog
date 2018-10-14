@@ -181,6 +181,7 @@ func NewP4dFileParser() *P4dFileParser {
 }
 
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
+	fmt.Printf("addCommand: %d, %d\n", newCmd.LineNo, newCmd.Pid)
 	newCmd.running = fp.running
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
@@ -286,6 +287,7 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 
 // Output all completed commands 3 or more seconds ago
 func (fp *P4dFileParser) outputCompletedCommands() {
+	fmt.Printf("outputCompletedCommands: %d\n", len(fp.cmds))
 	for _, cmd := range fp.cmds {
 		completed := false
 		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second) {
@@ -453,6 +455,8 @@ func (fp *P4dFileParser) LogParser(inchan chan []byte, outchan chan string) {
 			fp.outputCompletedCommands()
 		case line, ok := <-fp.inchan:
 			if ok {
+				line = bytes.TrimRight(line, "\r\n")
+				fmt.Printf("RcvLine: '%s'\n", line)
 				fp.parseLine(line)
 			} else {
 				fp.parseFinish()
