@@ -28,8 +28,8 @@ import (
 // GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
 const p4timeformat = "2006/01/02 15:04:05"
 
-var reCmd = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[([^\]]*)\] \'([\w-]+) (.*)\'.*`)
-var reCmdNoarg = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[([^\]]*)\] \'([\w-]+)\'.*`)
+var reCmd = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+) (.*)\'.*`)
+var reCmdNoarg = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+)\'.*`)
 var reCompute = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) compute end ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reCompleted = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) completed ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reJSONCmdargs = regexp.MustCompile(`^(.*) \{.*\}$`)
@@ -161,14 +161,15 @@ func (c *Command) updateFrom(other *Command) {
 
 // P4dFileParser - manages state
 type P4dFileParser struct {
-	lineNo             int64
-	cmds               map[int64]*Command
-	inchan             chan []byte
-	outchan            chan string
-	currStartTime      time.Time
-	pidsSeenThisSecond map[int64]bool
-	running            int
-	block              *Block
+	lineNo               int64
+	cmds                 map[int64]*Command
+	inchan               chan []byte
+	outchan              chan string
+	currStartTime        time.Time
+	timeLastCmdProcessed time.Time
+	pidsSeenThisSecond   map[int64]bool
+	running              int
+	block                *Block
 }
 
 // NewP4dFileParser - create and initialise properly
@@ -286,9 +287,12 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 
 // Output all completed commands 3 or more seconds ago
 func (fp *P4dFileParser) outputCompletedCommands() {
+	cmdHasBeenProcessed := false
+	currTime := time.Now()
 	for _, cmd := range fp.cmds {
 		completed := false
-		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second) {
+		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second ||
+			(fp.timeLastCmdProcessed != blankTime && currTime.Sub(fp.timeLastCmdProcessed) >= 3*time.Second)) {
 			completed = true
 		}
 		if !completed && (cmd.hasTrackInfo && cmd.EndTime != blankTime &&
@@ -296,10 +300,14 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 			completed = true
 		}
 		if completed {
+			cmdHasBeenProcessed = true
 			fp.outputCmd(cmd)
 			delete(fp.cmds, cmd.Pid)
 			fp.running--
 		}
+	}
+	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
+		fp.timeLastCmdProcessed = time.Now()
 	}
 }
 
@@ -445,11 +453,11 @@ func (fp *P4dFileParser) parseFinish() {
 func (fp *P4dFileParser) LogParser(inchan chan []byte, outchan chan string) {
 	fp.inchan = inchan
 	fp.outchan = outchan
-	timer := time.NewTimer(time.Second * 1)
+	// timer := time.NewTimer(time.Second * 1)
 	fp.lineNo = 1
 	for {
 		select {
-		case <-timer.C:
+		case <-time.After(time.Second * 1):
 			fp.outputCompletedCommands()
 		case line, ok := <-fp.inchan:
 			if ok {
