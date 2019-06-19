@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -191,8 +192,9 @@ func TestLogParseMultiIncremental(t *testing.T) {
 		output = append(output, line)
 	}
 	assert.Equal(t, 2, len(output))
-	assert.Equal(t, multiExp1, output[0])
-	assert.Equal(t, multiExp2, output[1])
+	sort.Strings(output)
+	assert.Equal(t, multiExp1, output[1])
+	assert.Equal(t, multiExp2, output[0])
 }
 
 // func TestLogParseResolve(t *testing.T) {
