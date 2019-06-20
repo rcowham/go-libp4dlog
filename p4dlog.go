@@ -20,6 +20,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -105,31 +106,70 @@ type Command struct {
 
 // Table stores track information per table (part of Command)
 type Table struct {
-	TableName      string
-	PagesIn        int
-	PagesOut       int
-	PagesCached    int
-	ReadLocks      int
-	WriteLocks     int
-	GetRows        int
-	PosRows        int
-	ScanRows       int
-	PutRows        int
-	DelRows        int
-	TotalReadWait  int
-	TotalReadHeld  int
-	TotalWriteWait int
-	TotalWriteHeld int
-	MaxReadWait    int
-	MaxReadHeld    int
-	MaxWriteWait   int
-	MaxWriteHeld   int
-	PeekCount      int
-	TotalPeekWait  int
-	TotalPeekHeld  int
-	MaxPeekWait    int
-	MaxPeekHeld    int
-	TriggerLapse   float32
+	TableName      string  `json:"tableName"`
+	PagesIn        int64   `json:"pagesIn"`
+	PagesOut       int64   `json:"pagesOut"`
+	PagesCached    int64   `json:"pagesCached"`
+	ReadLocks      int64   `json:"readLocks"`
+	WriteLocks     int64   `json:"writeLocks"`
+	GetRows        int64   `json:"getRows"`
+	PosRows        int64   `json:"posRows"`
+	ScanRows       int64   `json:"scanRows"`
+	PutRows        int64   `json:"putRows"`
+	DelRows        int64   `json:"delRows"`
+	TotalReadWait  int64   `json:"totalReadWait"`
+	TotalReadHeld  int64   `json:"totalReadHeld"`
+	TotalWriteWait int64   `json:"totalWriteWait"`
+	TotalWriteHeld int64   `json:"totalWriteHeld"`
+	MaxReadWait    int64   `json:"maxReadWait"`
+	MaxReadHeld    int64   `json:"maxReadHeld"`
+	MaxWriteWait   int64   `json:"maxWriteWait"`
+	MaxWriteHeld   int64   `json:"maxWriteHeld"`
+	PeekCount      int64   `json:"peekCount"`
+	TotalPeekWait  int64   `json:"totalPeekWait"`
+	TotalPeekHeld  int64   `json:"totalPeekHeld"`
+	MaxPeekWait    int64   `json:"maxPeekWait"`
+	MaxPeekHeld    int64   `json:"maxPeekHeld"`
+	TriggerLapse   float32 `json:"triggerLapse"`
+}
+
+func (t *Table) setPages(pagesIn, pagesOut, pagesCached []byte) {
+	t.PagesIn, _ = strconv.ParseInt(string(pagesIn), 10, 64)
+	t.PagesOut, _ = strconv.ParseInt(string(pagesOut), 10, 64)
+	t.PagesCached, _ = strconv.ParseInt(string(pagesCached), 10, 64)
+}
+
+func (t *Table) setLocksRows(readLocks, writeLocks, getRows, posRows,
+	scanRows, putRows, delRows []byte) {
+	t.ReadLocks, _ = strconv.ParseInt(string(readLocks), 10, 64)
+	t.WriteLocks, _ = strconv.ParseInt(string(writeLocks), 10, 64)
+	t.GetRows, _ = strconv.ParseInt(string(getRows), 10, 64)
+	t.PosRows, _ = strconv.ParseInt(string(posRows), 10, 64)
+	t.ScanRows, _ = strconv.ParseInt(string(scanRows), 10, 64)
+	t.PutRows, _ = strconv.ParseInt(string(putRows), 10, 64)
+	t.DelRows, _ = strconv.ParseInt(string(delRows), 10, 64)
+}
+
+func (t *Table) setTotalLock(totalReadWait, totalReadHeld, totalWriteWait, totalWriteHeld []byte) {
+	t.TotalReadWait, _ = strconv.ParseInt(string(totalReadWait), 10, 64)
+	t.TotalReadHeld, _ = strconv.ParseInt(string(totalReadHeld), 10, 64)
+	t.TotalWriteWait, _ = strconv.ParseInt(string(totalWriteWait), 10, 64)
+	t.TotalWriteHeld, _ = strconv.ParseInt(string(totalWriteHeld), 10, 64)
+}
+
+func (t *Table) setMaxLock(maxReadWait, maxReadHeld, maxWriteWait, maxWriteHeld []byte) {
+	t.MaxReadWait, _ = strconv.ParseInt(string(maxReadWait), 10, 64)
+	t.MaxReadHeld, _ = strconv.ParseInt(string(maxReadHeld), 10, 64)
+	t.MaxWriteWait, _ = strconv.ParseInt(string(maxWriteWait), 10, 64)
+	t.MaxWriteHeld, _ = strconv.ParseInt(string(maxWriteHeld), 10, 64)
+}
+
+func (t *Table) setPeek(peekCount, totalPeekWait, totalPeekHeld, maxPeekWait, maxPeekHeld []byte) {
+	t.PeekCount, _ = strconv.ParseInt(string(peekCount), 10, 64)
+	t.TotalPeekWait, _ = strconv.ParseInt(string(totalPeekWait), 10, 64)
+	t.TotalPeekHeld, _ = strconv.ParseInt(string(totalPeekHeld), 10, 64)
+	t.MaxPeekWait, _ = strconv.ParseInt(string(maxPeekWait), 10, 64)
+	t.MaxPeekHeld, _ = strconv.ParseInt(string(maxPeekHeld), 10, 64)
 }
 
 func newCommand() *Command {
@@ -194,6 +234,15 @@ func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimark
 
 // MarshalJSON - handle time formatting
 func (c *Command) MarshalJSON() ([]byte, error) {
+	tables := make([]Table, len(c.Tables))
+	i := 0
+	for _, v := range c.Tables {
+		tables[i] = *v
+		i++
+	}
+	sort.Slice(tables[:], func(i, j int) bool {
+		return tables[i].TableName < tables[j].TableName
+	})
 	return json.Marshal(&struct {
 		ProcessKey     string  `json:"processKey"`
 		Cmd            string  `json:"cmd"`
@@ -224,6 +273,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		RpcHimarkRev   int64   `json:"rpcHimarkRev"`
 		RpcSnd         float32 `json:"rpcSnd"`
 		RpcRcv         float32 `json:"rpcRcv"`
+		Tables         []Table `json:"tables"`
 	}{
 		ProcessKey:     c.getKey(),
 		Cmd:            string(c.Cmd),
@@ -254,6 +304,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		RpcHimarkRev:   c.RpcHimarkRev,
 		RpcSnd:         c.RpcSnd,
 		RpcRcv:         c.RpcRcv,
+		Tables:         tables,
 	})
 }
 
@@ -393,9 +444,15 @@ var trackChange = []byte("--- change")
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
+var reTrackPages = regexp.MustCompile(`^---   pages in\+out\+cached (\d+)\+(\d+)\+(\d+)`)
+var reTrackLocksRows = regexp.MustCompile(`^---   locks read/write (\d+)/(\d+) rows get\+pos\+scan put\+del (\d+)\+(\d+)\+(\d+) (\d+)\+(\d+)`)
+var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
+var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
+var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 	hasTrackInfo := false
+	var tableName string
 	for _, line := range lines {
 		if bytes.Equal(trackLapse, line[:len(trackLapse)]) {
 			val := line[len(trackLapse):]
@@ -406,7 +463,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 				cmd.CompletedLapse = float32(f)
 			}
 		} else if bytes.Equal(trackDB, line[:len(trackDB)]) {
-			tableName := string(line[len(trackDB):])
+			tableName = string(line[len(trackDB):])
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
 			hasTrackInfo = true
@@ -431,6 +488,41 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 		m = reTrackRPC.FindSubmatch(line)
 		if len(m) > 0 {
 			cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], nil, nil)
+			continue
+		}
+		m = reTrackPages.FindSubmatch(line)
+		if len(m) > 0 {
+			if t, ok := cmd.Tables[tableName]; ok {
+				t.setPages(m[1], m[2], m[3])
+			}
+			continue
+		}
+		m = reTrackLocksRows.FindSubmatch(line)
+		if len(m) > 0 {
+			if t, ok := cmd.Tables[tableName]; ok {
+				t.setLocksRows(m[1], m[2], m[3], m[4], m[5], m[6], m[7])
+			}
+			continue
+		}
+		m = reTrackTotalLock.FindSubmatch(line)
+		if len(m) > 0 {
+			if t, ok := cmd.Tables[tableName]; ok {
+				t.setTotalLock(m[1], m[2], m[3], m[4])
+			}
+			continue
+		}
+		m = reTrackMaxLock.FindSubmatch(line)
+		if len(m) > 0 {
+			if t, ok := cmd.Tables[tableName]; ok {
+				t.setMaxLock(m[1], m[2], m[3], m[4])
+			}
+			continue
+		}
+		m = reTrackPeek.FindSubmatch(line)
+		if len(m) > 0 {
+			if t, ok := cmd.Tables[tableName]; ok {
+				t.setPeek(m[1], m[2], m[3], m[4], m[5])
+			}
 			continue
 		}
 	}
