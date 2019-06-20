@@ -80,10 +80,68 @@ type Command struct {
 	IP             []byte    `json:"ip"`
 	App            []byte    `json:"app"`
 	Args           []byte    `json:"args"`
+	UCpu           int64     `json:"uCpu"`
+	SCpu           int64     `json:"sCpu"`
+	DiskIn         int64     `json:"diskIn"`
+	DiskOut        int64     `json:"diskOut"`
+	IpcIn          int64     `json:"ipcIn"`
+	IpcOut         int64     `json:"ipcOut"`
+	MaxRss         int64     `json:"maxRss"`
+	PageFaults     int64     `json:"pageFaults"`
+	RpcMsgsIn      int64     `json:"rpcMsgsIn"`
+	RpcMsgsOut     int64     `json:"rpcMsgsOut"`
+	RpcSizeIn      int64     `json:"rpcSizeIn"`
+	RpcSizeOut     int64     `json:"rpcSizeOut"`
+	RpcHimarkFwd   int64     `json:"rpcHimarkFwd"`
+	RpcHimarkRev   int64     `json:"rpcHimarkRev"`
+	RpcSnd         float32   `json:"rpcSnd"`
+	RpcRcv         float32   `json:"rpcRcv"`
+	Tables         map[string]*Table
 	duplicateKey   bool
 	completed      bool
 	hasTrackInfo   bool
 	running        int
+}
+
+// Table stores track information per table (part of Command)
+type Table struct {
+	TableName      string
+	PagesIn        int
+	PagesOut       int
+	PagesCached    int
+	ReadLocks      int
+	WriteLocks     int
+	GetRows        int
+	PosRows        int
+	ScanRows       int
+	PutRows        int
+	DelRows        int
+	TotalReadWait  int
+	TotalReadHeld  int
+	TotalWriteWait int
+	TotalWriteHeld int
+	MaxReadWait    int
+	MaxReadHeld    int
+	MaxWriteWait   int
+	MaxWriteHeld   int
+	PeekCount      int
+	TotalPeekWait  int
+	TotalPeekHeld  int
+	MaxPeekWait    int
+	MaxPeekHeld    int
+	TriggerLapse   float32
+}
+
+func newCommand() *Command {
+	c := new(Command)
+	c.Tables = make(map[string]*Table, 0)
+	return c
+}
+
+func newTable(name string) *Table {
+	t := new(Table)
+	t.TableName = name
+	return t
 }
 
 func (c *Command) getKey() string {
@@ -106,6 +164,34 @@ func (c *Command) setEndTime(t []byte) {
 	c.EndTime, _ = time.Parse(p4timeformat, string(t))
 }
 
+func (c *Command) setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults []byte) {
+	c.UCpu, _ = strconv.ParseInt(string(uCpu), 10, 64)
+	c.SCpu, _ = strconv.ParseInt(string(sCpu), 10, 64)
+	c.DiskIn, _ = strconv.ParseInt(string(diskIn), 10, 64)
+	c.DiskOut, _ = strconv.ParseInt(string(diskOut), 10, 64)
+	c.IpcIn, _ = strconv.ParseInt(string(ipcIn), 10, 64)
+	c.IpcOut, _ = strconv.ParseInt(string(ipcOut), 10, 64)
+	c.MaxRss, _ = strconv.ParseInt(string(maxRss), 10, 64)
+	c.PageFaults, _ = strconv.ParseInt(string(pageFaults), 10, 64)
+}
+
+func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev, rpcSnd, rpcRcv []byte) {
+	c.RpcMsgsIn, _ = strconv.ParseInt(string(rpcMsgsIn), 10, 64)
+	c.RpcMsgsOut, _ = strconv.ParseInt(string(rpcMsgsOut), 10, 64)
+	c.RpcSizeIn, _ = strconv.ParseInt(string(rpcSizeIn), 10, 64)
+	c.RpcSizeOut, _ = strconv.ParseInt(string(rpcSizeOut), 10, 64)
+	c.RpcHimarkFwd, _ = strconv.ParseInt(string(rpcHimarkFwd), 10, 64)
+	c.RpcHimarkRev, _ = strconv.ParseInt(string(rpcHimarkRev), 10, 64)
+	if rpcSnd != nil {
+		f, _ := strconv.ParseFloat(string(rpcSnd), 32)
+		c.RpcSnd = float32(f)
+	}
+	if rpcRcv != nil {
+		f, _ := strconv.ParseFloat(string(rpcRcv), 32)
+		c.RpcRcv = float32(f)
+	}
+}
+
 // MarshalJSON - handle time formatting
 func (c *Command) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
@@ -122,6 +208,22 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Args           string  `json:"args"`
 		StartTime      string  `json:"startTime"`
 		EndTime        string  `json:"endTime"`
+		UCpu           int64   `json:"uCpu"`
+		SCpu           int64   `json:"sCpu"`
+		DiskIn         int64   `json:"diskIn"`
+		DiskOut        int64   `json:"diskOut"`
+		IpcIn          int64   `json:"ipcIn"`
+		IpcOut         int64   `json:"ipcOut"`
+		MaxRss         int64   `json:"maxRss"`
+		PageFaults     int64   `json:"pageFaults"`
+		RpcMsgsIn      int64   `json:"rpcMsgsIn"`
+		RpcMsgsOut     int64   `json:"rpcMsgsOut"`
+		RpcSizeIn      int64   `json:"rpcSizeIn"`
+		RpcSizeOut     int64   `json:"rpcSizeOut"`
+		RpcHimarkFwd   int64   `json:"rpcHimarkFwd"`
+		RpcHimarkRev   int64   `json:"rpcHimarkRev"`
+		RpcSnd         float32 `json:"rpcSnd"`
+		RpcRcv         float32 `json:"rpcRcv"`
 	}{
 		ProcessKey:     c.getKey(),
 		Cmd:            string(c.Cmd),
@@ -136,6 +238,22 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Args:           string(c.Args),
 		StartTime:      c.StartTime.Format(p4timeformat),
 		EndTime:        c.EndTime.Format(p4timeformat),
+		UCpu:           c.UCpu,
+		SCpu:           c.SCpu,
+		DiskIn:         c.DiskIn,
+		DiskOut:        c.DiskOut,
+		IpcIn:          c.IpcIn,
+		IpcOut:         c.IpcOut,
+		MaxRss:         c.MaxRss,
+		PageFaults:     c.PageFaults,
+		RpcMsgsIn:      c.RpcMsgsIn,
+		RpcMsgsOut:     c.RpcMsgsOut,
+		RpcSizeIn:      c.RpcSizeIn,
+		RpcSizeOut:     c.RpcSizeOut,
+		RpcHimarkFwd:   c.RpcHimarkFwd,
+		RpcHimarkRev:   c.RpcHimarkRev,
+		RpcSnd:         c.RpcSnd,
+		RpcRcv:         c.RpcRcv,
 	})
 }
 
@@ -151,12 +269,60 @@ func (c *Command) updateFrom(other *Command) {
 	if other.CompletedLapse > 0 {
 		c.CompletedLapse = other.CompletedLapse
 	}
-	// Others to consider
-	// "uCpu",
-	// "sCpu", "diskIn", "diskOut", "ipcIn", "ipcOut", "maxRss",
-	// "pageFaults", "rpcMsgsIn", "rpcMsgsOut", "rpcSizeOut",
-	// "rpcSizeIn", "rpcHimarkFwd", "rpcHimarkRev", "error",
-	// "rpcSnd", "rpcRcv"]:
+	if other.UCpu > 0 {
+		c.UCpu = other.UCpu
+	}
+	if other.SCpu > 0 {
+		c.SCpu = other.SCpu
+	}
+	if other.DiskIn > 0 {
+		c.DiskIn = other.DiskIn
+	}
+	if other.DiskOut > 0 {
+		c.DiskOut = other.DiskOut
+	}
+	if other.IpcIn > 0 {
+		c.IpcIn = other.IpcIn
+	}
+	if other.IpcOut > 0 {
+		c.IpcOut = other.IpcOut
+	}
+	if other.MaxRss > 0 {
+		c.MaxRss = other.MaxRss
+	}
+	if other.PageFaults > 0 {
+		c.PageFaults = other.PageFaults
+	}
+	if other.IpcIn > 0 {
+		c.IpcIn = other.IpcIn
+	}
+	if other.RpcMsgsIn > 0 {
+		c.RpcMsgsIn = other.RpcMsgsIn
+	}
+	if other.RpcMsgsOut > 0 {
+		c.RpcMsgsOut = other.RpcMsgsOut
+	}
+	if other.RpcMsgsIn > 0 {
+		c.RpcMsgsIn = other.RpcMsgsIn
+	}
+	if other.RpcSizeIn > 0 {
+		c.RpcSizeIn = other.RpcSizeIn
+	}
+	if other.RpcSizeOut > 0 {
+		c.RpcSizeOut = other.RpcSizeOut
+	}
+	if other.RpcHimarkFwd > 0 {
+		c.RpcHimarkFwd = other.RpcHimarkFwd
+	}
+	if other.RpcHimarkRev > 0 {
+		c.RpcHimarkRev = other.RpcHimarkRev
+	}
+	if other.RpcSnd > 0 {
+		c.RpcSnd = other.RpcSnd
+	}
+	if other.RpcRcv > 0 {
+		c.RpcRcv = other.RpcRcv
+	}
 }
 
 // P4dFileParser - manages state
@@ -224,35 +390,11 @@ var trackDB = []byte("--- db.")
 var trackMeta = []byte("--- meta")
 var trackClients = []byte("--- clients")
 var trackChange = []byte("--- change")
-
-// From Python version:
-// self.tables = {}
-// # Use line number from original cmd if appropriate
-// if cmd.pid in self.cmds and cmd.processKey == self.cmds[cmd.pid].processKey:
-// 	cmd.lineNumber = self.cmds[cmd.pid].lineNumber
-// tablesTracked = []
-// trackProcessor = TrackProcessor(self.logger)
-// trackProcessor.processTrackLines(cmd, lines, self.tables, tablesTracked)
-// if cmd.completedLapse is not None:
-// 	cmd.setEndTime(dateAdd(cmd.startTime, float(cmd.completedLapse)))
-// else:
-// 	cmd.setEndTime(cmd.startTime)
-// # Don't set tracked info if is one of the special commands which can occur multiple times and
-// # which don't indicate the completion of the command
-// hasTrackInfo = False
-// for t in tablesTracked:
-// 	if not t.startswith("meta_") and not t.startswith("changes_") and not t.startswith("clients_"):
-// 		hasTrackInfo = True
-// self.addCommand(cmd, hasTrackInfo=hasTrackInfo)
-// if hasTrackInfo:
-// 	self.cmd_tables_insert(cmd, self.tables)
-// else:
-// 	# Save special tables for processing when cmd is completed
-// 	for t in self.tables.keys():
-// 		self.cmds[cmd.pid].tables[t] = self.tables[t]
+var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
+var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
+var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
-	tablesTracked := []string{}
 	hasTrackInfo := false
 	for _, line := range lines {
 		if bytes.Equal(trackLapse, line[:len(trackLapse)]) {
@@ -264,12 +406,32 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 				cmd.CompletedLapse = float32(f)
 			}
 		} else if bytes.Equal(trackDB, line[:len(trackDB)]) {
-			tablesTracked = append(tablesTracked, string(line[len(trackDB):]))
+			tableName := string(line[len(trackDB):])
+			t := newTable(tableName)
+			cmd.Tables[tableName] = t
 			hasTrackInfo = true
 		} else if bytes.Equal(trackMeta, line[:len(trackMeta)]) ||
 			bytes.Equal(trackChange, line[:len(trackChange)]) ||
 			bytes.Equal(trackClients, line[:len(trackClients)]) {
 			// Special tables don't have trackInfo set
+		}
+		if !bytes.Equal(trackStart, line[:len(trackStart)]) {
+			continue
+		}
+		m := reTrackUsage.FindSubmatch(line)
+		if len(m) > 0 {
+			cmd.setUsage(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+			continue
+		}
+		m = reTrackRPC2.FindSubmatch(line)
+		if len(m) > 0 {
+			cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+			continue
+		}
+		m = reTrackRPC.FindSubmatch(line)
+		if len(m) > 0 {
+			cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], nil, nil)
+			continue
 		}
 	}
 	cmd.hasTrackInfo = hasTrackInfo
@@ -287,16 +449,17 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 
 // Output all completed commands 3 or more seconds ago
 func (fp *P4dFileParser) outputCompletedCommands() {
+	const timeWindow = 3
 	cmdHasBeenProcessed := false
 	currTime := time.Now()
 	for _, cmd := range fp.cmds {
 		completed := false
-		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second ||
-			(fp.timeLastCmdProcessed != blankTime && currTime.Sub(fp.timeLastCmdProcessed) >= 3*time.Second)) {
+		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= timeWindow*time.Second ||
+			(fp.timeLastCmdProcessed != blankTime && currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow*time.Second)) {
 			completed = true
 		}
 		if !completed && (cmd.hasTrackInfo && cmd.EndTime != blankTime &&
-			fp.currStartTime.Sub(cmd.EndTime) >= 3*time.Second) {
+			fp.currStartTime.Sub(cmd.EndTime) >= timeWindow*time.Second) {
 			completed = true
 		}
 		if completed {
@@ -355,7 +518,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			m = reCmdNoarg.FindSubmatch(line)
 		}
 		if len(m) > 0 {
-			cmd = new(Command)
+			cmd = newCommand()
 			cmd.LineNo = block.lineNo
 			cmd.setStartTime(m[1])
 			cmd.Pid = toInt64(m[2])
