@@ -1,12 +1,16 @@
 package main
 
-// This command line utility wraps up p4d log analyzer
+// This command line utility builds on top of the p4d log analyzer
+// and outputs Prometheus metrics in a single file to be picked up by
+// node_exporter's textfile.collector module.
+
 import (
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"time"
 
 	p4dlog "github.com/rcowham/go-libp4dlog"
@@ -18,10 +22,12 @@ import (
 )
 
 var blankTime time.Time
+var logger logrus.Logger
 
 var (
 	logpath    = flag.String("logpath", "/p4/1/logs/log", "Path to the p4d log file to tail.")
 	outputpath = flag.String("output", "-", "Output - Prometheus metrics file or blank/'-' for stdout")
+	debug      = flag.Bool("debug", false, "debug level")
 )
 
 // Structure for use with libtail
@@ -40,6 +46,10 @@ type P4Prometheus struct {
 	logger         *logrus.Logger
 	cmdCounter     map[string]int32
 	cmdCumulative  map[string]float64
+	totalReadWait  map[string]float64
+	totalReadHeld  map[string]float64
+	totalWriteWait map[string]float64
+	totalWriteHeld map[string]float64
 	lines          chan []byte
 	events         chan string
 	lastOutputTime time.Time
@@ -54,6 +64,10 @@ func newP4Prometheus(logFilename, outputFilename string, logger *logrus.Logger) 
 		events:         make(chan string, 100),
 		cmdCounter:     make(map[string]int32),
 		cmdCumulative:  make(map[string]float64),
+		totalReadWait:  make(map[string]float64),
+		totalReadHeld:  make(map[string]float64),
+		totalWriteWait: make(map[string]float64),
+		totalWriteHeld: make(map[string]float64),
 	}
 }
 
@@ -72,12 +86,44 @@ func (p4p *P4Prometheus) publishCumulative() {
 		fmt.Fprintf(f, "# HELP p4_cmd_counter A count of completed p4 cmds (by cmd)\n"+
 			"# TYPE p4_cmd_counter counter\n")
 		for cmd, count := range p4p.cmdCounter {
-			fmt.Fprintf(f, "p4_cmd_counter{cmd=\"%s\"} %d\n", cmd, count)
+			buf := fmt.Sprintf("p4_cmd_counter{cmd=\"%s\"} %d\n", cmd, count)
+			logger.Debugf(buf)
+			fmt.Fprint(f, buf)
 		}
 		fmt.Fprintf(f, "# HELP p4_cmd_cumulative_seconds The total in seconds (by cmd)\n"+
 			"# TYPE p4_cmd_cumulative_seconds counter\n")
 		for cmd, lapse := range p4p.cmdCumulative {
-			fmt.Fprintf(f, "p4_cmd_cumulative_seconds{cmd=\"%s\"} %0.3f\n", cmd, lapse)
+			buf := fmt.Sprintf("p4_cmd_cumulative_seconds{cmd=\"%s\"} %0.3f\n", cmd, lapse)
+			logger.Debugf(buf)
+			fmt.Fprint(f, buf)
+		}
+		fmt.Fprintf(f, "# HELP p4_total_read_wait The total in seconds (by table)\n"+
+			"# TYPE p4_total_read_wait counter\n")
+		for table, total := range p4p.totalReadWait {
+			buf := fmt.Sprintf("p4_total_read_wait{table=\"%s\"} %0.3f\n", table, total)
+			logger.Debugf(buf)
+			fmt.Fprint(f, buf)
+		}
+		fmt.Fprintf(f, "# HELP p4_total_read_held The total in seconds (by table)\n"+
+			"# TYPE p4_total_read_held counter\n")
+		for table, total := range p4p.totalReadHeld {
+			buf := fmt.Sprintf("p4_total_read_held{table=\"%s\"} %0.3f\n", table, total)
+			logger.Debugf(buf)
+			fmt.Fprint(f, buf)
+		}
+		fmt.Fprintf(f, "# HELP p4_total_write_wait The total in seconds (by table)\n"+
+			"# TYPE p4_total_write_wait counter\n")
+		for table, total := range p4p.totalWriteWait {
+			buf := fmt.Sprintf("p4_total_write_wait{table=\"%s\"} %0.3f\n", table, total)
+			logger.Debugf(buf)
+			fmt.Fprint(f, buf)
+		}
+		fmt.Fprintf(f, "# HELP p4_total_write_wait The total in seconds (by table)\n"+
+			"# TYPE p4_total_write_wait counter\n")
+		for table, total := range p4p.totalWriteHeld {
+			buf := fmt.Sprintf("p4_total_write_wait{table=\"%s\"} %0.3f\n", table, total)
+			logger.Debugf(buf)
+			fmt.Fprint(f, buf)
 		}
 		f.Close()
 		os.Rename(tmpfile.Name(), p4p.outputFilename)
@@ -85,15 +131,24 @@ func (p4p *P4Prometheus) publishCumulative() {
 	}
 }
 
+func (p4p *P4Prometheus) getMilliseconds(tmap map[string]interface{}, fieldName string) float64 {
+	p4p.logger.Debugf("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	if total, ok := tmap[fieldName].(float64); ok {
+		return (total / 1000)
+	}
+	return 0
+}
+
 func (p4p *P4Prometheus) publishEvent(str string) {
+	p4p.logger.Debugf("publish json: %v\n", str)
 	var f interface{}
 	err := json.Unmarshal([]byte(str), &f)
 	if err != nil {
 		fmt.Printf("Error %v to unmarshal %s", err, str)
 	}
 	m := f.(map[string]interface{})
-	fmt.Printf("%v\n", m)
-	fmt.Printf("cmd{\"%s\"}=%0.3f\n", m["cmd"], m["completedLapse"])
+	p4p.logger.Debugf("unmarshalled: %v\n", m)
+	p4p.logger.Debugf("cmd{\"%s\"}=%0.3f\n", m["cmd"], m["completedLapse"])
 	var cmd string
 	var ok bool
 	if cmd, ok = m["cmd"].(string); !ok {
@@ -108,17 +163,30 @@ func (p4p *P4Prometheus) publishEvent(str string) {
 
 	p4p.cmdCounter[cmd]++
 	p4p.cmdCumulative[cmd] += lapse
-	p4p.publishCumulative()
 
-	// 		"p4.cmd":           m["cmd"],
-	// 		"p4.user":          m["user"],
-	// 		"p4.workspace":     m["workspace"],
-	// 		"p4.ip":            m["ip"],
-	// 		"p4.args":          m["args"],
-	// 		"p4.start_time":    m["startTime"],
-	// 		"p4.end_time":      m["endTime"],
-	// 		"p4.compute_sec":   m["computeLapse"],
-	// 		"p4.completed_sec": m["completedLapse"],
+	var tables []interface{}
+	p4p.logger.Debugf("Type: %v\n", reflect.TypeOf(m["tables"]))
+	if tables, ok = m["tables"].([]interface{}); ok {
+		for i := range tables {
+			p4p.logger.Debugf("table: %v, %v\n", reflect.TypeOf(tables[i]), tables[i])
+			var table map[string]interface{}
+			var tableName string
+			if table, ok = tables[i].(map[string]interface{}); !ok {
+				continue
+			}
+			if tableName, ok = table["tableName"].(string); !ok {
+				continue
+			}
+			if tableName == "" {
+				continue
+			}
+			p4p.totalReadHeld[tableName] += p4p.getMilliseconds(table, "totalReadHeld")
+			p4p.totalReadWait[tableName] += p4p.getMilliseconds(table, "totalReadWait")
+			p4p.totalWriteHeld[tableName] += p4p.getMilliseconds(table, "totalWriteHeld")
+			p4p.totalWriteWait[tableName] += p4p.getMilliseconds(table, "totalWriteWait")
+		}
+	}
+	p4p.publishCumulative()
 }
 
 func (p4p *P4Prometheus) processEvents() {
@@ -166,6 +234,9 @@ func main() {
 
 	logger := logrus.New()
 	logger.Level = logrus.InfoLevel
+	if *debug {
+		logger.Level = logrus.DebugLevel
+	}
 
 	p4p := newP4Prometheus(*logpath, *outputpath, logger)
 	logger.Infof("Processing log file: %s\n", *logpath)

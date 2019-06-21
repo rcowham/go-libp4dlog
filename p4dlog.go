@@ -374,6 +374,11 @@ func (c *Command) updateFrom(other *Command) {
 	if other.RpcRcv > 0 {
 		c.RpcRcv = other.RpcRcv
 	}
+	if len(other.Tables) > 0 {
+		for k, t := range other.Tables {
+			c.Tables[k] = t
+		}
+	}
 }
 
 // P4dFileParser - manages state
@@ -450,6 +455,13 @@ var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/wri
 var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 
+func getTable(cmd *Command, tableName string) *Table {
+	if _, ok := cmd.Tables[tableName]; !ok {
+		cmd.Tables[tableName] = newTable(tableName)
+	}
+	return cmd.Tables[tableName]
+}
+
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 	hasTrackInfo := false
 	var tableName string
@@ -462,15 +474,20 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 				f, _ := strconv.ParseFloat(string(val[i:j-i]), 32)
 				cmd.CompletedLapse = float32(f)
 			}
-		} else if bytes.Equal(trackDB, line[:len(trackDB)]) {
+			continue
+		}
+		if bytes.Equal(trackDB, line[:len(trackDB)]) {
 			tableName = string(line[len(trackDB):])
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
 			hasTrackInfo = true
-		} else if bytes.Equal(trackMeta, line[:len(trackMeta)]) ||
+			continue
+		}
+		if bytes.Equal(trackMeta, line[:len(trackMeta)]) ||
 			bytes.Equal(trackChange, line[:len(trackChange)]) ||
 			bytes.Equal(trackClients, line[:len(trackClients)]) {
 			// Special tables don't have trackInfo set
+			continue
 		}
 		if !bytes.Equal(trackStart, line[:len(trackStart)]) {
 			continue
@@ -492,37 +509,32 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 		}
 		m = reTrackPages.FindSubmatch(line)
 		if len(m) > 0 {
-			if t, ok := cmd.Tables[tableName]; ok {
-				t.setPages(m[1], m[2], m[3])
-			}
+			t := getTable(cmd, tableName)
+			t.setPages(m[1], m[2], m[3])
 			continue
 		}
 		m = reTrackLocksRows.FindSubmatch(line)
 		if len(m) > 0 {
-			if t, ok := cmd.Tables[tableName]; ok {
-				t.setLocksRows(m[1], m[2], m[3], m[4], m[5], m[6], m[7])
-			}
+			t := getTable(cmd, tableName)
+			t.setLocksRows(m[1], m[2], m[3], m[4], m[5], m[6], m[7])
 			continue
 		}
 		m = reTrackTotalLock.FindSubmatch(line)
 		if len(m) > 0 {
-			if t, ok := cmd.Tables[tableName]; ok {
-				t.setTotalLock(m[1], m[2], m[3], m[4])
-			}
+			t := getTable(cmd, tableName)
+			t.setTotalLock(m[1], m[2], m[3], m[4])
 			continue
 		}
 		m = reTrackMaxLock.FindSubmatch(line)
 		if len(m) > 0 {
-			if t, ok := cmd.Tables[tableName]; ok {
-				t.setMaxLock(m[1], m[2], m[3], m[4])
-			}
+			t := getTable(cmd, tableName)
+			t.setMaxLock(m[1], m[2], m[3], m[4])
 			continue
 		}
 		m = reTrackPeek.FindSubmatch(line)
 		if len(m) > 0 {
-			if t, ok := cmd.Tables[tableName]; ok {
-				t.setPeek(m[1], m[2], m[3], m[4], m[5])
-			}
+			t := getTable(cmd, tableName)
+			t.setPeek(m[1], m[2], m[3], m[4], m[5])
 			continue
 		}
 	}
