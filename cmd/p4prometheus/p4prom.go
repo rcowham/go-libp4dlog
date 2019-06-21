@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"time"
@@ -22,7 +21,6 @@ import (
 )
 
 var blankTime time.Time
-var logger logrus.Logger
 
 var (
 	logpath    = flag.String("logpath", "/p4/1/logs/log", "Path to the p4d log file to tail.")
@@ -60,8 +58,8 @@ func newP4Prometheus(logFilename, outputFilename string, logger *logrus.Logger) 
 		logFilename:    logFilename,
 		outputFilename: outputFilename,
 		logger:         logger,
-		lines:          make(chan []byte, 100),
-		events:         make(chan string, 100),
+		lines:          make(chan []byte, 10000),
+		events:         make(chan string, 10000),
 		cmdCounter:     make(map[string]int32),
 		cmdCumulative:  make(map[string]float64),
 		totalReadWait:  make(map[string]float64),
@@ -73,61 +71,63 @@ func newP4Prometheus(logFilename, outputFilename string, logger *logrus.Logger) 
 
 func (p4p *P4Prometheus) publishCumulative() {
 	if p4p.lastOutputTime == blankTime || time.Now().Sub(p4p.lastOutputTime) >= time.Second*10 {
-		tmpfile, err := ioutil.TempFile("", "~output")
+		f, err := os.Create(p4p.outputFilename)
 		if err != nil {
-			p4p.logger.Fatal(err)
+			p4p.logger.Errorf("Error opening %s: %v", p4p.outputFilename, err)
+			return
 		}
-		f, err := os.Create(tmpfile.Name())
-		if err != nil {
-			p4p.logger.Fatal(err)
-		}
-		p4p.logger.Infof("Temp file: %s\n", tmpfile.Name())
+		p4p.logger.Infof("Writing stats\n")
 		p4p.lastOutputTime = time.Now()
 		fmt.Fprintf(f, "# HELP p4_cmd_counter A count of completed p4 cmds (by cmd)\n"+
 			"# TYPE p4_cmd_counter counter\n")
 		for cmd, count := range p4p.cmdCounter {
 			buf := fmt.Sprintf("p4_cmd_counter{cmd=\"%s\"} %d\n", cmd, count)
-			logger.Debugf(buf)
+			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
 		fmt.Fprintf(f, "# HELP p4_cmd_cumulative_seconds The total in seconds (by cmd)\n"+
 			"# TYPE p4_cmd_cumulative_seconds counter\n")
 		for cmd, lapse := range p4p.cmdCumulative {
 			buf := fmt.Sprintf("p4_cmd_cumulative_seconds{cmd=\"%s\"} %0.3f\n", cmd, lapse)
-			logger.Debugf(buf)
+			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
-		fmt.Fprintf(f, "# HELP p4_total_read_wait The total in seconds (by table)\n"+
-			"# TYPE p4_total_read_wait counter\n")
+		fmt.Fprintf(f, "# HELP p4_total_read_wait_seconds The total waiting for read locks in seconds (by table)\n"+
+			"# TYPE p4_total_read_wait_seconds counter\n")
 		for table, total := range p4p.totalReadWait {
-			buf := fmt.Sprintf("p4_total_read_wait{table=\"%s\"} %0.3f\n", table, total)
-			logger.Debugf(buf)
+			buf := fmt.Sprintf("p4_total_read_wait_seconds{table=\"%s\"} %0.3f\n", table, total)
+			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
-		fmt.Fprintf(f, "# HELP p4_total_read_held The total in seconds (by table)\n"+
-			"# TYPE p4_total_read_held counter\n")
+		fmt.Fprintf(f, "# HELP p4_total_read_held_seconds The total read locks held in seconds (by table)\n"+
+			"# TYPE p4_total_read_held_seconds counter\n")
 		for table, total := range p4p.totalReadHeld {
-			buf := fmt.Sprintf("p4_total_read_held{table=\"%s\"} %0.3f\n", table, total)
-			logger.Debugf(buf)
+			buf := fmt.Sprintf("p4_total_read_held_seconds{table=\"%s\"} %0.3f\n", table, total)
+			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
-		fmt.Fprintf(f, "# HELP p4_total_write_wait The total in seconds (by table)\n"+
-			"# TYPE p4_total_write_wait counter\n")
+		fmt.Fprintf(f, "# HELP p4_total_write_wait_seconds The total waiting for write locks in seconds (by table)\n"+
+			"# TYPE p4_total_write_wait_seconds counter\n")
 		for table, total := range p4p.totalWriteWait {
-			buf := fmt.Sprintf("p4_total_write_wait{table=\"%s\"} %0.3f\n", table, total)
-			logger.Debugf(buf)
+			buf := fmt.Sprintf("p4_total_write_wait_seconds{table=\"%s\"} %0.3f\n", table, total)
+			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
-		fmt.Fprintf(f, "# HELP p4_total_write_wait The total in seconds (by table)\n"+
-			"# TYPE p4_total_write_wait counter\n")
+		fmt.Fprintf(f, "# HELP p4_total_write_held_seconds The total write locks held in seconds (by table)\n"+
+			"# TYPE p4_total_write_held_seconds counter\n")
 		for table, total := range p4p.totalWriteHeld {
-			buf := fmt.Sprintf("p4_total_write_wait{table=\"%s\"} %0.3f\n", table, total)
-			logger.Debugf(buf)
+			buf := fmt.Sprintf("p4_total_write_held_seconds{table=\"%s\"} %0.3f\n", table, total)
+			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
-		f.Close()
-		os.Rename(tmpfile.Name(), p4p.outputFilename)
-		os.Chmod(p4p.outputFilename, 0644)
+		err = f.Close()
+		if err != nil {
+			p4p.logger.Errorf("Error closing file: %v", err)
+		}
+		err = os.Chmod(p4p.outputFilename, 0644)
+		if err != nil {
+			p4p.logger.Errorf("Error chmod-ing file: %v", err)
+		}
 	}
 }
 
