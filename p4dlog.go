@@ -446,6 +446,9 @@ var trackDB = []byte("--- db.")
 var trackMeta = []byte("--- meta")
 var trackClients = []byte("--- clients")
 var trackChange = []byte("--- change")
+var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
+var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
+var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
@@ -606,6 +609,27 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, complet
 	}
 }
 
+func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line []byte) {
+	// Expects a single line with a lapse statement on it
+	var triggerLapse float64
+	m := reTriggerLapse.FindSubmatch(line)
+	if len(m) > 0 {
+		triggerLapse, _ := strconv.ParseFloat(string(m[1]), 64)
+	} else {
+		m = reTriggerLapse2.FindSubmatch(line)
+		if len(m) > 0 {
+			s = fmt.Sprintf("0.%s", string(m[1]))
+			triggerLapse, _ := strconv.ParseFloat(s, 64)
+		}
+	}
+	if triggerLapse > 0 {
+		tableName = fmt.Sprintf("trigger_%s", trigger)
+		t := newTable(tableName)
+		t.TriggerLapse = triggerLapse
+		cmd.Tables[tableName] = t
+	}
+}
+
 func (fp *P4dFileParser) processInfoBlock(block *Block) {
 
 	var cmd *Command
@@ -641,13 +665,20 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 					cmd.Args = sm[1]
 				}
 			}
-			//TODO - proper trigger support - for now just remove
+			// Detect trigger entries
+			trigger := ""
 			if i := bytes.Index(line, []byte("' trigger ")); i >= 0 {
-				line = line[:i+1]
+				tm := reCmdTrigger.FindSubmatch(line)
+				if len(tm) > 0 {
+					trigger = tm[1]
+				line = line[:i+1]	// Strip from the line
 			}
 			h := md5.Sum(line)
 			cmd.ProcessKey = hex.EncodeToString(h[:])
 			fp.addCommand(cmd, false)
+			if len(trigger) > 0 {
+					fp.processTriggerLapse(cmd, trigger, block.lines[-1])
+			}
 		} else {
 			// process completed and computed
 			m := reCompleted.FindSubmatch(line)
