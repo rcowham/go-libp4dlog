@@ -13,6 +13,7 @@ import (
 	"time"
 
 	p4dlog "github.com/rcowham/go-libp4dlog"
+	"github.com/rcowham/go-libp4dlog/cmd/p4prometheus/config"
 	"github.com/rcowham/go-libtail/tailer"
 	"github.com/rcowham/go-libtail/tailer/fswatcher"
 	"github.com/rcowham/go-libtail/tailer/glob"
@@ -23,6 +24,7 @@ import (
 var blankTime time.Time
 
 var (
+	configfile = flag.String("config", "p4prometheus.yaml", "Config file.")
 	logpath    = flag.String("logpath", "/p4/1/logs/log", "Path to the p4d log file to tail.")
 	outputpath = flag.String("output", "-", "Output - Prometheus metrics file or blank/'-' for stdout")
 	debug      = flag.Bool("debug", false, "debug level")
@@ -238,15 +240,19 @@ func main() {
 		logger.Level = logrus.DebugLevel
 	}
 
-	p4p := newP4Prometheus(*logpath, *outputpath, logger)
-	logger.Infof("Processing log file: %s\n", *logpath)
+	cfg, err := config.LoadConfigFile(*configfile)
+	if err != nil {
+		exitOnError(err)
+	}
+	logger.Infof("Processing log file: '%s' output to '%s'\n", cfg.LogPath, cfg.MetricsOutput)
+	p4p := newP4Prometheus(cfg.LogPath, cfg.MetricsOutput, logger)
 
 	fp := p4dlog.NewP4dFileParser()
 	go fp.LogParser(p4p.lines, p4p.events)
 
 	//---------------
 
-	cfg := &logConfig{
+	logcfg := &logConfig{
 		Type:                 "file",
 		Path:                 *logpath,
 		PollInterval:         0,
@@ -254,7 +260,7 @@ func main() {
 		FailOnMissingLogfile: true,
 	}
 
-	tail, err := startTailer(cfg, logger)
+	tail, err := startTailer(logcfg, logger)
 	exitOnError(err)
 
 	lineNo := 0
