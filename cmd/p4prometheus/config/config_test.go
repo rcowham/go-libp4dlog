@@ -5,16 +5,25 @@ import (
 )
 
 const defaultConfig = `
-logpath: /p4/1/logs/log
-metricsoutput: /hxlogs/metrics/cmds.prom
-serverid: myserverid
-sdpinstance: 1
+log_path:		/p4/1/logs/log
+metrics_output:	/hxlogs/metrics/cmds.prom
+server_id:		myserverid
+sdp_instance: 	1
 `
 
 func TestValidConfig(t *testing.T) {
 	cfg := loadOrFail(t, defaultConfig)
 	if cfg.LogPath != "/p4/1/logs/log" {
 		t.Fatalf("Error parsing LogPath, got %v", cfg.LogPath)
+	}
+	if cfg.MetricsOutput != "/hxlogs/metrics/cmds.prom" {
+		t.Fatalf("Error parsing MetricsOutput, got %v", cfg.MetricsOutput)
+	}
+	if cfg.ServerID != "myserverid" {
+		t.Fatalf("Error parsing ServerID, got %v", cfg.ServerID)
+	}
+	if cfg.SDPInstance != "1" {
+		t.Fatalf("Error parsing LogPath, got %v", cfg.SDPInstance)
 	}
 }
 

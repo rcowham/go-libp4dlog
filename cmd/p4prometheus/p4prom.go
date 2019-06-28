@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"time"
@@ -25,8 +26,6 @@ var blankTime time.Time
 
 var (
 	configfile = flag.String("config", "p4prometheus.yaml", "Config file.")
-	logpath    = flag.String("logpath", "/p4/1/logs/log", "Path to the p4d log file to tail.")
-	outputpath = flag.String("output", "-", "Output - Prometheus metrics file or blank/'-' for stdout")
 	debug      = flag.Bool("debug", false, "debug level")
 )
 
@@ -41,8 +40,7 @@ type logConfig struct {
 
 // P4Prometheus structure
 type P4Prometheus struct {
-	logFilename    string
-	outputFilename string
+	config         *config.Config
 	logger         *logrus.Logger
 	cmdCounter     map[string]int32
 	cmdCumulative  map[string]float64
@@ -55,10 +53,9 @@ type P4Prometheus struct {
 	lastOutputTime time.Time
 }
 
-func newP4Prometheus(logFilename, outputFilename string, logger *logrus.Logger) (p4p *P4Prometheus) {
+func newP4Prometheus(config *config.Config, logger *logrus.Logger) (p4p *P4Prometheus) {
 	return &P4Prometheus{
-		logFilename:    logFilename,
-		outputFilename: outputFilename,
+		config:         config,
 		logger:         logger,
 		lines:          make(chan []byte, 10000),
 		events:         make(chan string, 10000),
@@ -73,9 +70,9 @@ func newP4Prometheus(logFilename, outputFilename string, logger *logrus.Logger) 
 
 func (p4p *P4Prometheus) publishCumulative() {
 	if p4p.lastOutputTime == blankTime || time.Now().Sub(p4p.lastOutputTime) >= time.Second*10 {
-		f, err := os.Create(p4p.outputFilename)
+		f, err := os.Create(p4p.config.MetricsOutput)
 		if err != nil {
-			p4p.logger.Errorf("Error opening %s: %v", p4p.outputFilename, err)
+			p4p.logger.Errorf("Error opening %s: %v", p4p.config.MetricsOutput, err)
 			return
 		}
 		p4p.logger.Infof("Writing stats\n")
@@ -83,42 +80,48 @@ func (p4p *P4Prometheus) publishCumulative() {
 		fmt.Fprintf(f, "# HELP p4_cmd_counter A count of completed p4 cmds (by cmd)\n"+
 			"# TYPE p4_cmd_counter counter\n")
 		for cmd, count := range p4p.cmdCounter {
-			buf := fmt.Sprintf("p4_cmd_counter{cmd=\"%s\"} %d\n", cmd, count)
+			buf := fmt.Sprintf("p4_cmd_counter{cmd=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %d\n",
+				cmd, p4p.config.ServerID, p4p.config.SDPInstance, count)
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
 		fmt.Fprintf(f, "# HELP p4_cmd_cumulative_seconds The total in seconds (by cmd)\n"+
 			"# TYPE p4_cmd_cumulative_seconds counter\n")
 		for cmd, lapse := range p4p.cmdCumulative {
-			buf := fmt.Sprintf("p4_cmd_cumulative_seconds{cmd=\"%s\"} %0.3f\n", cmd, lapse)
+			buf := fmt.Sprintf("p4_cmd_cumulative_seconds{cmd=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
+				cmd, p4p.config.ServerID, p4p.config.SDPInstance, lapse)
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
 		fmt.Fprintf(f, "# HELP p4_total_read_wait_seconds The total waiting for read locks in seconds (by table)\n"+
 			"# TYPE p4_total_read_wait_seconds counter\n")
 		for table, total := range p4p.totalReadWait {
-			buf := fmt.Sprintf("p4_total_read_wait_seconds{table=\"%s\"} %0.3f\n", table, total)
+			buf := fmt.Sprintf("p4_total_read_wait_seconds{table=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
+				table, p4p.config.ServerID, p4p.config.SDPInstance, total)
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
 		fmt.Fprintf(f, "# HELP p4_total_read_held_seconds The total read locks held in seconds (by table)\n"+
 			"# TYPE p4_total_read_held_seconds counter\n")
 		for table, total := range p4p.totalReadHeld {
-			buf := fmt.Sprintf("p4_total_read_held_seconds{table=\"%s\"} %0.3f\n", table, total)
+			buf := fmt.Sprintf("p4_total_read_held_seconds{table=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
+				table, p4p.config.ServerID, p4p.config.SDPInstance, total)
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
 		fmt.Fprintf(f, "# HELP p4_total_write_wait_seconds The total waiting for write locks in seconds (by table)\n"+
 			"# TYPE p4_total_write_wait_seconds counter\n")
 		for table, total := range p4p.totalWriteWait {
-			buf := fmt.Sprintf("p4_total_write_wait_seconds{table=\"%s\"} %0.3f\n", table, total)
+			buf := fmt.Sprintf("p4_total_write_wait_seconds{table=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
+				table, p4p.config.ServerID, p4p.config.SDPInstance, total)
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
 		fmt.Fprintf(f, "# HELP p4_total_write_held_seconds The total write locks held in seconds (by table)\n"+
 			"# TYPE p4_total_write_held_seconds counter\n")
 		for table, total := range p4p.totalWriteHeld {
-			buf := fmt.Sprintf("p4_total_write_held_seconds{table=\"%s\"} %0.3f\n", table, total)
+			buf := fmt.Sprintf("p4_total_write_held_seconds{table=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
+				table, p4p.config.ServerID, p4p.config.SDPInstance, total)
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
@@ -126,7 +129,7 @@ func (p4p *P4Prometheus) publishCumulative() {
 		if err != nil {
 			p4p.logger.Errorf("Error closing file: %v", err)
 		}
-		err = os.Chmod(p4p.outputFilename, 0644)
+		err = os.Chmod(p4p.config.MetricsOutput, 0644)
 		if err != nil {
 			p4p.logger.Errorf("Error chmod-ing file: %v", err)
 		}
@@ -231,6 +234,19 @@ func exitOnError(err error) {
 	}
 }
 
+func readServerID(logger *logrus.Logger, instance string) string {
+	idfile := fmt.Sprintf("/p4/%s/root/server.id", instance)
+	if _, err := os.Stat(idfile); err == nil {
+		buf, err := ioutil.ReadFile("file.txt") // just pass the file name
+		if err != nil {
+			logger.Errorf("Failed to read %v - %v", err)
+			return ""
+		}
+		return string(buf)
+	}
+	return ""
+}
+
 func main() {
 	flag.Parse()
 
@@ -244,8 +260,13 @@ func main() {
 	if err != nil {
 		exitOnError(err)
 	}
-	logger.Infof("Processing log file: '%s' output to '%s'\n", cfg.LogPath, cfg.MetricsOutput)
-	p4p := newP4Prometheus(cfg.LogPath, cfg.MetricsOutput, logger)
+	logger.Infof("Processing log file: '%s' output to '%s' SDP instance '%s'\n",
+		cfg.LogPath, cfg.MetricsOutput, cfg.SDPInstance)
+	if len(cfg.ServerID) == 0 {
+		cfg.ServerID = readServerID(logger, cfg.SDPInstance)
+	}
+	logger.Infof("Server id: '%s'\n", cfg.ServerID)
+	p4p := newP4Prometheus(cfg, logger)
 
 	fp := p4dlog.NewP4dFileParser()
 	go fp.LogParser(p4p.lines, p4p.events)
@@ -254,7 +275,7 @@ func main() {
 
 	logcfg := &logConfig{
 		Type:                 "file",
-		Path:                 *logpath,
+		Path:                 cfg.LogPath,
 		PollInterval:         0,
 		Readall:              true,
 		FailOnMissingLogfile: true,

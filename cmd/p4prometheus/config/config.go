@@ -10,10 +10,10 @@ import (
 
 // Config for p4prometheus
 type Config struct {
-	LogPath       string `yaml:"logpath"`
-	MetricsOutput string `yaml:"metricsoutput"`
-	ServerID      string `yaml:"serverid"`
-	SDPInstance   string `yaml:"sdpinstance"`
+	LogPath       string `yaml:"log_path"`
+	MetricsOutput string `yaml:"metrics_output"`
+	ServerID      string `yaml:"server_id"`
+	SDPInstance   string `yaml:"sdp_instance"`
 }
 
 // Unmarshal the config
@@ -49,13 +49,13 @@ func LoadConfigString(content []byte) (*Config, error) {
 
 func (c *Config) validate() error {
 	if c.LogPath == "" {
-		return fmt.Errorf("Invalid LogPath: please specify name of p4d server log")
+		return fmt.Errorf("Invalid log_path: please specify name of p4d server log")
 	}
 	if c.MetricsOutput == "" {
-		return fmt.Errorf("Invalid MetricsOutput: please specify name of Prometheus metric file to write")
+		return fmt.Errorf("Invalid metrics_output: please specify name of Prometheus metric file to write, e.g. /hxlogs/metrics/p4_cmds.prom")
 	}
 	if !strings.HasSuffix(c.MetricsOutput, ".prom") {
-		return fmt.Errorf("Invalid MetricsOutput: Prometheus metric file must end in '.prom'")
+		return fmt.Errorf("Invalid metrics_output: Prometheus metric file must end in '.prom'")
 	}
 	return nil
 }
