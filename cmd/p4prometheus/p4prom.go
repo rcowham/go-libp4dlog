@@ -40,31 +40,33 @@ type logConfig struct {
 
 // P4Prometheus structure
 type P4Prometheus struct {
-	config         *config.Config
-	logger         *logrus.Logger
-	cmdCounter     map[string]int32
-	cmdCumulative  map[string]float64
-	totalReadWait  map[string]float64
-	totalReadHeld  map[string]float64
-	totalWriteWait map[string]float64
-	totalWriteHeld map[string]float64
-	lines          chan []byte
-	events         chan string
-	lastOutputTime time.Time
+	config            *config.Config
+	logger            *logrus.Logger
+	cmdCounter        map[string]int32
+	cmdCumulative     map[string]float64
+	totalReadWait     map[string]float64
+	totalReadHeld     map[string]float64
+	totalWriteWait    map[string]float64
+	totalWriteHeld    map[string]float64
+	totalTriggerLapse map[string]float64
+	lines             chan []byte
+	events            chan string
+	lastOutputTime    time.Time
 }
 
 func newP4Prometheus(config *config.Config, logger *logrus.Logger) (p4p *P4Prometheus) {
 	return &P4Prometheus{
-		config:         config,
-		logger:         logger,
-		lines:          make(chan []byte, 10000),
-		events:         make(chan string, 10000),
-		cmdCounter:     make(map[string]int32),
-		cmdCumulative:  make(map[string]float64),
-		totalReadWait:  make(map[string]float64),
-		totalReadHeld:  make(map[string]float64),
-		totalWriteWait: make(map[string]float64),
-		totalWriteHeld: make(map[string]float64),
+		config:            config,
+		logger:            logger,
+		lines:             make(chan []byte, 10000),
+		events:            make(chan string, 10000),
+		cmdCounter:        make(map[string]int32),
+		cmdCumulative:     make(map[string]float64),
+		totalReadWait:     make(map[string]float64),
+		totalReadHeld:     make(map[string]float64),
+		totalWriteWait:    make(map[string]float64),
+		totalWriteHeld:    make(map[string]float64),
+		totalTriggerLapse: make(map[string]float64),
 	}
 }
 
@@ -125,6 +127,14 @@ func (p4p *P4Prometheus) publishCumulative() {
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
+		fmt.Fprintf(f, "# HELP p4_total_trigger_lapse_seconds The total lapse time for triggers in seconds (by trigger)\n"+
+			"# TYPE p4_total_trigger_lapse_seconds counter\n")
+		for table, total := range p4p.totalTriggerLapse {
+			buf := fmt.Sprintf("p4_total_trigger_lapse_seconds{trigger=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
+				table, p4p.config.ServerID, p4p.config.SDPInstance, total)
+			p4p.logger.Debugf(buf)
+			fmt.Fprint(f, buf)
+		}
 		err = f.Close()
 		if err != nil {
 			p4p.logger.Errorf("Error closing file: %v", err)
@@ -134,6 +144,14 @@ func (p4p *P4Prometheus) publishCumulative() {
 			p4p.logger.Errorf("Error chmod-ing file: %v", err)
 		}
 	}
+}
+
+func (p4p *P4Prometheus) getSeconds(tmap map[string]interface{}, fieldName string) float64 {
+	p4p.logger.Debugf("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	if total, ok := tmap[fieldName].(float64); ok {
+		return (total)
+	}
+	return 0
 }
 
 func (p4p *P4Prometheus) getMilliseconds(tmap map[string]interface{}, fieldName string) float64 {
@@ -170,6 +188,7 @@ func (p4p *P4Prometheus) publishEvent(str string) {
 	p4p.cmdCumulative[cmd] += lapse
 
 	var tables []interface{}
+	const triggerPrefix = "trigger_"
 	p4p.logger.Debugf("Type: %v\n", reflect.TypeOf(m["tables"]))
 	if tables, ok = m["tables"].([]interface{}); ok {
 		for i := range tables {
@@ -185,10 +204,15 @@ func (p4p *P4Prometheus) publishEvent(str string) {
 			if tableName == "" {
 				continue
 			}
-			p4p.totalReadHeld[tableName] += p4p.getMilliseconds(table, "totalReadHeld")
-			p4p.totalReadWait[tableName] += p4p.getMilliseconds(table, "totalReadWait")
-			p4p.totalWriteHeld[tableName] += p4p.getMilliseconds(table, "totalWriteHeld")
-			p4p.totalWriteWait[tableName] += p4p.getMilliseconds(table, "totalWriteWait")
+			if len(tableName) > len(triggerPrefix) && tableName[:len(triggerPrefix)] == triggerPrefix {
+				triggerName := tableName[len(triggerPrefix):]
+				p4p.totalTriggerLapse[triggerName] += p4p.getSeconds(table, "triggerLapse")
+			} else {
+				p4p.totalReadHeld[tableName] += p4p.getMilliseconds(table, "totalReadHeld")
+				p4p.totalReadWait[tableName] += p4p.getMilliseconds(table, "totalReadWait")
+				p4p.totalWriteHeld[tableName] += p4p.getMilliseconds(table, "totalWriteHeld")
+				p4p.totalWriteWait[tableName] += p4p.getMilliseconds(table, "totalWriteWait")
+			}
 		}
 	}
 	p4p.publishCumulative()
@@ -222,7 +246,7 @@ func startTailer(cfgInput *logConfig, logger *logrus.Logger) (fswatcher.FileTail
 	case cfgInput.Type == "stdin":
 		tail = tailer.RunStdinTailer()
 	default:
-		return nil, fmt.Errorf("Config error: Input type '%v' unknown.", cfgInput.Type)
+		return nil, fmt.Errorf("config error: Input type '%v' unknown", cfgInput.Type)
 	}
 	return tail, nil
 }
@@ -237,9 +261,9 @@ func exitOnError(err error) {
 func readServerID(logger *logrus.Logger, instance string) string {
 	idfile := fmt.Sprintf("/p4/%s/root/server.id", instance)
 	if _, err := os.Stat(idfile); err == nil {
-		buf, err := ioutil.ReadFile("file.txt") // just pass the file name
+		buf, err := ioutil.ReadFile(idfile) // just pass the file name
 		if err != nil {
-			logger.Errorf("Failed to read %v - %v", err)
+			logger.Errorf("Failed to read %v - %v", idfile, err)
 			return ""
 		}
 		return string(buf)
