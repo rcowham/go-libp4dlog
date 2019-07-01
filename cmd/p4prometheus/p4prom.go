@@ -5,6 +5,7 @@ package main
 // node_exporter's textfile.collector module.
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -42,6 +43,7 @@ type logConfig struct {
 type P4Prometheus struct {
 	config            *config.Config
 	logger            *logrus.Logger
+	fp                *p4dlog.P4dFileParser
 	cmdCounter        map[string]int32
 	cmdCumulative     map[string]float64
 	totalReadWait     map[string]float64
@@ -49,6 +51,8 @@ type P4Prometheus struct {
 	totalWriteWait    map[string]float64
 	totalWriteHeld    map[string]float64
 	totalTriggerLapse map[string]float64
+	cmdsProcessed     int64
+	linesRead         int64
 	lines             chan []byte
 	events            chan string
 	lastOutputTime    time.Time
@@ -79,6 +83,28 @@ func (p4p *P4Prometheus) publishCumulative() {
 		}
 		p4p.logger.Infof("Writing stats\n")
 		p4p.lastOutputTime = time.Now()
+
+		fmt.Fprintf(f, "# HELP p4_prom_log_lines_read A count of log lines read\n"+
+			"# TYPE p4_prom_log_lines_read counter\n")
+		buf := fmt.Sprintf("p4_prom_log_lines_read{serverid=\"%s\",sdpinst=\"%s\"} %d\n",
+			p4p.config.ServerID, p4p.config.SDPInstance, p4p.linesRead)
+		p4p.logger.Debugf(buf)
+		fmt.Fprint(f, buf)
+
+		fmt.Fprintf(f, "# HELP p4_prom_cmds_processed A count of all cmds processed\n"+
+			"# TYPE p4_prom_cmds_processed counter\n")
+		buf = fmt.Sprintf("p4_prom_cmds_processed{serverid=\"%s\",sdpinst=\"%s\"} %d\n",
+			p4p.config.ServerID, p4p.config.SDPInstance, p4p.cmdsProcessed)
+		p4p.logger.Debugf(buf)
+		fmt.Fprint(f, buf)
+
+		fmt.Fprintf(f, "# HELP p4_prom_cmds_pending A count of all current cmds (not completed)\n"+
+			"# TYPE p4_prom_cmds_pending gauge\n")
+		buf = fmt.Sprintf("p4_prom_cmds_pending{serverid=\"%s\",sdpinst=\"%s\"} %d\n",
+			p4p.config.ServerID, p4p.config.SDPInstance, p4p.fp.CmdsPendingCount())
+		p4p.logger.Debugf(buf)
+		fmt.Fprint(f, buf)
+
 		fmt.Fprintf(f, "# HELP p4_cmd_counter A count of completed p4 cmds (by cmd)\n"+
 			"# TYPE p4_cmd_counter counter\n")
 		for cmd, count := range p4p.cmdCounter {
@@ -127,13 +153,15 @@ func (p4p *P4Prometheus) publishCumulative() {
 			p4p.logger.Debugf(buf)
 			fmt.Fprint(f, buf)
 		}
-		fmt.Fprintf(f, "# HELP p4_total_trigger_lapse_seconds The total lapse time for triggers in seconds (by trigger)\n"+
-			"# TYPE p4_total_trigger_lapse_seconds counter\n")
-		for table, total := range p4p.totalTriggerLapse {
-			buf := fmt.Sprintf("p4_total_trigger_lapse_seconds{trigger=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
-				table, p4p.config.ServerID, p4p.config.SDPInstance, total)
-			p4p.logger.Debugf(buf)
-			fmt.Fprint(f, buf)
+		if len(p4p.totalTriggerLapse) > 0 {
+			fmt.Fprintf(f, "# HELP p4_total_trigger_lapse_seconds The total lapse time for triggers in seconds (by trigger)\n"+
+				"# TYPE p4_total_trigger_lapse_seconds counter\n")
+			for table, total := range p4p.totalTriggerLapse {
+				buf := fmt.Sprintf("p4_total_trigger_lapse_seconds{trigger=\"%s\",serverid=\"%s\",sdpinst=\"%s\"} %0.3f\n",
+					table, p4p.config.ServerID, p4p.config.SDPInstance, total)
+				p4p.logger.Debugf(buf)
+				fmt.Fprint(f, buf)
+			}
 		}
 		err = f.Close()
 		if err != nil {
@@ -266,7 +294,7 @@ func readServerID(logger *logrus.Logger, instance string) string {
 			logger.Errorf("Failed to read %v - %v", idfile, err)
 			return ""
 		}
-		return string(buf)
+		return string(bytes.TrimRight(buf, " \r\n"))
 	}
 	return ""
 }
@@ -294,6 +322,7 @@ func main() {
 	p4p := newP4Prometheus(cfg, logger)
 
 	fp := p4dlog.NewP4dFileParser()
+	p4p.fp = fp
 	go fp.LogParser(p4p.lines, p4p.events)
 
 	//---------------
@@ -309,7 +338,7 @@ func main() {
 	tail, err := startTailer(logcfg, logger)
 	exitOnError(err)
 
-	lineNo := 0
+	p4p.linesRead = 0
 	for {
 		select {
 		case <-time.After(time.Second * 1):
@@ -322,9 +351,10 @@ func main() {
 				exitOnError(fmt.Errorf("error reading log lines: %v", err.Error()))
 			}
 		case line := <-tail.Lines():
-			lineNo++
+			p4p.linesRead++
 			p4p.lines <- []byte(line.Line)
 		case json := <-p4p.events:
+			p4p.cmdsProcessed++
 			p4p.publishEvent(json)
 		}
 	}
