@@ -81,6 +81,7 @@ type Command struct {
 	IP             []byte    `json:"ip"`
 	App            []byte    `json:"app"`
 	Args           []byte    `json:"args"`
+	Running        int64     `json:"running"`
 	UCpu           int64     `json:"uCpu"`
 	SCpu           int64     `json:"sCpu"`
 	DiskIn         int64     `json:"diskIn"`
@@ -101,7 +102,6 @@ type Command struct {
 	duplicateKey   bool
 	completed      bool
 	hasTrackInfo   bool
-	running        int
 }
 
 // Table stores track information per table (part of Command)
@@ -257,6 +257,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Args           string  `json:"args"`
 		StartTime      string  `json:"startTime"`
 		EndTime        string  `json:"endTime"`
+		Running        int64   `json:"running"`
 		UCpu           int64   `json:"uCpu"`
 		SCpu           int64   `json:"sCpu"`
 		DiskIn         int64   `json:"diskIn"`
@@ -288,6 +289,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Args:           string(c.Args),
 		StartTime:      c.StartTime.Format(p4timeformat),
 		EndTime:        c.EndTime.Format(p4timeformat),
+		Running:        c.Running,
 		UCpu:           c.UCpu,
 		SCpu:           c.SCpu,
 		DiskIn:         c.DiskIn,
@@ -390,7 +392,7 @@ type P4dFileParser struct {
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
-	running              int
+	running              int64
 	block                *Block
 }
 
@@ -404,7 +406,7 @@ func NewP4dFileParser() *P4dFileParser {
 }
 
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
-	newCmd.running = fp.running
+	newCmd.Running = fp.running
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
 		fp.pidsSeenThisSecond = make(map[int64]bool)
@@ -614,18 +616,18 @@ func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line 
 	var triggerLapse float64
 	m := reTriggerLapse.FindSubmatch(line)
 	if len(m) > 0 {
-		triggerLapse, _ := strconv.ParseFloat(string(m[1]), 64)
+		triggerLapse, _ = strconv.ParseFloat(string(m[1]), 32)
 	} else {
 		m = reTriggerLapse2.FindSubmatch(line)
 		if len(m) > 0 {
-			s = fmt.Sprintf("0.%s", string(m[1]))
-			triggerLapse, _ := strconv.ParseFloat(s, 64)
+			s := fmt.Sprintf("0.%s", string(m[1]))
+			triggerLapse, _ = strconv.ParseFloat(s, 32)
 		}
 	}
 	if triggerLapse > 0 {
-		tableName = fmt.Sprintf("trigger_%s", trigger)
+		tableName := fmt.Sprintf("trigger_%s", trigger)
 		t := newTable(tableName)
-		t.TriggerLapse = triggerLapse
+		t.TriggerLapse = float32(triggerLapse)
 		cmd.Tables[tableName] = t
 	}
 }
@@ -668,16 +670,17 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			// Detect trigger entries
 			trigger := ""
 			if i := bytes.Index(line, []byte("' trigger ")); i >= 0 {
-				tm := reCmdTrigger.FindSubmatch(line)
+				tm := reCmdTrigger.FindSubmatch(line[i:])
 				if len(tm) > 0 {
-					trigger = tm[1]
-				line = line[:i+1]	// Strip from the line
+					trigger = string(tm[1])
+				}
+				line = line[:i+1] // Strip from the line
 			}
 			h := md5.Sum(line)
 			cmd.ProcessKey = hex.EncodeToString(h[:])
 			fp.addCommand(cmd, false)
 			if len(trigger) > 0 {
-					fp.processTriggerLapse(cmd, trigger, block.lines[-1])
+				fp.processTriggerLapse(cmd, trigger, block.lines[len(block.lines)-1])
 			}
 		} else {
 			// process completed and computed
@@ -745,6 +748,11 @@ func (fp *P4dFileParser) parseFinish() {
 	}
 	fp.outputRemainingCommands()
 	close(fp.outchan)
+}
+
+// CmdsPending - count of unmatched commands
+func (fp *P4dFileParser) CmdsPendingCount() int {
+	return len(fp.cmds)
 }
 
 // LogParser - interface to be run on a go routine

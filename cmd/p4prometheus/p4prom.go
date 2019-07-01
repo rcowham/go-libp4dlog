@@ -272,6 +272,7 @@ func readServerID(logger *logrus.Logger, instance string) string {
 }
 
 func main() {
+	// defer profile.Start().Stop()
 	flag.Parse()
 
 	logger := logrus.New()
