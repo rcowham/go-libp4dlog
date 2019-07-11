@@ -30,6 +30,46 @@ var (
 	healthy      int32
 )
 
+type p4mon struct {
+	all    bool
+	logger *log.Logger
+}
+
+func (p4c *p4mon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	p4c.logger.Println("monitor invoked")
+	p4 := p4.NewP4()
+	result, err := p4.Run([]string{"monitor", "show"})
+	if err != nil {
+		p4c.logger.Printf("Error: %v %v\n", err, result)
+	}
+	msg := ""
+	var id, status, user, ctime, command string
+	for _, r := range result {
+		if v, ok := r["id"]; ok {
+			id = v.(string)
+		}
+		if v, ok := r["status"]; ok {
+			status = v.(string)
+		}
+		if v, ok := r["user"]; ok {
+			user = v.(string)
+		}
+		if v, ok := r["time"]; ok {
+			ctime = v.(string)
+		}
+		if v, ok := r["command"]; ok {
+			command = v.(string)
+		}
+		if !p4c.all && command != "IDLE" {
+			msg += fmt.Sprintf("%-6s %s %-10s %s %s\n", id, status, user, ctime, command)
+		}
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, msg)
+}
+
 func main() {
 	flag.StringVar(&listenAddr, "listen-addr", ":8001", "server listen address")
 	flag.Parse()
@@ -44,12 +84,17 @@ func main() {
 
 	logger.Println("Server is starting...")
 
+	mon := &p4mon{all: false, logger: logger}
+	monAll := &p4mon{all: true, logger: logger}
+
 	router := http.NewServeMux()
 	router.Handle("/", index())
 	router.Handle("/healthz", healthz())
 	router.Handle("/metrics", metrics())
-	router.Handle("/monitor", monitor(logger))
-	router.Handle("/monitor_all", monitorAll())
+	router.Handle("/monitor", mon)
+	router.Handle("/monitor_all", monAll)
+
+	handler := cors.Default().Handler(router)
 
 	nextRequestID := func() string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
@@ -57,7 +102,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         listenAddr,
-		Handler:      tracing(nextRequestID)(logging(logger)(router)),
+		Handler:      tracing(nextRequestID)(logging(logger)(handler)),
 		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -106,79 +151,9 @@ func index() http.Handler {
 	}))
 }
 
-func monitor(logger *log.Logger) http.Handler {
-	logger.Println("monitor invoked")
-	p4 := p4.NewP4()
-	result, err := p4.Run([]string{"monitor", "show"})
-	if err != nil {
-		logger.Printf("Error: %v %v\n", err, result)
-	}
-	msg := ""
-	var id, status, user, ctime, command string
-	for _, r := range result {
-		if v, ok := r["id"]; ok {
-			id = v.(string)
-		}
-		if v, ok := r["status"]; ok {
-			status = v.(string)
-		}
-		if v, ok := r["user"]; ok {
-			user = v.(string)
-		}
-		if v, ok := r["time"]; ok {
-			ctime = v.(string)
-		}
-		if v, ok := r["command"]; ok {
-			command = v.(string)
-		}
-		if command != "IDLE" {
-			msg += fmt.Sprintf("%-6s %s %-10s %s %s\n", id, status, user, ctime, command)
-		}
-	}
-	return cors.Default().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, msg)
-	}))
-}
-
-func monitorAll() http.Handler {
-	p4 := p4.NewP4()
-	result, err := p4.Run([]string{"monitor", "show"})
-	if err != nil {
-		fmt.Printf("Error: %v %v\n", err, result)
-	}
-	msg := ""
-	var id, status, user, ctime, command string
-	for _, r := range result {
-		if v, ok := r["id"]; ok {
-			id = v.(string)
-		}
-		if v, ok := r["status"]; ok {
-			status = v.(string)
-		}
-		if v, ok := r["user"]; ok {
-			user = v.(string)
-		}
-		if v, ok := r["time"]; ok {
-			ctime = v.(string)
-		}
-		if v, ok := r["command"]; ok {
-			command = v.(string)
-		}
-		msg += fmt.Sprintf("%-6s %s %-10s %s %s\n", id, status, user, ctime, command)
-	}
-	return cors.Default().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, msg)
-	}))
-}
-
 func metrics() http.Handler {
-	msg := `	323 I p4dtguser  00:00:05 IDLE
+	msg := `	Static Monitor Output
+	323 I p4dtguser  00:00:05 IDLE
 	1321 I p4dtguser  00:00:04 IDLE 
 	1337 I p4dtguser  00:00:03 IDLE 
 	1353 I p4dtguser  00:00:03 IDLE 
@@ -187,26 +162,6 @@ func metrics() http.Handler {
 	2123 B remote     193:06:33 ldapsync 
 	3283 I p4dtguser  00:00:03 IDLE 
 	3318 R rcowham    00:00:00 monitor 
-	3332 I p4dtguser  00:00:02 IDLE 
-	9835 I svc_p4d_ha 00:38:30 IDLE 
-	9837 I svc_p4d_fr 00:00:00 IDLE 
-	10348 I svc_p4d_fr 00:15:19 IDLE 
-	10891 I svc_p4d_fr 00:03:40 IDLE 
-	12245 I svc_p4d_fr 00:05:34 IDLE 
-	16719 I svc_p4d_ha 00:43:35 IDLE 
-	16729 I svc_p4d_ha 00:52:00 IDLE 
-	17590 I svc_p4d_ha 00:15:19 IDLE 
-	17894 I svc_p4d_fr 00:02:39 IDLE 
-	17895 I svc_p4d_ha 01:24:29 IDLE 
-	19628 I svc_p4d_ha 00:54:10 IDLE 
-	20271 R svc_p4d_ha 00:00:04 rmt-Journal 
-	22056 I svc_p4d_ha 00:19:10 IDLE 
-	22157 I svc_p4d_fr 00:10:57 IDLE 
-	24428 I svc_p4d_ha 00:26:54 IDLE 
-	24429 I svc_p4d_ha 00:22:44 IDLE 
-	24430 I svc_p4d_ha 00:02:39 IDLE 
-	29455 I p4dtguser  00:00:01 IDLE 
-	32663 I p4dtguser  00:00:03 IDLE 
    `
 	return cors.Default().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
