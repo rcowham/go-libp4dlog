@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"reflect"
+	"syscall"
 	"time"
 
 	p4dlog "github.com/rcowham/go-libp4dlog"
@@ -279,13 +281,6 @@ func startTailer(cfgInput *logConfig, logger *logrus.Logger) (fswatcher.FileTail
 	return tail, nil
 }
 
-func exitOnError(err error) {
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err.Error())
-		os.Exit(-1)
-	}
-}
-
 func readServerID(logger *logrus.Logger, instance string) string {
 	idfile := fmt.Sprintf("/p4/%s/root/server.id", instance)
 	if _, err := os.Stat(idfile); err == nil {
@@ -300,6 +295,7 @@ func readServerID(logger *logrus.Logger, instance string) string {
 }
 
 func main() {
+	// for profiling
 	// defer profile.Start().Stop()
 	flag.Parse()
 
@@ -311,7 +307,8 @@ func main() {
 
 	cfg, err := config.LoadConfigFile(*configfile)
 	if err != nil {
-		exitOnError(err)
+		logger.Errorf("error loading config file: %v", err)
+		os.Exit(-1)
 	}
 	logger.Infof("Processing log file: '%s' output to '%s' SDP instance '%s'\n",
 		cfg.LogPath, cfg.MetricsOutput, cfg.SDPInstance)
@@ -336,7 +333,13 @@ func main() {
 	}
 
 	tail, err := startTailer(logcfg, logger)
-	exitOnError(err)
+	if err != nil {
+		logger.Errorf("error starting to tail log lines: %v", err)
+		os.Exit(-2)
+	}
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	p4p.linesRead = 0
 	for {
@@ -346,9 +349,11 @@ func main() {
 			p4p.publishCumulative()
 		case err := <-tail.Errors():
 			if os.IsNotExist(err.Cause()) {
-				exitOnError(fmt.Errorf("error reading log lines: %v: use 'fail_on_missing_logfile: false' in the input configuration if you want grok_exporter to start even though the logfile is missing", err))
+				logger.Errorf("error reading log lines: %v: use 'fail_on_missing_logfile: false' in the input configuration if you want p4prometheus to start even though the logfile is missing", err)
+				os.Exit(-3)
 			} else {
-				exitOnError(fmt.Errorf("error reading log lines: %v", err.Error()))
+				logger.Errorf("error reading log lines: %v", err)
+				os.Exit(-4)
 			}
 		case line := <-tail.Lines():
 			p4p.linesRead++
@@ -356,30 +361,10 @@ func main() {
 		case json := <-p4p.events:
 			p4p.cmdsProcessed++
 			p4p.publishEvent(json)
+		case sig := <-sigs:
+			logger.Infof("Terminating normally - signal %v", sig)
+			os.Exit(0)
 		}
 	}
-
-	// sigs := make(chan os.Signal, 1)
-	// done := make(chan bool, 1)
-
-	// // registers to receive notifications of the specified signals.
-	// signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	// // Block waiting for signals. When it gets one it'll print it out
-	// // and then notify the program that it can finish.
-	// go func() {
-	// 	sig := <-sigs
-	// 	fmt.Println()
-	// 	fmt.Println(sig)
-	// 	done <- true
-	// }()
-
-	// // The program will wait here until it gets the
-	// // expected signal (as indicated by the goroutine
-	// // above sending a value on `done`) and then exit.
-	// fmt.Println("awaiting signal")
-	// <-done
-	// fmt.Println("exiting")
-	// stop <- struct{}{}
 
 }
