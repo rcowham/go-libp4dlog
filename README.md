@@ -1,26 +1,30 @@
 # go-libp4dlog
+
 go-libp4dlog is a library for Go to parse Perforce p4d text logs.
-It can output the results as JSON or SQL statements (for SQLite or MySQL).
 
-# p4prometheus
+P4D log files are written to P4LOG, or "p4d -L log". We would normally recommend configurables server=1 and track1
+though you need to ensure your log file is regularly rotated.
 
-This is a cmd line utility to continuously parse log files and write a summary to 
-a specified Prometheus compatible metrics file which can be handled via node_exporter
-textfile collector module.
+For outline of how to setup P4LOG:
 
-## Installation
+https://www.perforce.com/manuals/p4sag/Content/P4SAG/DB5-79706.html
 
-Create a simple service (/etc/systemd/system/) and run the following as say user `perforce`
+## P4D Log Analysis
 
-/usr/local/bin/p4prometheus -config /p4/common/config/p4prometheus.yaml
+See open source project:
 
-## Config file
+* https://swarm.workshop.perforce.com/projects/perforce-software-log-analyzer
 
-```yaml
-log_path:       /p4/1/logs/log
-metrics_output: /p4/metrics/cmds.prom
-server_id:      
-sdp_instance:   1
-```
+Also KB articles:
 
-Note that server_id can be explicitly specified or will be automatically read from /p4/<instance>/root/server.id
+* https://community.perforce.com/s/article/2514
+* https://community.perforce.com/s/article/2525
+
+## Output of this library
+
+This library can output the results of log parsing as JSON (in future SQL statements for SQLite or MySQL).
+
+It is used by:
+
+* https://github.com/rcowham/p4dbeat - Custom Elastic Beat - consumes parsed log records and sends to Elastic stash
+* https://github.com/rcowham/p4prometheus - consumes parsed log records and writes Prometheus metrics
