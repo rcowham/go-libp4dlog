@@ -134,7 +134,7 @@ func TestLogParseMulti(t *testing.T) {
 	assert.Equal(t, multiExp2, output[0])
 }
 
-func TestLogParseMultiIncremental(t *testing.T) {
+func TestLogParseMultiIncrementalJSON(t *testing.T) {
 	// Test the same results iteratively
 	opts := new(P4dParseOptions)
 	opts.testInput = multiInput
@@ -142,7 +142,7 @@ func TestLogParseMultiIncremental(t *testing.T) {
 	outchan := make(chan string, 100)
 
 	fp := NewP4dFileParser()
-	go fp.LogParser(inchan, outchan)
+	go fp.LogParser(inchan, nil, outchan)
 
 	scanner := bufio.NewScanner(strings.NewReader(opts.testInput))
 	for scanner.Scan() {
@@ -159,6 +159,32 @@ func TestLogParseMultiIncremental(t *testing.T) {
 	sort.Strings(output)
 	assert.Equal(t, multiExp1, output[1])
 	assert.Equal(t, multiExp2, output[0])
+}
+
+func TestLogParseMultiIncrementalCmd(t *testing.T) {
+	// Test the same results iteratively
+	opts := new(P4dParseOptions)
+	opts.testInput = multiInput
+	inchan := make(chan []byte, 100)
+	cmdchan := make(chan Command, 100)
+
+	fp := NewP4dFileParser()
+	go fp.LogParser(inchan, cmdchan, nil)
+
+	scanner := bufio.NewScanner(strings.NewReader(opts.testInput))
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		inchan <- line
+	}
+	close(inchan)
+
+	output := []Command{}
+	for cmd := range cmdchan {
+		output = append(output, cmd)
+	}
+	assert.Equal(t, 2, len(output))
+	assert.Equal(t, "user-sync", string(output[0].Cmd))
+	assert.Equal(t, "user-sync", string(output[1].Cmd))
 }
 
 // func TestLogParseResolve(t *testing.T) {

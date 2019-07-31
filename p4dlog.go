@@ -388,7 +388,8 @@ type P4dFileParser struct {
 	lineNo               int64
 	cmds                 map[int64]*Command
 	inchan               chan []byte
-	outchan              chan string
+	jsonchan             chan string
+	cmdchan              chan Command
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
@@ -549,10 +550,14 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 
 // Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
-	lines := []string{}
-	lines = append(lines, fmt.Sprintf("%v", cmd))
-	if len(lines) > 0 && len(lines[0]) > 0 {
-		fp.outchan <- strings.Join(lines, `\n`)
+	if fp.cmdchan != nil {
+		fp.cmdchan <- *cmd
+	} else {
+		lines := []string{}
+		lines = append(lines, fmt.Sprintf("%v", cmd))
+		if len(lines) > 0 && len(lines[0]) > 0 {
+			fp.jsonchan <- strings.Join(lines, `\n`)
+		}
 	}
 }
 
@@ -747,19 +752,24 @@ func (fp *P4dFileParser) parseFinish() {
 		}
 	}
 	fp.outputRemainingCommands()
-	close(fp.outchan)
+	if fp.cmdchan != nil {
+		close(fp.cmdchan)
+	}
+	if fp.jsonchan != nil {
+		close(fp.jsonchan)
+	}
 }
 
-// CmdsPending - count of unmatched commands
+// CmdsPendingCount - count of unmatched commands
 func (fp *P4dFileParser) CmdsPendingCount() int {
 	return len(fp.cmds)
 }
 
-// LogParser - interface to be run on a go routine
-func (fp *P4dFileParser) LogParser(inchan chan []byte, outchan chan string) {
+// LogParser - interface to be run on a go routine - if cmdchan is not nil it will be used - otherwise jsonchan
+func (fp *P4dFileParser) LogParser(inchan chan []byte, cmdchan chan Command, jsonchan chan string) {
 	fp.inchan = inchan
-	fp.outchan = outchan
-	// timer := time.NewTimer(time.Second * 1)
+	fp.cmdchan = cmdchan
+	fp.jsonchan = jsonchan
 	fp.lineNo = 1
 	for {
 		select {
@@ -779,7 +789,7 @@ func (fp *P4dFileParser) LogParser(inchan chan []byte, outchan chan string) {
 
 // P4LogParseFile - interface for parsing a specified file
 func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan string) {
-	fp.outchan = outchan
+	fp.jsonchan = outchan
 	var scanner *bufio.Scanner
 	if len(opts.testInput) > 0 {
 		scanner = bufio.NewScanner(strings.NewReader(opts.testInput))
