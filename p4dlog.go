@@ -13,16 +13,16 @@ package p4dlog
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -387,23 +387,12 @@ func (c *Command) updateFrom(other *Command) {
 type P4dFileParser struct {
 	lineNo               int64
 	cmds                 map[int64]*Command
-	inchan               chan []byte
-	jsonchan             chan string
 	cmdchan              chan Command
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
 	running              int64
 	block                *Block
-}
-
-// NewP4dFileParser - create and initialise properly
-func NewP4dFileParser() *P4dFileParser {
-	var fp P4dFileParser
-	fp.cmds = make(map[int64]*Command)
-	fp.pidsSeenThisSecond = make(map[int64]bool)
-	fp.block = new(Block)
-	return &fp
 }
 
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
@@ -414,7 +403,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	}
 	if cmd, ok := fp.cmds[newCmd.Pid]; ok {
 		if cmd.ProcessKey != newCmd.ProcessKey {
-			fp.outputCmd(cmd)
+			fp.cmdchan <- *cmd
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 		} else if bytes.Equal(newCmd.Cmd, []byte("rmt-FileFetch")) ||
 			bytes.Equal(newCmd.Cmd, []byte("rmt-Journal")) ||
@@ -422,7 +411,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			if hasTrackInfo {
 				cmd.updateFrom(newCmd)
 			} else {
-				fp.outputCmd(cmd)
+				fp.cmdchan <- *cmd
 				newCmd.duplicateKey = true
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 			}
@@ -548,19 +537,6 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 	fp.addCommand(cmd, hasTrackInfo)
 }
 
-// Output a single command to appropriate channel
-func (fp *P4dFileParser) outputCmd(cmd *Command) {
-	if fp.cmdchan != nil {
-		fp.cmdchan <- *cmd
-	} else {
-		lines := []string{}
-		lines = append(lines, fmt.Sprintf("%v", cmd))
-		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.jsonchan <- strings.Join(lines, `\n`)
-		}
-	}
-}
-
 // Output all completed commands 3 or more seconds ago
 func (fp *P4dFileParser) outputCompletedCommands() {
 	const timeWindow = 3
@@ -578,7 +554,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		}
 		if completed {
 			cmdHasBeenProcessed = true
-			fp.outputCmd(cmd)
+			fp.cmdchan <- *cmd
 			delete(fp.cmds, cmd.Pid)
 			fp.running--
 		}
@@ -591,7 +567,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 // Processes all remaining commands whether completed or not - intended for use at end
 func (fp *P4dFileParser) outputRemainingCommands() {
 	for _, cmd := range fp.cmds {
-		fp.outputCmd(cmd)
+		fp.cmdchan <- *cmd
 	}
 	fp.cmds = make(map[int64]*Command)
 }
@@ -752,69 +728,57 @@ func (fp *P4dFileParser) parseFinish() {
 		}
 	}
 	fp.outputRemainingCommands()
-	if fp.cmdchan != nil {
-		close(fp.cmdchan)
-	}
-	if fp.jsonchan != nil {
-		close(fp.jsonchan)
-	}
 }
 
 // CmdsPendingCount - count of unmatched commands
-func (fp *P4dFileParser) CmdsPendingCount() int {
+func (fp *P4dFileParser) cmdsPendingCount() int {
 	return len(fp.cmds)
 }
 
-// LogParser - interface to be run on a go routine - if cmdchan is not nil it will be used - otherwise jsonchan
-func (fp *P4dFileParser) LogParser(inchan chan []byte, cmdchan chan Command, jsonchan chan string) {
-	fp.inchan = inchan
-	fp.cmdchan = cmdchan
-	fp.jsonchan = jsonchan
+// ParseLog file will read log entries from the provided interface and return a stream
+// of
+func ParseLog(ctx context.Context, reader io.Reader) <-chan Command {
+	fp := P4dFileParser{
+		cmds:               make(map[int64]*Command),
+		pidsSeenThisSecond: make(map[int64]bool),
+		block:              new(Block),
+		cmdchan:            make(chan Command),
+		lineNo:             1,
+	}
+
+	scanner := bufio.NewScanner(reader)
 	fp.lineNo = 1
-	for {
-		select {
-		case <-time.After(time.Second * 1):
-			fp.outputCompletedCommands()
-		case line, ok := <-fp.inchan:
-			if ok {
-				line = bytes.TrimRight(line, "\r\n")
-				fp.parseLine(line)
-			} else {
-				fp.parseFinish()
+	go func() {
+		defer close(fp.cmdchan)
+		for {
+			select {
+			case <-time.After(time.Second * 1):
+				fp.outputCompletedCommands()
+			case <-ctx.Done():
 				return
+			default:
+				keepGoing := false
+				for linesScanned := 0; scanner.Scan(); linesScanned++ {
+					if linesScanned > 50 {
+						keepGoing = true
+						break
+					}
+					line := scanner.Bytes()
+					fp.parseLine(line)
+				}
+				err := scanner.Err()
+				fp.parseFinish()
+
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "reading file: %s\n", err)
+					return
+				}
+
+				if !keepGoing {
+					return
+				}
 			}
 		}
-	}
-}
-
-// P4LogParseFile - interface for parsing a specified file
-func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan string) {
-	fp.jsonchan = outchan
-	var scanner *bufio.Scanner
-	if len(opts.testInput) > 0 {
-		scanner = bufio.NewScanner(strings.NewReader(opts.testInput))
-	} else if opts.File == "-" {
-		scanner = bufio.NewScanner(os.Stdin)
-	} else {
-		file, err := os.Open(opts.File)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-		const maxCapacity = 1024 * 1024
-		buf := make([]byte, maxCapacity)
-		reader := bufio.NewReaderSize(file, maxCapacity)
-		scanner = bufio.NewScanner(reader)
-		scanner.Buffer(buf, maxCapacity)
-	}
-	fp.lineNo = 1
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		fp.parseLine(line)
-	}
-	fp.parseFinish()
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "reading file %s:%s\n", opts.File, err)
-	}
-
+	}()
+	return fp.cmdchan
 }
