@@ -745,7 +745,7 @@ func (fp *P4dFileParser) cmdsPendingCount() int {
 
 // ParseLog file will read log entries from the provided interface and return a stream
 // of
-func ParseLog(ctx context.Context, reader io.Reader) <-chan Command {
+func ParseLog(ctx context.Context, reader io.Reader, tail bool) <-chan Command {
 	fp := P4dFileParser{
 		cmds:               make(map[int64]*Command),
 		pidsSeenThisSecond: make(map[int64]bool),
@@ -765,10 +765,10 @@ func ParseLog(ctx context.Context, reader io.Reader) <-chan Command {
 			case <-ctx.Done():
 				return
 			default:
-				keepGoing := false
+				lineLimitReached := false
 				for linesScanned := 0; scanner.Scan(); linesScanned++ {
 					if linesScanned > 50 {
-						keepGoing = true
+						lineLimitReached = true
 						break
 					}
 					line := scanner.Bytes()
@@ -778,11 +778,12 @@ func ParseLog(ctx context.Context, reader io.Reader) <-chan Command {
 				fp.parseFinish()
 
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "reading file: %s\n", err)
+					fmt.Fprintf(os.Stderr, "reading file (line %d): %s\n", fp.lineNo, err)
 					return
 				}
 
-				if !keepGoing {
+				if !tail && !lineLimitReached {
+					// we hit the end of the file and we're not tailing
 					return
 				}
 			}
