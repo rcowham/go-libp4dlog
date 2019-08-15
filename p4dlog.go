@@ -106,31 +106,39 @@ type Command struct {
 
 // Table stores track information per table (part of Command)
 type Table struct {
-	TableName      string  `json:"tableName"`
-	PagesIn        int64   `json:"pagesIn"`
-	PagesOut       int64   `json:"pagesOut"`
-	PagesCached    int64   `json:"pagesCached"`
-	ReadLocks      int64   `json:"readLocks"`
-	WriteLocks     int64   `json:"writeLocks"`
-	GetRows        int64   `json:"getRows"`
-	PosRows        int64   `json:"posRows"`
-	ScanRows       int64   `json:"scanRows"`
-	PutRows        int64   `json:"putRows"`
-	DelRows        int64   `json:"delRows"`
-	TotalReadWait  int64   `json:"totalReadWait"`
-	TotalReadHeld  int64   `json:"totalReadHeld"`
-	TotalWriteWait int64   `json:"totalWriteWait"`
-	TotalWriteHeld int64   `json:"totalWriteHeld"`
-	MaxReadWait    int64   `json:"maxReadWait"`
-	MaxReadHeld    int64   `json:"maxReadHeld"`
-	MaxWriteWait   int64   `json:"maxWriteWait"`
-	MaxWriteHeld   int64   `json:"maxWriteHeld"`
-	PeekCount      int64   `json:"peekCount"`
-	TotalPeekWait  int64   `json:"totalPeekWait"`
-	TotalPeekHeld  int64   `json:"totalPeekHeld"`
-	MaxPeekWait    int64   `json:"maxPeekWait"`
-	MaxPeekHeld    int64   `json:"maxPeekHeld"`
-	TriggerLapse   float32 `json:"triggerLapse"`
+	TableName      string        `json:"tableName"`
+	PagesIn        int64         `json:"pagesIn"`
+	PagesOut       int64         `json:"pagesOut"`
+	PagesCached    int64         `json:"pagesCached"`
+	ReadLocks      int64         `json:"readLocks"`
+	WriteLocks     int64         `json:"writeLocks"`
+	GetRows        int64         `json:"getRows"`
+	PosRows        int64         `json:"posRows"`
+	ScanRows       int64         `json:"scanRows"`
+	PutRows        int64         `json:"putRows"`
+	DelRows        int64         `json:"delRows"`
+	TotalReadWait  time.Duration `json:"totalReadWait"`
+	TotalReadHeld  time.Duration `json:"totalReadHeld"`
+	TotalWriteWait time.Duration `json:"totalWriteWait"`
+	TotalWriteHeld time.Duration `json:"totalWriteHeld"`
+	MaxReadWait    time.Duration `json:"maxReadWait"`
+	MaxReadHeld    time.Duration `json:"maxReadHeld"`
+	MaxWriteWait   time.Duration `json:"maxWriteWait"`
+	MaxWriteHeld   time.Duration `json:"maxWriteHeld"`
+	PeekCount      int64         `json:"peekCount"`
+	TotalPeekWait  time.Duration `json:"totalPeekWait"`
+	TotalPeekHeld  time.Duration `json:"totalPeekHeld"`
+	MaxPeekWait    time.Duration `json:"maxPeekWait"`
+	MaxPeekHeld    time.Duration `json:"maxPeekHeld"`
+	TriggerLapse   float32       `json:"triggerLapse"`
+}
+
+func parseMillisecond(value []byte) time.Duration {
+	asInt, err := strconv.ParseInt(string(value), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(asInt) * time.Millisecond
 }
 
 func (t *Table) setPages(pagesIn, pagesOut, pagesCached []byte) {
@@ -151,25 +159,25 @@ func (t *Table) setLocksRows(readLocks, writeLocks, getRows, posRows,
 }
 
 func (t *Table) setTotalLock(totalReadWait, totalReadHeld, totalWriteWait, totalWriteHeld []byte) {
-	t.TotalReadWait, _ = strconv.ParseInt(string(totalReadWait), 10, 64)
-	t.TotalReadHeld, _ = strconv.ParseInt(string(totalReadHeld), 10, 64)
-	t.TotalWriteWait, _ = strconv.ParseInt(string(totalWriteWait), 10, 64)
-	t.TotalWriteHeld, _ = strconv.ParseInt(string(totalWriteHeld), 10, 64)
+	t.TotalReadWait = parseMillisecond(totalReadWait)
+	t.TotalReadHeld = parseMillisecond(totalReadHeld)
+	t.TotalWriteWait = parseMillisecond(totalWriteWait)
+	t.TotalWriteHeld = parseMillisecond(totalWriteHeld)
 }
 
 func (t *Table) setMaxLock(maxReadWait, maxReadHeld, maxWriteWait, maxWriteHeld []byte) {
-	t.MaxReadWait, _ = strconv.ParseInt(string(maxReadWait), 10, 64)
-	t.MaxReadHeld, _ = strconv.ParseInt(string(maxReadHeld), 10, 64)
-	t.MaxWriteWait, _ = strconv.ParseInt(string(maxWriteWait), 10, 64)
-	t.MaxWriteHeld, _ = strconv.ParseInt(string(maxWriteHeld), 10, 64)
+	t.MaxReadWait = parseMillisecond(maxReadWait)
+	t.MaxReadHeld = parseMillisecond(maxReadHeld)
+	t.MaxWriteWait = parseMillisecond(maxWriteWait)
+	t.MaxWriteHeld = parseMillisecond(maxWriteHeld)
 }
 
 func (t *Table) setPeek(peekCount, totalPeekWait, totalPeekHeld, maxPeekWait, maxPeekHeld []byte) {
 	t.PeekCount, _ = strconv.ParseInt(string(peekCount), 10, 64)
-	t.TotalPeekWait, _ = strconv.ParseInt(string(totalPeekWait), 10, 64)
-	t.TotalPeekHeld, _ = strconv.ParseInt(string(totalPeekHeld), 10, 64)
-	t.MaxPeekWait, _ = strconv.ParseInt(string(maxPeekWait), 10, 64)
-	t.MaxPeekHeld, _ = strconv.ParseInt(string(maxPeekHeld), 10, 64)
+	t.TotalPeekWait = parseMillisecond(totalPeekWait)
+	t.TotalPeekHeld = parseMillisecond(totalPeekHeld)
+	t.MaxPeekWait = parseMillisecond(maxPeekWait)
+	t.MaxPeekHeld = parseMillisecond(maxPeekHeld)
 }
 
 func newCommand() *Command {
