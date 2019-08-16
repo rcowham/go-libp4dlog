@@ -9,6 +9,27 @@ For outline of how to setup P4LOG:
 
 https://www.perforce.com/manuals/p4sag/Content/P4SAG/DB5-79706.html
 
+# Usage
+
+```go
+
+p4dlog "github.com/seanhoughton/go-libp4dlog"
+
+func main()  {
+    fp, err := os.Open("/path/to/log")
+    if err != nil {
+        return err
+    }
+
+    commands := p4dlog.ParseLog(ctx, fp, false)
+    for command := range commands {
+        fmt.Printf("Command %s by %s\n", string(command.Cmd), string(Command.User))
+    }
+}
+
+```
+
+
 ## P4D Log Analysis
 
 See open source project:
