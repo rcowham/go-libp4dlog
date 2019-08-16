@@ -13,7 +13,7 @@ https://www.perforce.com/manuals/p4sag/Content/P4SAG/DB5-79706.html
 
 ```go
 
-p4dlog "github.com/seanhoughton/go-libp4dlog"
+import p4dlog "github.com/seanhoughton/go-libp4dlog"
 
 func main()  {
     fp, err := os.Open("/path/to/log")
