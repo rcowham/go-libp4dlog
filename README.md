@@ -21,7 +21,7 @@ func main()  {
         return err
     }
 
-    commands := p4dlog.ParseLog(ctx, fp, false)
+    commands := p4dlog.ParseLog(context.Background(), fp, false)
     for command := range commands {
         fmt.Printf("Command %s by %s\n", string(command.Cmd), string(Command.User))
     }
