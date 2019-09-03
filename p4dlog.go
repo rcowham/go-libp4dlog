@@ -13,16 +13,16 @@ package p4dlog
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -90,47 +90,63 @@ type Command struct {
 	IpcOut         int64     `json:"ipcOut"`
 	MaxRss         int64     `json:"maxRss"`
 	PageFaults     int64     `json:"pageFaults"`
-	RpcMsgsIn      int64     `json:"rpcMsgsIn"`
-	RpcMsgsOut     int64     `json:"rpcMsgsOut"`
-	RpcSizeIn      int64     `json:"rpcSizeIn"`
-	RpcSizeOut     int64     `json:"rpcSizeOut"`
-	RpcHimarkFwd   int64     `json:"rpcHimarkFwd"`
-	RpcHimarkRev   int64     `json:"rpcHimarkRev"`
-	RpcSnd         float32   `json:"rpcSnd"`
-	RpcRcv         float32   `json:"rpcRcv"`
+	RPCMsgsIn      int64     `json:"rpcMsgsIn"`
+	RPCMsgsOut     int64     `json:"rpcMsgsOut"`
+	RPCSizeIn      int64     `json:"rpcSizeIn"`
+	RPCSizeOut     int64     `json:"rpcSizeOut"`
+	RPCHimarkFwd   int64     `json:"rpcHimarkFwd"`
+	RPCHimarkRev   int64     `json:"rpcHimarkRev"`
+	RPCSnd         float32   `json:"rpcSnd"`
+	RPCRcv         float32   `json:"rpcRcv"`
 	Tables         map[string]*Table
 	duplicateKey   bool
 	completed      bool
 	hasTrackInfo   bool
 }
 
+// Duration is a
+type Duration time.Duration
+
+// MarshalJSON serializes durations as seconds
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).Seconds() * 1000)
+}
+
 // Table stores track information per table (part of Command)
 type Table struct {
-	TableName      string  `json:"tableName"`
-	PagesIn        int64   `json:"pagesIn"`
-	PagesOut       int64   `json:"pagesOut"`
-	PagesCached    int64   `json:"pagesCached"`
-	ReadLocks      int64   `json:"readLocks"`
-	WriteLocks     int64   `json:"writeLocks"`
-	GetRows        int64   `json:"getRows"`
-	PosRows        int64   `json:"posRows"`
-	ScanRows       int64   `json:"scanRows"`
-	PutRows        int64   `json:"putRows"`
-	DelRows        int64   `json:"delRows"`
-	TotalReadWait  int64   `json:"totalReadWait"`
-	TotalReadHeld  int64   `json:"totalReadHeld"`
-	TotalWriteWait int64   `json:"totalWriteWait"`
-	TotalWriteHeld int64   `json:"totalWriteHeld"`
-	MaxReadWait    int64   `json:"maxReadWait"`
-	MaxReadHeld    int64   `json:"maxReadHeld"`
-	MaxWriteWait   int64   `json:"maxWriteWait"`
-	MaxWriteHeld   int64   `json:"maxWriteHeld"`
-	PeekCount      int64   `json:"peekCount"`
-	TotalPeekWait  int64   `json:"totalPeekWait"`
-	TotalPeekHeld  int64   `json:"totalPeekHeld"`
-	MaxPeekWait    int64   `json:"maxPeekWait"`
-	MaxPeekHeld    int64   `json:"maxPeekHeld"`
-	TriggerLapse   float32 `json:"triggerLapse"`
+	TableName      string   `json:"tableName"`
+	PagesIn        int64    `json:"pagesIn"`
+	PagesOut       int64    `json:"pagesOut"`
+	PagesCached    int64    `json:"pagesCached"`
+	ReadLocks      int64    `json:"readLocks"`
+	WriteLocks     int64    `json:"writeLocks"`
+	GetRows        int64    `json:"getRows"`
+	PosRows        int64    `json:"posRows"`
+	ScanRows       int64    `json:"scanRows"`
+	PutRows        int64    `json:"putRows"`
+	DelRows        int64    `json:"delRows"`
+	TotalReadWait  Duration `json:"totalReadWait"`
+	TotalReadHeld  Duration `json:"totalReadHeld"`
+	TotalWriteWait Duration `json:"totalWriteWait"`
+	TotalWriteHeld Duration `json:"totalWriteHeld"`
+	MaxReadWait    Duration `json:"maxReadWait"`
+	MaxReadHeld    Duration `json:"maxReadHeld"`
+	MaxWriteWait   Duration `json:"maxWriteWait"`
+	MaxWriteHeld   Duration `json:"maxWriteHeld"`
+	PeekCount      int64    `json:"peekCount"`
+	TotalPeekWait  Duration `json:"totalPeekWait"`
+	TotalPeekHeld  Duration `json:"totalPeekHeld"`
+	MaxPeekWait    Duration `json:"maxPeekWait"`
+	MaxPeekHeld    Duration `json:"maxPeekHeld"`
+	TriggerLapse   float32  `json:"triggerLapse"`
+}
+
+func parseMillisecond(value []byte) Duration {
+	asInt, err := strconv.ParseInt(string(value), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return Duration(time.Duration(asInt) * time.Millisecond)
 }
 
 func (t *Table) setPages(pagesIn, pagesOut, pagesCached []byte) {
@@ -151,25 +167,25 @@ func (t *Table) setLocksRows(readLocks, writeLocks, getRows, posRows,
 }
 
 func (t *Table) setTotalLock(totalReadWait, totalReadHeld, totalWriteWait, totalWriteHeld []byte) {
-	t.TotalReadWait, _ = strconv.ParseInt(string(totalReadWait), 10, 64)
-	t.TotalReadHeld, _ = strconv.ParseInt(string(totalReadHeld), 10, 64)
-	t.TotalWriteWait, _ = strconv.ParseInt(string(totalWriteWait), 10, 64)
-	t.TotalWriteHeld, _ = strconv.ParseInt(string(totalWriteHeld), 10, 64)
+	t.TotalReadWait = parseMillisecond(totalReadWait)
+	t.TotalReadHeld = parseMillisecond(totalReadHeld)
+	t.TotalWriteWait = parseMillisecond(totalWriteWait)
+	t.TotalWriteHeld = parseMillisecond(totalWriteHeld)
 }
 
 func (t *Table) setMaxLock(maxReadWait, maxReadHeld, maxWriteWait, maxWriteHeld []byte) {
-	t.MaxReadWait, _ = strconv.ParseInt(string(maxReadWait), 10, 64)
-	t.MaxReadHeld, _ = strconv.ParseInt(string(maxReadHeld), 10, 64)
-	t.MaxWriteWait, _ = strconv.ParseInt(string(maxWriteWait), 10, 64)
-	t.MaxWriteHeld, _ = strconv.ParseInt(string(maxWriteHeld), 10, 64)
+	t.MaxReadWait = parseMillisecond(maxReadWait)
+	t.MaxReadHeld = parseMillisecond(maxReadHeld)
+	t.MaxWriteWait = parseMillisecond(maxWriteWait)
+	t.MaxWriteHeld = parseMillisecond(maxWriteHeld)
 }
 
 func (t *Table) setPeek(peekCount, totalPeekWait, totalPeekHeld, maxPeekWait, maxPeekHeld []byte) {
 	t.PeekCount, _ = strconv.ParseInt(string(peekCount), 10, 64)
-	t.TotalPeekWait, _ = strconv.ParseInt(string(totalPeekWait), 10, 64)
-	t.TotalPeekHeld, _ = strconv.ParseInt(string(totalPeekHeld), 10, 64)
-	t.MaxPeekWait, _ = strconv.ParseInt(string(maxPeekWait), 10, 64)
-	t.MaxPeekHeld, _ = strconv.ParseInt(string(maxPeekHeld), 10, 64)
+	t.TotalPeekWait = parseMillisecond(totalPeekWait)
+	t.TotalPeekHeld = parseMillisecond(totalPeekHeld)
+	t.MaxPeekWait = parseMillisecond(maxPeekWait)
+	t.MaxPeekHeld = parseMillisecond(maxPeekHeld)
 }
 
 func newCommand() *Command {
@@ -216,19 +232,19 @@ func (c *Command) setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, p
 }
 
 func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev, rpcSnd, rpcRcv []byte) {
-	c.RpcMsgsIn, _ = strconv.ParseInt(string(rpcMsgsIn), 10, 64)
-	c.RpcMsgsOut, _ = strconv.ParseInt(string(rpcMsgsOut), 10, 64)
-	c.RpcSizeIn, _ = strconv.ParseInt(string(rpcSizeIn), 10, 64)
-	c.RpcSizeOut, _ = strconv.ParseInt(string(rpcSizeOut), 10, 64)
-	c.RpcHimarkFwd, _ = strconv.ParseInt(string(rpcHimarkFwd), 10, 64)
-	c.RpcHimarkRev, _ = strconv.ParseInt(string(rpcHimarkRev), 10, 64)
+	c.RPCMsgsIn, _ = strconv.ParseInt(string(rpcMsgsIn), 10, 64)
+	c.RPCMsgsOut, _ = strconv.ParseInt(string(rpcMsgsOut), 10, 64)
+	c.RPCSizeIn, _ = strconv.ParseInt(string(rpcSizeIn), 10, 64)
+	c.RPCSizeOut, _ = strconv.ParseInt(string(rpcSizeOut), 10, 64)
+	c.RPCHimarkFwd, _ = strconv.ParseInt(string(rpcHimarkFwd), 10, 64)
+	c.RPCHimarkRev, _ = strconv.ParseInt(string(rpcHimarkRev), 10, 64)
 	if rpcSnd != nil {
 		f, _ := strconv.ParseFloat(string(rpcSnd), 32)
-		c.RpcSnd = float32(f)
+		c.RPCSnd = float32(f)
 	}
 	if rpcRcv != nil {
 		f, _ := strconv.ParseFloat(string(rpcRcv), 32)
-		c.RpcRcv = float32(f)
+		c.RPCRcv = float32(f)
 	}
 }
 
@@ -266,14 +282,14 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		IpcOut         int64   `json:"ipcOut"`
 		MaxRss         int64   `json:"maxRss"`
 		PageFaults     int64   `json:"pageFaults"`
-		RpcMsgsIn      int64   `json:"rpcMsgsIn"`
-		RpcMsgsOut     int64   `json:"rpcMsgsOut"`
-		RpcSizeIn      int64   `json:"rpcSizeIn"`
-		RpcSizeOut     int64   `json:"rpcSizeOut"`
-		RpcHimarkFwd   int64   `json:"rpcHimarkFwd"`
-		RpcHimarkRev   int64   `json:"rpcHimarkRev"`
-		RpcSnd         float32 `json:"rpcSnd"`
-		RpcRcv         float32 `json:"rpcRcv"`
+		RPCMsgsIn      int64   `json:"rpcMsgsIn"`
+		RPCMsgsOut     int64   `json:"rpcMsgsOut"`
+		RPCSizeIn      int64   `json:"rpcSizeIn"`
+		RPCSizeOut     int64   `json:"rpcSizeOut"`
+		RPCHimarkFwd   int64   `json:"rpcHimarkFwd"`
+		RPCHimarkRev   int64   `json:"rpcHimarkRev"`
+		RPCSnd         float32 `json:"rpcSnd"`
+		RPCRcv         float32 `json:"rpcRcv"`
 		Tables         []Table `json:"tables"`
 	}{
 		ProcessKey:     c.getKey(),
@@ -298,14 +314,14 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		IpcOut:         c.IpcOut,
 		MaxRss:         c.MaxRss,
 		PageFaults:     c.PageFaults,
-		RpcMsgsIn:      c.RpcMsgsIn,
-		RpcMsgsOut:     c.RpcMsgsOut,
-		RpcSizeIn:      c.RpcSizeIn,
-		RpcSizeOut:     c.RpcSizeOut,
-		RpcHimarkFwd:   c.RpcHimarkFwd,
-		RpcHimarkRev:   c.RpcHimarkRev,
-		RpcSnd:         c.RpcSnd,
-		RpcRcv:         c.RpcRcv,
+		RPCMsgsIn:      c.RPCMsgsIn,
+		RPCMsgsOut:     c.RPCMsgsOut,
+		RPCSizeIn:      c.RPCSizeIn,
+		RPCSizeOut:     c.RPCSizeOut,
+		RPCHimarkFwd:   c.RPCHimarkFwd,
+		RPCHimarkRev:   c.RPCHimarkRev,
+		RPCSnd:         c.RPCSnd,
+		RPCRcv:         c.RPCRcv,
 		Tables:         tables,
 	})
 }
@@ -349,32 +365,32 @@ func (c *Command) updateFrom(other *Command) {
 	if other.IpcIn > 0 {
 		c.IpcIn = other.IpcIn
 	}
-	if other.RpcMsgsIn > 0 {
-		c.RpcMsgsIn = other.RpcMsgsIn
+	if other.RPCMsgsIn > 0 {
+		c.RPCMsgsIn = other.RPCMsgsIn
 	}
-	if other.RpcMsgsOut > 0 {
-		c.RpcMsgsOut = other.RpcMsgsOut
+	if other.RPCMsgsOut > 0 {
+		c.RPCMsgsOut = other.RPCMsgsOut
 	}
-	if other.RpcMsgsIn > 0 {
-		c.RpcMsgsIn = other.RpcMsgsIn
+	if other.RPCMsgsIn > 0 {
+		c.RPCMsgsIn = other.RPCMsgsIn
 	}
-	if other.RpcSizeIn > 0 {
-		c.RpcSizeIn = other.RpcSizeIn
+	if other.RPCSizeIn > 0 {
+		c.RPCSizeIn = other.RPCSizeIn
 	}
-	if other.RpcSizeOut > 0 {
-		c.RpcSizeOut = other.RpcSizeOut
+	if other.RPCSizeOut > 0 {
+		c.RPCSizeOut = other.RPCSizeOut
 	}
-	if other.RpcHimarkFwd > 0 {
-		c.RpcHimarkFwd = other.RpcHimarkFwd
+	if other.RPCHimarkFwd > 0 {
+		c.RPCHimarkFwd = other.RPCHimarkFwd
 	}
-	if other.RpcHimarkRev > 0 {
-		c.RpcHimarkRev = other.RpcHimarkRev
+	if other.RPCHimarkRev > 0 {
+		c.RPCHimarkRev = other.RPCHimarkRev
 	}
-	if other.RpcSnd > 0 {
-		c.RpcSnd = other.RpcSnd
+	if other.RPCSnd > 0 {
+		c.RPCSnd = other.RPCSnd
 	}
-	if other.RpcRcv > 0 {
-		c.RpcRcv = other.RpcRcv
+	if other.RPCRcv > 0 {
+		c.RPCRcv = other.RPCRcv
 	}
 	if len(other.Tables) > 0 {
 		for k, t := range other.Tables {
@@ -387,23 +403,12 @@ func (c *Command) updateFrom(other *Command) {
 type P4dFileParser struct {
 	lineNo               int64
 	cmds                 map[int64]*Command
-	inchan               chan []byte
-	jsonchan             chan string
 	cmdchan              chan Command
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
 	running              int64
 	block                *Block
-}
-
-// NewP4dFileParser - create and initialise properly
-func NewP4dFileParser() *P4dFileParser {
-	var fp P4dFileParser
-	fp.cmds = make(map[int64]*Command)
-	fp.pidsSeenThisSecond = make(map[int64]bool)
-	fp.block = new(Block)
-	return &fp
 }
 
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
@@ -414,7 +419,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	}
 	if cmd, ok := fp.cmds[newCmd.Pid]; ok {
 		if cmd.ProcessKey != newCmd.ProcessKey {
-			fp.outputCmd(cmd)
+			fp.cmdchan <- *cmd
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 		} else if bytes.Equal(newCmd.Cmd, []byte("rmt-FileFetch")) ||
 			bytes.Equal(newCmd.Cmd, []byte("rmt-Journal")) ||
@@ -422,7 +427,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			if hasTrackInfo {
 				cmd.updateFrom(newCmd)
 			} else {
-				fp.outputCmd(cmd)
+				fp.cmdchan <- *cmd
 				newCmd.duplicateKey = true
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 			}
@@ -548,19 +553,6 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 	fp.addCommand(cmd, hasTrackInfo)
 }
 
-// Output a single command to appropriate channel
-func (fp *P4dFileParser) outputCmd(cmd *Command) {
-	if fp.cmdchan != nil {
-		fp.cmdchan <- *cmd
-	} else {
-		lines := []string{}
-		lines = append(lines, fmt.Sprintf("%v", cmd))
-		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.jsonchan <- strings.Join(lines, `\n`)
-		}
-	}
-}
-
 // Output all completed commands 3 or more seconds ago
 func (fp *P4dFileParser) outputCompletedCommands() {
 	const timeWindow = 3
@@ -578,7 +570,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		}
 		if completed {
 			cmdHasBeenProcessed = true
-			fp.outputCmd(cmd)
+			fp.cmdchan <- *cmd
 			delete(fp.cmds, cmd.Pid)
 			fp.running--
 		}
@@ -591,7 +583,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 // Processes all remaining commands whether completed or not - intended for use at end
 func (fp *P4dFileParser) outputRemainingCommands() {
 	for _, cmd := range fp.cmds {
-		fp.outputCmd(cmd)
+		fp.cmdchan <- *cmd
 	}
 	fp.cmds = make(map[int64]*Command)
 }
@@ -752,69 +744,58 @@ func (fp *P4dFileParser) parseFinish() {
 		}
 	}
 	fp.outputRemainingCommands()
-	if fp.cmdchan != nil {
-		close(fp.cmdchan)
-	}
-	if fp.jsonchan != nil {
-		close(fp.jsonchan)
-	}
 }
 
 // CmdsPendingCount - count of unmatched commands
-func (fp *P4dFileParser) CmdsPendingCount() int {
+func (fp *P4dFileParser) cmdsPendingCount() int {
 	return len(fp.cmds)
 }
 
-// LogParser - interface to be run on a go routine - if cmdchan is not nil it will be used - otherwise jsonchan
-func (fp *P4dFileParser) LogParser(inchan chan []byte, cmdchan chan Command, jsonchan chan string) {
-	fp.inchan = inchan
-	fp.cmdchan = cmdchan
-	fp.jsonchan = jsonchan
+// ParseLog file will read log entries from the provided interface and return a stream
+// of
+func ParseLog(ctx context.Context, reader io.Reader, tail bool) <-chan Command {
+	fp := P4dFileParser{
+		cmds:               make(map[int64]*Command),
+		pidsSeenThisSecond: make(map[int64]bool),
+		block:              new(Block),
+		cmdchan:            make(chan Command),
+		lineNo:             1,
+	}
+
+	scanner := bufio.NewScanner(reader)
 	fp.lineNo = 1
-	for {
-		select {
-		case <-time.After(time.Second * 1):
-			fp.outputCompletedCommands()
-		case line, ok := <-fp.inchan:
-			if ok {
-				line = bytes.TrimRight(line, "\r\n")
-				fp.parseLine(line)
-			} else {
-				fp.parseFinish()
+	go func() {
+		defer close(fp.cmdchan)
+		for {
+			select {
+			case <-time.After(time.Second * 1):
+				fp.outputCompletedCommands()
+			case <-ctx.Done():
 				return
+			default:
+				lineLimitReached := false
+				for linesScanned := 0; scanner.Scan(); linesScanned++ {
+					if linesScanned > 50 {
+						lineLimitReached = true
+						break
+					}
+					line := scanner.Bytes()
+					fp.parseLine(line)
+				}
+				err := scanner.Err()
+				fp.parseFinish()
+
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "reading file (line %d): %s\n", fp.lineNo, err)
+					return
+				}
+
+				if !tail && !lineLimitReached {
+					// we hit the end of the file and we're not tailing
+					return
+				}
 			}
 		}
-	}
-}
-
-// P4LogParseFile - interface for parsing a specified file
-func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan string) {
-	fp.jsonchan = outchan
-	var scanner *bufio.Scanner
-	if len(opts.testInput) > 0 {
-		scanner = bufio.NewScanner(strings.NewReader(opts.testInput))
-	} else if opts.File == "-" {
-		scanner = bufio.NewScanner(os.Stdin)
-	} else {
-		file, err := os.Open(opts.File)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-		const maxCapacity = 1024 * 1024
-		buf := make([]byte, maxCapacity)
-		reader := bufio.NewReaderSize(file, maxCapacity)
-		scanner = bufio.NewScanner(reader)
-		scanner.Buffer(buf, maxCapacity)
-	}
-	fp.lineNo = 1
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		fp.parseLine(line)
-	}
-	fp.parseFinish()
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "reading file %s:%s\n", opts.File, err)
-	}
-
+	}()
+	return fp.cmdchan
 }
