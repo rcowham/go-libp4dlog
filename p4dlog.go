@@ -744,7 +744,6 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 }
 
 func (fp *P4dFileParser) processErrorBlock(block *Block) {
-
 	var cmd *Command
 	for _, line := range block.lines[1:] {
 		m := rePid.FindSubmatch(line)
@@ -757,6 +756,14 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 			}
 		}
 	}
+}
+
+func (fp *P4dFileParser) processBlock(block *Block) {
+	if bytes.Equal(fp.block.lines[0], infoBlock) {
+		fp.processInfoBlock(fp.block)
+	} else if bytes.Equal(fp.block.lines[0], errorBlock) {
+		fp.processErrorBlock(fp.block)
+	} //TODO: output unrecognised block if wanted
 }
 
 func blankLine(line []byte) bool {
@@ -786,13 +793,11 @@ func blockEnd(line []byte) bool {
 func (fp *P4dFileParser) parseLine(line []byte) {
 	if blockEnd(line) {
 		if len(fp.block.lines) > 0 {
-			if bytes.Equal(fp.block.lines[0], infoBlock) {
-				fp.processInfoBlock(fp.block)
-			} else if bytes.Equal(fp.block.lines[0], errorBlock) {
-				fp.processErrorBlock(fp.block)
-			} else if blankLine(fp.block.lines[0]) {
+			if blankLine(fp.block.lines[0]) {
 				fp.outputCompletedCommands()
-			} //TODO: output unrecognised block if wanted
+			} else {
+				fp.processBlock(fp.block)
+			}
 		}
 		fp.block = new(Block)
 		fp.block.addLine(line, fp.lineNo)
@@ -804,12 +809,8 @@ func (fp *P4dFileParser) parseLine(line []byte) {
 
 // P4LogParseFinish - interface for incremental parsing
 func (fp *P4dFileParser) parseFinish() {
-	if len(fp.block.lines) > 0 {
-		if bytes.Equal(fp.block.lines[0], infoBlock) {
-			fp.processInfoBlock(fp.block)
-		} else if bytes.Equal(fp.block.lines[0], errorBlock) {
-			fp.processErrorBlock(fp.block)
-		}
+	if len(fp.block.lines) > 0 && !blankLine(fp.block.lines[0]) {
+		fp.processBlock(fp.block)
 	}
 	fp.outputRemainingCommands()
 	if fp.cmdchan != nil {
