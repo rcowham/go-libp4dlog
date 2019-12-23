@@ -390,6 +390,7 @@ type P4dFileParser struct {
 	inchan               chan []byte
 	jsonchan             chan string
 	cmdchan              chan Command
+	debug                bool
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
@@ -406,6 +407,11 @@ func NewP4dFileParser() *P4dFileParser {
 	return &fp
 }
 
+// SetDebugMode
+func (fp *P4dFileParser) SetDebugMode() {
+	fp.debug = true
+}
+
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	newCmd.Running = fp.running
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
@@ -416,9 +422,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		if cmd.ProcessKey != newCmd.ProcessKey {
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
-		} else if bytes.Equal(newCmd.Cmd, []byte("rmt-FileFetch")) ||
-			bytes.Equal(newCmd.Cmd, []byte("rmt-Journal")) ||
-			bytes.Equal(newCmd.Cmd, []byte("pull")) {
+		} else if cmdHasNoCompletionRecord(newCmd.Cmd) {
 			if hasTrackInfo {
 				cmd.updateFrom(newCmd)
 			} else {
@@ -441,6 +445,13 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		fp.running++
 	}
 	fp.outputCompletedCommands()
+}
+
+// Special commands which only have start records not completion records
+func cmdHasNoCompletionRecord(cmdName []byte) bool {
+	return bytes.Equal(cmdName, []byte("rmt-FileFetch")) ||
+		bytes.Equal(cmdName, []byte("rmt-Journal")) ||
+		bytes.Equal(cmdName, []byte("pull"))
 }
 
 var trackStart = []byte("---")
@@ -561,19 +572,37 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	}
 }
 
+// Output pending commands on debug channel if set - for debug purposes
+func (fp *P4dFileParser) debugOutputCommands() {
+	if !fp.debug {
+		return
+	}
+	for _, cmd := range fp.cmds {
+		lines := []string{}
+		lines = append(lines, fmt.Sprintf("DEBUG: %v", cmd))
+		if len(lines) > 0 && len(lines[0]) > 0 {
+			fp.jsonchan <- strings.Join(lines, `\n`)
+		}
+	}
+}
+
 // Output all completed commands 3 or more seconds ago
 func (fp *P4dFileParser) outputCompletedCommands() {
-	const timeWindow = 3
+	const timeWindow = 3 * time.Second
 	cmdHasBeenProcessed := false
 	currTime := time.Now()
 	for _, cmd := range fp.cmds {
 		completed := false
-		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= timeWindow*time.Second ||
-			(fp.timeLastCmdProcessed != blankTime && currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow*time.Second)) {
+		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= timeWindow ||
+			(fp.timeLastCmdProcessed != blankTime && currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow)) {
 			completed = true
 		}
 		if !completed && (cmd.hasTrackInfo && cmd.EndTime != blankTime &&
-			fp.currStartTime.Sub(cmd.EndTime) >= timeWindow*time.Second) {
+			fp.currStartTime.Sub(cmd.EndTime) >= timeWindow) {
+			completed = true
+		}
+		// Handle the special commands which don't receive a completed time
+		if !completed && fp.currStartTime.Sub(cmd.EndTime) >= timeWindow && cmdHasNoCompletionRecord(cmd.Cmd) {
 			completed = true
 		}
 		if completed {
@@ -771,10 +800,12 @@ func (fp *P4dFileParser) LogParser(inchan chan []byte, cmdchan chan Command, jso
 	fp.cmdchan = cmdchan
 	fp.jsonchan = jsonchan
 	fp.lineNo = 1
+	ticker := time.NewTicker(time.Second * 1)
 	for {
 		select {
-		case <-time.After(time.Second * 1):
+		case <-ticker.C:
 			fp.outputCompletedCommands()
+			fp.debugOutputCommands()
 		case line, ok := <-fp.inchan:
 			if ok {
 				line = bytes.TrimRight(line, "\r\n")
@@ -809,8 +840,7 @@ func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan strin
 	}
 	fp.lineNo = 1
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		fp.parseLine(line)
+		fp.parseLine(scanner.Bytes())
 	}
 	fp.parseFinish()
 	if err := scanner.Err(); err != nil {

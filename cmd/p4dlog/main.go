@@ -3,35 +3,64 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 
-	"github.com/akamensky/argparse"
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	// "github.com/pkg/profile"
-	"github.com/rcowham/go-libp4dlog"
+	p4dlog "github.com/rcowham/go-libp4dlog"
+	"github.com/rcowham/p4prometheus/version"
 )
 
 func main() {
 	// CPU profiling by default
 	// defer profile.Start().Stop()
-	// Create new parser object
-	parser := argparse.NewParser("psla", "Perforce Server Log Analyzer - parses standard log file")
-	// Create string flag
-	filename := parser.String("f", "file", &argparse.Options{Required: true, Help: "Log file to process"})
-	// Parse input
-	if err := parser.Parse(os.Args); err != nil {
-		fmt.Print(parser.Usage(err))
-	}
-	opts := new(p4dlog.P4dParseOptions)
-	opts.File = *filename
-	// inchan := make(chan []byte)
-	outchan := make(chan string)
-	fp := p4dlog.NewP4dFileParser()
-	go fp.P4LogParseFile(*opts, outchan)
+	var (
+		logfile = kingpin.Flag(
+			"logfile",
+			"P4d log file to read (full path).",
+		).String()
+		debug = kingpin.Flag(
+			"debug",
+			"Enable debugging.",
+		).Bool()
+	)
+	kingpin.Version(version.Print("p4sla"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
 
-	buf := bufio.NewWriterSize(os.Stdout, 1024*1024)
-	defer buf.Flush()
+	inchan := make(chan []byte, 100)
+	outchan := make(chan string, 100)
+
+	file, err := os.Open(*logfile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	const maxCapacity = 1024 * 1024
+	inbuf := make([]byte, maxCapacity)
+	reader := bufio.NewReaderSize(file, maxCapacity)
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(inbuf, maxCapacity)
+
+	fp := p4dlog.NewP4dFileParser()
+	if *debug {
+		fp.SetDebugMode()
+	}
+	go fp.LogParser(inchan, nil, outchan)
+
+	go func() {
+		for scanner.Scan() {
+			inchan <- scanner.Bytes()
+		}
+		close(inchan)
+	}()
+
+	outbuf := bufio.NewWriterSize(os.Stdout, 1024*1024)
+	defer outbuf.Flush()
 	for line := range outchan {
-		fmt.Fprintf(buf, "%s\n", line)
+		fmt.Fprintf(outbuf, "%s\n", line)
 	}
 
 }
