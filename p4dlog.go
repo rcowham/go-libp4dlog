@@ -36,6 +36,7 @@ var reCompleted = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid
 var reJSONCmdargs = regexp.MustCompile(`^(.*) \{.*\}$`)
 
 var infoBlock = []byte("Perforce server info:")
+var errorBlock = []byte("Perforce server error:")
 
 func toInt64(buf []byte) (n int64) {
 	for _, v := range buf {
@@ -98,6 +99,7 @@ type Command struct {
 	RpcHimarkRev   int64     `json:"rpcHimarkRev"`
 	RpcSnd         float32   `json:"rpcSnd"`
 	RpcRcv         float32   `json:"rpcRcv"`
+	CmdError       bool      `json:"cmderror"`
 	Tables         map[string]*Table
 	duplicateKey   bool
 	completed      bool
@@ -274,6 +276,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		RpcHimarkRev   int64   `json:"rpcHimarkRev"`
 		RpcSnd         float32 `json:"rpcSnd"`
 		RpcRcv         float32 `json:"rpcRcv"`
+		CmdError       bool    `json:"cmdError"`
 		Tables         []Table `json:"tables"`
 	}{
 		ProcessKey:     c.getKey(),
@@ -306,6 +309,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		RpcHimarkRev:   c.RpcHimarkRev,
 		RpcSnd:         c.RpcSnd,
 		RpcRcv:         c.RpcRcv,
+		CmdError:       c.CmdError,
 		Tables:         tables,
 	})
 }
@@ -460,6 +464,7 @@ var trackDB = []byte("--- db.")
 var trackMeta = []byte("--- meta")
 var trackClients = []byte("--- clients")
 var trackChange = []byte("--- change")
+var trackClientEntity = []byte("--- clientEntity")
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
 var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
@@ -471,6 +476,7 @@ var reTrackLocksRows = regexp.MustCompile(`^---   locks read/write (\d+)/(\d+) r
 var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
+var rePid = regexp.MustCompile(`\tPid (\d+)$`)
 
 func getTable(cmd *Command, tableName string) *Table {
 	if _, ok := cmd.Tables[tableName]; !ok {
@@ -502,7 +508,8 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 		}
 		if bytes.Equal(trackMeta, line[:len(trackMeta)]) ||
 			bytes.Equal(trackChange, line[:len(trackChange)]) ||
-			bytes.Equal(trackClients, line[:len(trackClients)]) {
+			bytes.Equal(trackClients, line[:len(trackClients)]) ||
+			bytes.Equal(trackClientEntity, line[:len(trackClientEntity)]) {
 			// Special tables don't have trackInfo set
 			continue
 		}
@@ -736,12 +743,32 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 	}
 }
 
+func (fp *P4dFileParser) processErrorBlock(block *Block) {
+
+	var cmd *Command
+	for _, line := range block.lines[1:] {
+		m := rePid.FindSubmatch(line)
+		if len(m) > 0 {
+			pid := toInt64(m[1])
+			ok := false
+			if cmd, ok = fp.cmds[pid]; ok {
+				cmd.CmdError = true
+				cmd.completed = true
+			}
+		}
+	}
+}
+
 func blankLine(line []byte) bool {
 	return len(line) == 0
 }
 
-var blockEnds = [][]byte{[]byte("Perforce server info:"), []byte("Perforce server error:"),
-	[]byte("locks acquired by blocking after"), []byte("Rpc himark:")}
+var blockEnds = [][]byte{
+	[]byte("Perforce server info:"),
+	[]byte("Perforce server error:"),
+	[]byte("locks acquired by blocking after"),
+	[]byte("Rpc himark:"),
+	[]byte("server to client")}
 
 func blockEnd(line []byte) bool {
 	if blankLine(line) {
@@ -761,9 +788,11 @@ func (fp *P4dFileParser) parseLine(line []byte) {
 		if len(fp.block.lines) > 0 {
 			if bytes.Equal(fp.block.lines[0], infoBlock) {
 				fp.processInfoBlock(fp.block)
+			} else if bytes.Equal(fp.block.lines[0], errorBlock) {
+				fp.processErrorBlock(fp.block)
 			} else if blankLine(fp.block.lines[0]) {
 				fp.outputCompletedCommands()
-			}
+			} //TODO: output unrecognised block if wanted
 		}
 		fp.block = new(Block)
 		fp.block.addLine(line, fp.lineNo)
@@ -778,6 +807,8 @@ func (fp *P4dFileParser) parseFinish() {
 	if len(fp.block.lines) > 0 {
 		if bytes.Equal(fp.block.lines[0], infoBlock) {
 			fp.processInfoBlock(fp.block)
+		} else if bytes.Equal(fp.block.lines[0], errorBlock) {
+			fp.processErrorBlock(fp.block)
 		}
 	}
 	fp.outputRemainingCommands()
@@ -801,10 +832,12 @@ func (fp *P4dFileParser) LogParser(inchan chan []byte, cmdchan chan Command, jso
 	fp.jsonchan = jsonchan
 	fp.lineNo = 1
 	ticker := time.NewTicker(time.Second * 1)
+	tickerDebug := time.NewTicker(time.Second * 60)
 	for {
 		select {
 		case <-ticker.C:
 			fp.outputCompletedCommands()
+		case <-tickerDebug.C:
 			fp.debugOutputCommands()
 		case line, ok := <-fp.inchan:
 			if ok {
