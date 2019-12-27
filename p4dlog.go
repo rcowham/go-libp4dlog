@@ -1,5 +1,9 @@
 /*
-Package p4dlog parses Perforce text logs (not structured logs).
+Package p4dlog parses Perforce Hexlix Core Server text logs (not structured logs).
+
+These are logs created by p4d, as documented by:
+
+https://community.perforce.com/s/article/2525
 
 It assumes you have set configurable server=3 (or greater)
 You may also have decided to set track=1 to get more detailed usage of
@@ -461,10 +465,12 @@ func cmdHasNoCompletionRecord(cmdName []byte) bool {
 var trackStart = []byte("---")
 var trackLapse = []byte("--- lapse ")
 var trackDB = []byte("--- db.")
+var trackRdbLbr = []byte("--- rdb.lbr")
 var trackMeta = []byte("--- meta")
 var trackClients = []byte("--- clients")
 var trackChange = []byte("--- change")
 var trackClientEntity = []byte("--- clientEntity")
+var trackReplicaPull = []byte("--- replica/pull")
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
 var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
@@ -473,7 +479,7 @@ var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 var reTrackPages = regexp.MustCompile(`^---   pages in\+out\+cached (\d+)\+(\d+)\+(\d+)`)
 var reTrackLocksRows = regexp.MustCompile(`^---   locks read/write (\d+)/(\d+) rows get\+pos\+scan put\+del (\d+)\+(\d+)\+(\d+) (\d+)\+(\d+)`)
-var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
+var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+\-?(\d+)ms`)
 var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var rePid = regexp.MustCompile(`\tPid (\d+)$`)
@@ -483,6 +489,10 @@ func getTable(cmd *Command, tableName string) *Table {
 		cmd.Tables[tableName] = newTable(tableName)
 	}
 	return cmd.Tables[tableName]
+}
+
+func lineStarts(line []byte, matchText []byte) bool {
+	return len(line) >= len(matchText) && bytes.Equal(matchText, line[:len(matchText)])
 }
 
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
@@ -499,17 +509,25 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 			}
 			continue
 		}
-		if bytes.Equal(trackDB, line[:len(trackDB)]) {
+		if lineStarts(line, trackDB) {
 			tableName = string(line[len(trackDB):])
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
 			hasTrackInfo = true
 			continue
 		}
-		if bytes.Equal(trackMeta, line[:len(trackMeta)]) ||
-			bytes.Equal(trackChange, line[:len(trackChange)]) ||
-			bytes.Equal(trackClients, line[:len(trackClients)]) ||
-			bytes.Equal(trackClientEntity, line[:len(trackClientEntity)]) {
+		if lineStarts(line, trackRdbLbr) {
+			tableName = "rdb.lbr"
+			t := newTable(tableName)
+			cmd.Tables[tableName] = t
+			hasTrackInfo = true
+			continue
+		}
+		if lineStarts(line, trackMeta) ||
+			lineStarts(line, trackChange) ||
+			lineStarts(line, trackClients) ||
+			lineStarts(line, trackClientEntity) ||
+			lineStarts(line, trackReplicaPull) {
 			// Special tables don't have trackInfo set
 			continue
 		}
@@ -561,6 +579,12 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 			t.setPeek(m[1], m[2], m[3], m[4], m[5])
 			continue
 		}
+		if fp.debug {
+			if !lineStarts(line, []byte("---   pages split internal+leaf")) {
+				fmt.Fprintf(os.Stderr, "Unrecognised track: %s\n", string(line))
+			}
+		}
+
 	}
 	cmd.hasTrackInfo = hasTrackInfo
 	fp.addCommand(cmd, hasTrackInfo)
@@ -684,11 +708,13 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			return // Block has been processed
 		}
 
+		matched := false
 		m := reCmd.FindSubmatch(line)
 		if len(m) == 0 {
 			m = reCmdNoarg.FindSubmatch(line)
 		}
 		if len(m) > 0 {
+			matched = true
 			cmd = newCommand()
 			cmd.LineNo = block.lineNo
 			cmd.setStartTime(m[1])
@@ -723,23 +749,33 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			if len(trigger) > 0 {
 				fp.processTriggerLapse(cmd, trigger, block.lines[len(block.lines)-1])
 			}
-		} else {
+		}
+		if !matched {
 			// process completed and computed
 			m := reCompleted.FindSubmatch(line)
 			if len(m) > 0 {
+				matched = true
 				endTime := m[1]
 				pid := toInt64(m[2])
 				completedLapse := m[3]
 				fp.updateCompletionTime(pid, endTime, completedLapse)
-			} else {
-				m := reCompute.FindSubmatch(line)
-				if len(m) > 0 {
-					pid := toInt64(m[2])
-					computeLapse := m[3]
-					fp.updateComputeTime(pid, computeLapse)
-				}
 			}
 		}
+		if !matched {
+			m := reCompute.FindSubmatch(line)
+			if len(m) > 0 {
+				matched = true
+				pid := toInt64(m[2])
+				computeLapse := m[3]
+				fp.updateComputeTime(pid, computeLapse)
+			}
+		}
+		if !matched && fp.debug {
+			if !lineStarts(line, []byte("server to client")) {
+				fmt.Fprintf(os.Stderr, "Unrecognised: %s\n", string(line))
+			}
+		}
+
 	}
 }
 
