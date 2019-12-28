@@ -593,7 +593,15 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 // Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	if fp.cmdchan != nil {
-		fp.cmdchan <- *cmd
+		// Ensure entire structure is copied, particularly map member to avoid concurrency issues
+		cmdcopy := *cmd
+		cmdcopy.Tables = make(map[string]*Table, len(cmd.Tables))
+		i := 0
+		for k, v := range cmd.Tables {
+			cmdcopy.Tables[k] = v
+			i++
+		}
+		fp.cmdchan <- cmdcopy
 	} else {
 		lines := []string{}
 		lines = append(lines, fmt.Sprintf("%v", cmd))
