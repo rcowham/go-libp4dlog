@@ -534,6 +534,9 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 		if !bytes.Equal(trackStart, line[:len(trackStart)]) {
 			continue
 		}
+		if len(tableName) == 0 { // One of the special tables - discard track records
+			continue
+		}
 		m := reTrackUsage.FindSubmatch(line)
 		if len(m) > 0 {
 			cmd.setUsage(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
