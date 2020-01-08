@@ -190,7 +190,7 @@ func newTable(name string) *Table {
 	return t
 }
 
-func (c *Command) getKey() string {
+func (c *Command) GetKey() string {
 	if c.duplicateKey {
 		return fmt.Sprintf("%s.%d", c.ProcessKey, c.LineNo)
 	}
@@ -283,7 +283,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		CmdError       bool    `json:"cmdError"`
 		Tables         []Table `json:"tables"`
 	}{
-		ProcessKey:     c.getKey(),
+		ProcessKey:     c.GetKey(),
 		Cmd:            string(c.Cmd),
 		Pid:            c.Pid,
 		LineNo:         c.LineNo,
@@ -529,6 +529,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 			lineStarts(line, trackClientEntity) ||
 			lineStarts(line, trackReplicaPull) {
 			// Special tables don't have trackInfo set
+			tableName = ""
 			continue
 		}
 		if !bytes.Equal(trackStart, line[:len(trackStart)]) {
@@ -644,8 +645,8 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 			fp.currStartTime.Sub(cmd.EndTime) >= timeWindow) {
 			completed = true
 		}
-		// Handle the special commands which don't receive a completed time
-		if !completed && fp.currStartTime.Sub(cmd.EndTime) >= timeWindow && cmdHasNoCompletionRecord(cmd.Cmd) {
+		// Handle the special commands which don't receive a completed time - we use StartTime
+		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && cmdHasNoCompletionRecord(cmd.Cmd) {
 			completed = true
 		}
 		if completed {

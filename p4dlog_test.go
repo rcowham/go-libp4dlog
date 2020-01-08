@@ -397,3 +397,46 @@ Perforce server error:
 	assert.Equal(t, `{"processKey":"227e3b54b1283b1fef89bc5843eb87d5","cmd":"user-resolved","pid":25883,"lineNo":2,"user":"user1","workspace":"ws1","computeLapse":0,"completedLapse":0,"ip":"10.1.3.158","app":"IntelliJ_IDEA_resolved/2018.1/LINUX26X86_64/1637071","args":"/home/user1/perforce_ws/ws1/.idea/... /home/user1/perforce_ws/ws1/...","startTime":"2019/12/20 09:42:15","endTime":"0001/01/01 00:00:00","running":0,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":true,"tables":[]}`,
 		output[0])
 }
+
+func TestDuplicatePulls(t *testing.T) {
+	opts := new(P4dParseOptions)
+	outchan := make(chan string)
+	fp := NewP4dFileParser()
+	opts.testInput = `
+Perforce server info:
+	2019/12/20 08:00:03 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
+--- db.view
+---   pages in+out+cached 2+3+96
+---   locks read/write 4/5 rows get+pos+scan put+del 6+7+8 9+10
+--- replica/pull(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+-25ms
+
+Perforce server info:
+	2019/12/20 08:00:03 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
+--- db.domain
+---   pages in+out+cached 2+3+96
+---   locks read/write 0/1 rows get+pos+scan put+del 0+0+0 1+0
+--- replica/pull(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+-25ms
+
+Perforce server info:
+	2019/12/20 08:00:03 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
+--- db.domain
+---   pages in+out+cached 2+3+96
+---   locks read/write 0/1 rows get+pos+scan put+del 0+0+0 0+1
+--- db.view
+---   pages in+out+cached 2+3+96
+---   locks read/write 0/1 rows get+pos+scan put+del 0+0+0 0+1
+--- replica/pull(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+-25ms
+`
+	go fp.P4LogParseFile(*opts, outchan)
+	output := getResult(outchan)
+	assert.Equal(t, 3, len(output))
+	assert.Equal(t, `{"processKey":"642f3b3976afda703fb97524581913b7","cmd":"pull","pid":6170,"lineNo":2,"user":"svc_wok","workspace":"unknown","computeLapse":0,"completedLapse":0,"ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2019/12/20 08:00:03","endTime":"0001/01/01 00:00:00","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"readLocks":4,"writeLocks":5,"getRows":6,"posRows":7,"scanRows":8,"putRows":9,"delRows":10,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+		output[0])
+	assert.Equal(t, `{"processKey":"642f3b3976afda703fb97524581913b7.10","cmd":"pull","pid":6170,"lineNo":10,"user":"svc_wok","workspace":"unknown","computeLapse":0,"completedLapse":0,"ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2019/12/20 08:00:03","endTime":"0001/01/01 00:00:00","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"domain","pagesIn":2,"pagesOut":3,"pagesCached":96,"readLocks":0,"writeLocks":1,"getRows":0,"posRows":0,"scanRows":0,"putRows":1,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+		output[1])
+	assert.Equal(t, `{"processKey":"642f3b3976afda703fb97524581913b7.18","cmd":"pull","pid":6170,"lineNo":18,"user":"svc_wok","workspace":"unknown","computeLapse":0,"completedLapse":0,"ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2019/12/20 08:00:03","endTime":"0001/01/01 00:00:00","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"domain","pagesIn":2,"pagesOut":3,"pagesCached":96,"readLocks":0,"writeLocks":1,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":1,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"readLocks":0,"writeLocks":1,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":1,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+		output[2])
+}
