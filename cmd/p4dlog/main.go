@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
@@ -38,17 +39,41 @@ func writeHeader(f io.Writer) {
 	triggerLapse FLOAT NULL,
 	PRIMARY KEY (processkey, lineNumber, tableName));
 `)
+	fmt.Fprintf(f, "PRAGMA journal_mode = MEMORY; \nBEGIN TRANSACTION;\n")
+}
+
+func writeTrailer(f io.Writer) {
+	fmt.Fprintf(f, "PRAGMA journal_mode = MEMORY; \nEND TRANSACTION;\n")
+}
+
+func dateStr(t time.Time) string {
+	var blankTime time.Time
+	if t == blankTime {
+		return ""
+	}
+	return t.Format("2006/01/02 15:04:05")
 }
 
 func writeSQL(f io.Writer, cmd *p4dlog.Command) {
-	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f,%.3f,%d,"%v");
-`,
-		cmd.GetKey(), cmd.LineNo, cmd.Pid, cmd.StartTime, cmd.EndTime, cmd.ComputeLapse, cmd.CompletedLapse,
+	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,`+
+		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
+		`%.3f,%.3f,%d,"%v");`+"\n",
+		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
+		cmd.ComputeLapse, cmd.CompletedLapse,
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RpcMsgsIn, cmd.RpcMsgsOut,
 		cmd.RpcSizeIn, cmd.RpcSizeOut, cmd.RpcHimarkFwd, cmd.RpcHimarkRev,
 		cmd.RpcSnd, cmd.RpcRcv, cmd.Running, cmd.CmdError)
+	for _, t := range cmd.Tables {
+		fmt.Fprintf(f, "INSERT INTO tableuse VALUES ("+
+			`"%s",%d,"%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f);`+"\n",
+			cmd.GetKey(), cmd.LineNo, t.TableName, t.PagesIn, t.PagesOut, t.PagesCached,
+			t.ReadLocks, t.WriteLocks, t.GetRows, t.PosRows, t.ScanRows, t.PutRows, t.DelRows,
+			t.TotalReadWait, t.TotalReadHeld, t.TotalWriteWait, t.TotalWriteHeld,
+			t.MaxReadWait, t.MaxReadHeld, t.MaxWriteWait, t.MaxWriteHeld, t.PeekCount,
+			t.TotalPeekWait, t.TotalPeekHeld, t.MaxPeekWait, t.MaxPeekHeld, t.TriggerLapse)
+	}
 }
 
 func main() {
@@ -104,17 +129,17 @@ func main() {
 		close(inchan)
 	}()
 
-	outbuf := bufio.NewWriterSize(os.Stdout, 1024*1024)
-	defer outbuf.Flush()
+	f := bufio.NewWriterSize(os.Stdout, 1024*1024)
+	defer f.Flush()
 	if *sql {
-		writeHeader(outbuf)
+		writeHeader(f)
 		for cmd := range cmdchan {
-			writeSQL(outbuf, &cmd)
+			writeSQL(f, &cmd)
 		}
-
+		writeTrailer(f)
 	} else {
 		for line := range outchan {
-			fmt.Fprintf(outbuf, "%s\n", line)
+			fmt.Fprintf(f, "%s\n", line)
 		}
 	}
 
