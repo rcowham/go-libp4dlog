@@ -39,11 +39,15 @@ func writeHeader(f io.Writer) {
 	triggerLapse FLOAT NULL,
 	PRIMARY KEY (processkey, lineNumber, tableName));
 `)
-	fmt.Fprintf(f, "PRAGMA journal_mode = MEMORY; \nBEGIN TRANSACTION;\n")
+	fmt.Fprintf(f, "PRAGMA journal_mode = OFF;\nPRAGMA synchronous = OFF\nBEGIN TRANSACTION;\n")
+}
+
+func writeTransaction(f io.Writer) {
+	fmt.Fprintf(f, "COMMIT;\nBEGIN TRANSACTION\n")
 }
 
 func writeTrailer(f io.Writer) {
-	fmt.Fprintf(f, "PRAGMA journal_mode = MEMORY; \nEND TRANSACTION;\n")
+	fmt.Fprintf(f, "PRAGMA journal_mode = MEMORY; \nCOMMIT;\n")
 }
 
 func dateStr(t time.Time) string {
@@ -133,8 +137,13 @@ func main() {
 	defer f.Flush()
 	if *sql {
 		writeHeader(f)
+		i := 1
 		for cmd := range cmdchan {
 			writeSQL(f, &cmd)
+			i++
+			if i%50000 == 0 {
+				writeTransaction(f)
+			}
 		}
 		writeTrailer(f)
 	} else {
