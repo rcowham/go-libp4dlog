@@ -1,6 +1,6 @@
 
 
-BINARY=p4dlog
+BINARY=log2sql
 
 # These are the values we want to pass for VERSION and BUILD
 # git tag 1.0.1
@@ -21,12 +21,12 @@ build:
 
 # Builds distribution
 dist:
-	GOOS=linux GOARCH=amd64 go build -o p4dlog.linux-amd64 ${LDFLAGS}
-	GOOS=windows GOARCH=amd64 go build -o p4dlog.windows-amd64 ${LDFLAGS}
-	go build -o p4dlog.darwin-amd64 ${LDFLAGS}
-	-chmod +x p4dlog.linux-amd64 p4prometheus.windows-amd64 p4prometheus.darwin-amd64
-	-rm p4dlog.linux-amd64.gz p4prometheus.windows-amd64.gz p4prometheus.darwin-amd64.gz
-	gzip p4dlog.linux-amd64 p4prometheus.windows-amd64 p4prometheus.darwin-amd64
+	GOOS=linux GOARCH=amd64 go build -o log2sql.linux-amd64 ${LDFLAGS}
+	GOOS=windows GOARCH=amd64 go build -o log2sql.windows-amd64 ${LDFLAGS}
+	go build -o log2sql.darwin-amd64 ${LDFLAGS}
+	-chmod +x log2sql.linux-amd64 p4prometheus.windows-amd64 p4prometheus.darwin-amd64
+	-rm log2sql.linux-amd64.gz p4prometheus.windows-amd64.gz p4prometheus.darwin-amd64.gz
+	gzip log2sql.linux-amd64 p4prometheus.windows-amd64 p4prometheus.darwin-amd64
 
 # Installs our project: copies binaries
 install:
