@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -10,11 +11,14 @@ import (
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
+	"github.com/machinebox/progress"
 	// "github.com/pkg/profile"
 
 	p4dlog "github.com/rcowham/go-libp4dlog"
 	"github.com/rcowham/p4prometheus/version"
 )
+
+const statementsPerTransaction = 50000
 
 func writeHeader(f io.Writer) {
 	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS process
@@ -59,7 +63,8 @@ func dateStr(t time.Time) string {
 	return t.Format("2006/01/02 15:04:05")
 }
 
-func writeSQL(f io.Writer, cmd *p4dlog.Command) {
+func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
+	rows := 1
 	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,`+
 		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%.3f,%.3f,%d,"%v");`+"\n",
@@ -71,6 +76,7 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) {
 		cmd.RpcSizeIn, cmd.RpcSizeOut, cmd.RpcHimarkFwd, cmd.RpcHimarkRev,
 		cmd.RpcSnd, cmd.RpcRcv, cmd.Running, cmd.CmdError)
 	for _, t := range cmd.Tables {
+		rows++
 		fmt.Fprintf(f, "INSERT INTO tableuse VALUES ("+
 			`"%s",%d,"%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f);`+"\n",
 			cmd.GetKey(), cmd.LineNo, t.TableName, t.PagesIn, t.PagesOut, t.PagesCached,
@@ -79,6 +85,20 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) {
 			t.MaxReadWait, t.MaxReadHeld, t.MaxWriteWait, t.MaxWriteHeld, t.PeekCount,
 			t.TotalPeekWait, t.TotalPeekHeld, t.MaxPeekWait, t.MaxPeekHeld, t.TriggerLapse)
 	}
+	return int64(rows)
+}
+
+func byteCountDecimal(b int64) string {
+	const unit = 1000
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "kMGTPE"[exp])
 }
 
 func main() {
@@ -93,9 +113,9 @@ func main() {
 			"debug",
 			"Enable debugging.",
 		).Bool()
-		sql = kingpin.Flag(
-			"sql",
-			"Output Sqlite statements.",
+		jsonOutput = kingpin.Flag(
+			"json",
+			"Output JSON statements (otherwise SQL).",
 		).Bool()
 	)
 	kingpin.Version(version.Print("p4sla"))
@@ -111,20 +131,37 @@ func main() {
 		log.Fatal(err)
 	}
 	defer file.Close()
+	stat, err := file.Stat()
+	if err != nil {
+		log.Fatal(err)
+	}
 	const maxCapacity = 1024 * 1024
+	ctx := context.Background()
 	inbuf := make([]byte, maxCapacity)
 	reader := bufio.NewReaderSize(file, maxCapacity)
-	scanner := bufio.NewScanner(reader)
+	preader := progress.NewReader(reader)
+	scanner := bufio.NewScanner(preader)
 	scanner.Buffer(inbuf, maxCapacity)
+
+	// Start a goroutine printing progress
+	go func() {
+		progressChan := progress.NewTicker(ctx, preader, stat.Size(), 1*time.Second)
+		for p := range progressChan {
+			fmt.Fprintf(os.Stderr, "\r%s/%s %.0f%% estimated finish %s, %v remaining...", byteCountDecimal(p.N()),
+				byteCountDecimal(stat.Size()), p.Percent(), p.Estimated().Format("15:04"),
+				p.Remaining().Round(time.Second))
+		}
+		fmt.Fprintln(os.Stderr, "\rprocessing is completed")
+	}()
 
 	fp := p4dlog.NewP4dFileParser()
 	if *debug {
 		fp.SetDebugMode()
 	}
-	if *sql {
-		go fp.LogParser(inchan, cmdchan, outchan)
-	} else {
+	if *jsonOutput {
 		go fp.LogParser(inchan, nil, outchan)
+	} else {
+		go fp.LogParser(inchan, cmdchan, outchan)
 	}
 
 	go func() {
@@ -136,14 +173,14 @@ func main() {
 
 	f := bufio.NewWriterSize(os.Stdout, 1024*1024)
 	defer f.Flush()
-	if *sql {
+	if !*jsonOutput {
 		writeHeader(f)
-		i := 1
+		i := int64(1)
 		for cmd := range cmdchan {
-			writeSQL(f, &cmd)
-			i++
-			if i%50000 == 0 {
+			i += writeSQL(f, &cmd)
+			if i >= statementsPerTransaction {
 				writeTransaction(f)
+				i = 1
 			}
 		}
 		writeTrailer(f)
