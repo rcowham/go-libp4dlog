@@ -5,13 +5,14 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"time"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/machinebox/progress"
+	"github.com/sirupsen/logrus"
+
 	// "github.com/pkg/profile"
 
 	p4dlog "github.com/rcowham/go-libp4dlog"
@@ -101,40 +102,19 @@ func byteCountDecimal(b int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "kMGTPE"[exp])
 }
 
-func main() {
-	// CPU profiling by default
-	// defer profile.Start().Stop()
-	var (
-		logfile = kingpin.Flag(
-			"logfile",
-			"P4d log file to read (full path).",
-		).String()
-		debug = kingpin.Flag(
-			"debug",
-			"Enable debugging.",
-		).Bool()
-		jsonOutput = kingpin.Flag(
-			"json",
-			"Output JSON statements (otherwise SQL).",
-		).Bool()
-	)
-	kingpin.Version(version.Print("p4sla"))
-	kingpin.HelpFlag.Short('h')
-	kingpin.Parse()
-
-	inchan := make(chan []byte, 100)
-	outchan := make(chan string, 100)
-	cmdchan := make(chan p4dlog.Command, 100)
-
-	file, err := os.Open(*logfile)
+// Parse single log file - output is sent via logparser channel
+func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
+	file, err := os.Open(logfile)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 	defer file.Close()
 	stat, err := file.Stat()
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
+	logger.Infof("Opened %s, size %v", logfile, stat.Size())
+
 	const maxCapacity = 1024 * 1024
 	ctx := context.Background()
 	inbuf := make([]byte, maxCapacity)
@@ -154,6 +134,44 @@ func main() {
 		fmt.Fprintln(os.Stderr, "\rprocessing is completed")
 	}()
 
+	for scanner.Scan() {
+		inchan <- scanner.Bytes()
+	}
+
+}
+
+func main() {
+	// CPU profiling by default
+	// defer profile.Start().Stop()
+	var (
+		logfiles = kingpin.Flag(
+			"log",
+			"P4d log file to read (path).",
+		).Strings()
+		debug = kingpin.Flag(
+			"debug",
+			"Enable debugging.",
+		).Bool()
+		jsonOutput = kingpin.Flag(
+			"json",
+			"Output JSON statements (otherwise SQL).",
+		).Bool()
+	)
+	kingpin.Version(version.Print("p4sla"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
+
+	logger := logrus.New()
+	logger.Level = logrus.InfoLevel
+	if *debug {
+		logger.Level = logrus.DebugLevel
+	}
+	logger.Infof("Logfiles: %v", *logfiles)
+
+	inchan := make(chan []byte, 100)
+	outchan := make(chan string, 100)
+	cmdchan := make(chan p4dlog.Command, 100)
+
 	fp := p4dlog.NewP4dFileParser()
 	if *debug {
 		fp.SetDebugMode()
@@ -165,14 +183,17 @@ func main() {
 	}
 
 	go func() {
-		for scanner.Scan() {
-			inchan <- scanner.Bytes()
+		for _, f := range *logfiles {
+			logger.Infof("Processing: %s\n", f)
+			parseLog(logger, f, inchan)
 		}
+		logger.Debugf("Finished all log files\n")
 		close(inchan)
 	}()
 
 	f := bufio.NewWriterSize(os.Stdout, 1024*1024)
 	defer f.Flush()
+
 	if !*jsonOutput {
 		writeHeader(f)
 		i := int64(1)
