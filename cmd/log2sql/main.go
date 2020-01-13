@@ -113,7 +113,7 @@ func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	logger.Infof("Opened %s, size %v", logfile, stat.Size())
+	logger.Debugf("Opened %s, size %v", logfile, stat.Size())
 
 	const maxCapacity = 1024 * 1024
 	ctx := context.Background()
@@ -127,16 +127,17 @@ func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
 	go func() {
 		progressChan := progress.NewTicker(ctx, preader, stat.Size(), 1*time.Second)
 		for p := range progressChan {
-			fmt.Fprintf(os.Stderr, "\r%s/%s %.0f%% estimated finish %s, %v remaining...", byteCountDecimal(p.N()),
-				byteCountDecimal(stat.Size()), p.Percent(), p.Estimated().Format("15:04"),
+			fmt.Fprintf(os.Stderr, "\r%s: %s/%s %.0f%% estimated finish %s, %v remaining...",
+				logfile, byteCountDecimal(p.N()), byteCountDecimal(stat.Size()),
+				p.Percent(), p.Estimated().Format("15:04:05"),
 				p.Remaining().Round(time.Second))
 		}
-		fmt.Fprintln(os.Stderr, "\rprocessing is completed")
 	}()
 
 	for scanner.Scan() {
 		inchan <- scanner.Bytes()
 	}
+	fmt.Fprintln(os.Stderr, "\nprocessing completed")
 
 }
 
@@ -144,10 +145,9 @@ func main() {
 	// CPU profiling by default
 	// defer profile.Start().Stop()
 	var (
-		logfiles = kingpin.Flag(
-			"log",
-			"P4d log file to read (path).",
-		).Strings()
+		logfiles = kingpin.Arg(
+			"logfile",
+			"Log files to process.").Strings()
 		debug = kingpin.Flag(
 			"debug",
 			"Enable debugging.",
