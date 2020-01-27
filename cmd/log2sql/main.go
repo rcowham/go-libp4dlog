@@ -36,6 +36,7 @@ func writeHeader(f io.Writer) {
 	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS tableUse
 	(processkey CHAR(50) NOT NULL, lineNumber INT NOT NULL,
 	tableName VARCHAR(255) NOT NULL, pagesIn INT NULL, pagesOut INT NULL, pagesCached INT NULL,
+	pagesSplitInternal INT NULL, pagesSplitLeaf INT NULL,
 	readLocks INT NULL, writeLocks INT NULL, getRows INT NULL, posRows INT NULL, scanRows INT NULL,
 	putRows int NULL, delRows INT NULL, totalReadWait INT NULL, totalReadHeld INT NULL,
 	totalWriteWait INT NULL, totalWriteHeld INT NULL, maxReadWait INT NULL, maxReadHeld INT NULL,
@@ -79,8 +80,9 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 	for _, t := range cmd.Tables {
 		rows++
 		fmt.Fprintf(f, "INSERT INTO tableuse VALUES ("+
-			`"%s",%d,"%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f);`+"\n",
+			`"%s",%d,"%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f);`+"\n",
 			cmd.GetKey(), cmd.LineNo, t.TableName, t.PagesIn, t.PagesOut, t.PagesCached,
+			t.PagesSplitInternal, t.PagesSplitLeaf,
 			t.ReadLocks, t.WriteLocks, t.GetRows, t.PosRows, t.ScanRows, t.PutRows, t.DelRows,
 			t.TotalReadWait, t.TotalReadHeld, t.TotalWriteWait, t.TotalWriteHeld,
 			t.MaxReadWait, t.MaxReadHeld, t.MaxWriteWait, t.MaxWriteHeld, t.PeekCount,
