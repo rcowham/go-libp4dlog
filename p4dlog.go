@@ -112,37 +112,44 @@ type Command struct {
 
 // Table stores track information per table (part of Command)
 type Table struct {
-	TableName      string  `json:"tableName"`
-	PagesIn        int64   `json:"pagesIn"`
-	PagesOut       int64   `json:"pagesOut"`
-	PagesCached    int64   `json:"pagesCached"`
-	ReadLocks      int64   `json:"readLocks"`
-	WriteLocks     int64   `json:"writeLocks"`
-	GetRows        int64   `json:"getRows"`
-	PosRows        int64   `json:"posRows"`
-	ScanRows       int64   `json:"scanRows"`
-	PutRows        int64   `json:"putRows"`
-	DelRows        int64   `json:"delRows"`
-	TotalReadWait  int64   `json:"totalReadWait"`
-	TotalReadHeld  int64   `json:"totalReadHeld"`
-	TotalWriteWait int64   `json:"totalWriteWait"`
-	TotalWriteHeld int64   `json:"totalWriteHeld"`
-	MaxReadWait    int64   `json:"maxReadWait"`
-	MaxReadHeld    int64   `json:"maxReadHeld"`
-	MaxWriteWait   int64   `json:"maxWriteWait"`
-	MaxWriteHeld   int64   `json:"maxWriteHeld"`
-	PeekCount      int64   `json:"peekCount"`
-	TotalPeekWait  int64   `json:"totalPeekWait"`
-	TotalPeekHeld  int64   `json:"totalPeekHeld"`
-	MaxPeekWait    int64   `json:"maxPeekWait"`
-	MaxPeekHeld    int64   `json:"maxPeekHeld"`
-	TriggerLapse   float32 `json:"triggerLapse"`
+	TableName          string  `json:"tableName"`
+	PagesIn            int64   `json:"pagesIn"`
+	PagesOut           int64   `json:"pagesOut"`
+	PagesCached        int64   `json:"pagesCached"`
+	PagesSplitInternal int64   `json:"pagesSplitInternal"`
+	PagesSplitLeaf     int64   `json:"pagesSplitLeaf"`
+	ReadLocks          int64   `json:"readLocks"`
+	WriteLocks         int64   `json:"writeLocks"`
+	GetRows            int64   `json:"getRows"`
+	PosRows            int64   `json:"posRows"`
+	ScanRows           int64   `json:"scanRows"`
+	PutRows            int64   `json:"putRows"`
+	DelRows            int64   `json:"delRows"`
+	TotalReadWait      int64   `json:"totalReadWait"`
+	TotalReadHeld      int64   `json:"totalReadHeld"`
+	TotalWriteWait     int64   `json:"totalWriteWait"`
+	TotalWriteHeld     int64   `json:"totalWriteHeld"`
+	MaxReadWait        int64   `json:"maxReadWait"`
+	MaxReadHeld        int64   `json:"maxReadHeld"`
+	MaxWriteWait       int64   `json:"maxWriteWait"`
+	MaxWriteHeld       int64   `json:"maxWriteHeld"`
+	PeekCount          int64   `json:"peekCount"`
+	TotalPeekWait      int64   `json:"totalPeekWait"`
+	TotalPeekHeld      int64   `json:"totalPeekHeld"`
+	MaxPeekWait        int64   `json:"maxPeekWait"`
+	MaxPeekHeld        int64   `json:"maxPeekHeld"`
+	TriggerLapse       float32 `json:"triggerLapse"`
 }
 
 func (t *Table) setPages(pagesIn, pagesOut, pagesCached []byte) {
 	t.PagesIn, _ = strconv.ParseInt(string(pagesIn), 10, 64)
 	t.PagesOut, _ = strconv.ParseInt(string(pagesOut), 10, 64)
 	t.PagesCached, _ = strconv.ParseInt(string(pagesCached), 10, 64)
+}
+
+func (t *Table) setPagesSplit(pagesSplitInternal, pagesSplitLeaf []byte) {
+	t.PagesSplitInternal, _ = strconv.ParseInt(string(pagesSplitInternal), 10, 64)
+	t.PagesSplitLeaf, _ = strconv.ParseInt(string(pagesSplitLeaf), 10, 64)
 }
 
 func (t *Table) setLocksRows(readLocks, writeLocks, getRows, posRows,
@@ -478,6 +485,7 @@ var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 var reTrackPages = regexp.MustCompile(`^---   pages in\+out\+cached (\d+)\+(\d+)\+(\d+)`)
+var reTrackPagesSplit = regexp.MustCompile(`^---   pages split internal\+leaf (\d+)\+(\d+)`)
 var reTrackLocksRows = regexp.MustCompile(`^---   locks read/write (\d+)/(\d+) rows get\+pos\+scan put\+del (\d+)\+(\d+)\+(\d+) (\d+)\+(\d+)`)
 var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+\-?(\d+)ms`)
 var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
@@ -584,10 +592,14 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 			t.setPeek(m[1], m[2], m[3], m[4], m[5])
 			continue
 		}
+		m = reTrackPagesSplit.FindSubmatch(line)
+		if len(m) > 0 {
+			t := getTable(cmd, tableName)
+			t.setPagesSplit(m[1], m[2])
+			continue
+		}
 		if fp.debug {
-			if !lineStarts(line, []byte("---   pages split internal+leaf")) {
-				fmt.Fprintf(os.Stderr, "Unrecognised track: %s\n", string(line))
-			}
+			fmt.Fprintf(os.Stderr, "Unrecognised track: %s\n", string(line))
 		}
 
 	}
