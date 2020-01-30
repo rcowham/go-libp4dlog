@@ -15,19 +15,20 @@ See p4dlog_test.go for examples of log entries.
 package p4dlog
 
 import (
-	"bufio"
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
@@ -197,6 +198,7 @@ func newTable(name string) *Table {
 	return t
 }
 
+// GetKey - returns process key (handling duplicates)
 func (c *Command) GetKey() string {
 	if c.duplicateKey {
 		return fmt.Sprintf("%s.%d", c.ProcessKey, c.LineNo)
@@ -400,9 +402,12 @@ func (c *Command) updateFrom(other *Command) {
 
 // P4dFileParser - manages state
 type P4dFileParser struct {
+	logger               *logrus.Logger
+	outputDuration       time.Duration
+	debugDuration        time.Duration
 	lineNo               int64
 	cmds                 map[int64]*Command
-	inchan               chan []byte
+	lines                chan []byte
 	jsonchan             chan string
 	cmdchan              chan Command
 	debug                bool
@@ -414,17 +419,26 @@ type P4dFileParser struct {
 }
 
 // NewP4dFileParser - create and initialise properly
-func NewP4dFileParser() *P4dFileParser {
+func NewP4dFileParser(logger *logrus.Logger) *P4dFileParser {
 	var fp P4dFileParser
 	fp.cmds = make(map[int64]*Command)
 	fp.pidsSeenThisSecond = make(map[int64]bool)
 	fp.block = new(Block)
+	fp.logger = logger
+	fp.outputDuration = time.Second * 1
+	fp.debugDuration = time.Second * 60
 	return &fp
 }
 
-// SetDebugMode
+// SetDebugMode - turn on debugging - very verbose!
 func (fp *P4dFileParser) SetDebugMode() {
 	fp.debug = true
+}
+
+// SetDurations - for debugging
+func (fp *P4dFileParser) SetDurations(outputDuration, debugDuration time.Duration) {
+	fp.outputDuration = outputDuration
+	fp.debugDuration = debugDuration
 }
 
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
@@ -599,7 +613,12 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 			continue
 		}
 		if fp.debug {
-			fmt.Fprintf(os.Stderr, "Unrecognised track: %s\n", string(line))
+			buf := fmt.Sprintf("Unrecognised track: %s\n", string(line))
+			if fp.logger != nil {
+				fp.logger.Debugf(buf)
+			} else {
+				fmt.Fprint(os.Stderr, buf)
+			}
 		}
 
 	}
@@ -609,41 +628,36 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 
 // Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
-	if fp.cmdchan != nil {
-		// Ensure entire structure is copied, particularly map member to avoid concurrency issues
-		cmdcopy := *cmd
-		cmdcopy.Tables = make(map[string]*Table, len(cmd.Tables))
-		i := 0
-		for k, v := range cmd.Tables {
-			cmdcopy.Tables[k] = v
-			i++
-		}
-		fp.cmdchan <- cmdcopy
-	} else {
-		lines := []string{}
-		lines = append(lines, fmt.Sprintf("%v", cmd))
-		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.jsonchan <- strings.Join(lines, `\n`)
-		}
+	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
+	cmdcopy := *cmd
+	cmdcopy.Tables = make(map[string]*Table, len(cmd.Tables))
+	i := 0
+	for k, v := range cmd.Tables {
+		cmdcopy.Tables[k] = v
+		i++
 	}
+	fp.cmdchan <- cmdcopy
 }
 
 // Output pending commands on debug channel if set - for debug purposes
 func (fp *P4dFileParser) debugOutputCommands() {
-	if !fp.debug {
+	if !fp.debug || fp.logger == nil {
 		return
 	}
 	for _, cmd := range fp.cmds {
 		lines := []string{}
 		lines = append(lines, fmt.Sprintf("DEBUG: %v", cmd))
 		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.jsonchan <- strings.Join(lines, `\n`)
+			fp.logger.Debug(strings.Join(lines, `\n`))
 		}
 	}
 }
 
 // Output all completed commands 3 or more seconds ago
 func (fp *P4dFileParser) outputCompletedCommands() {
+	if fp.logger != nil {
+		fp.logger.Debugf("outputCompletedCommands: %d", len(fp.cmds))
+	}
 	const timeWindow = 3 * time.Second
 	cmdHasBeenProcessed := false
 	currTime := time.Now()
@@ -675,10 +689,16 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 
 // Processes all remaining commands whether completed or not - intended for use at end
 func (fp *P4dFileParser) outputRemainingCommands() {
+	if fp.logger != nil {
+		fp.logger.Debugf("outputRemainingCommands: %d", len(fp.cmds))
+	}
 	for _, cmd := range fp.cmds {
 		fp.outputCmd(cmd)
 	}
 	fp.cmds = make(map[int64]*Command)
+	if fp.logger != nil {
+		fp.logger.Debugf("outputRemainingCommands end: %d", len(fp.cmds))
+	}
 }
 
 func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse []byte) {
@@ -797,7 +817,12 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 		}
 		if !matched && fp.debug {
 			if !lineStarts(line, []byte("server to client")) {
-				fmt.Fprintf(os.Stderr, "Unrecognised: %s\n", string(line))
+				buf := fmt.Sprintf("Unrecognised: %s\n", string(line))
+				if fp.logger != nil {
+					fp.logger.Debug(buf)
+				} else {
+					fmt.Fprint(os.Stderr, buf)
+				}
 			}
 		}
 
@@ -870,15 +895,16 @@ func (fp *P4dFileParser) parseLine(line []byte) {
 
 // P4LogParseFinish - interface for incremental parsing
 func (fp *P4dFileParser) parseFinish() {
+	if fp.logger != nil {
+		fp.logger.Debugf("parseFinish")
+	}
 	if len(fp.block.lines) > 0 && !blankLine(fp.block.lines[0]) {
 		fp.processBlock(fp.block)
 	}
 	fp.outputRemainingCommands()
 	if fp.cmdchan != nil {
 		close(fp.cmdchan)
-	}
-	if fp.jsonchan != nil {
-		close(fp.jsonchan)
+		fp.cmdchan = nil
 	}
 }
 
@@ -887,25 +913,33 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 	return len(fp.cmds)
 }
 
-// LogParser - interface to be run on a go routine - if cmdchan is not nil it will be used - otherwise jsonchan
-func (fp *P4dFileParser) LogParser(inchan chan []byte, cmdchan chan Command, jsonchan chan string) {
-	fp.inchan = inchan
+// LogParser - interface to be run on a go routine - commands are returned on cmdchan
+func (fp *P4dFileParser) LogParser(ctx context.Context, lines chan []byte, cmdchan chan Command) {
+	fp.lines = lines
 	fp.cmdchan = cmdchan
-	fp.jsonchan = jsonchan
 	fp.lineNo = 1
-	ticker := time.NewTicker(time.Second * 1)
-	tickerDebug := time.NewTicker(time.Second * 60)
+	ticker := time.NewTicker(fp.outputDuration)
+	tickerDebug := time.NewTicker(fp.debugDuration)
 	for {
 		select {
 		case <-ticker.C:
 			fp.outputCompletedCommands()
 		case <-tickerDebug.C:
 			fp.debugOutputCommands()
-		case line, ok := <-fp.inchan:
+		case <-ctx.Done():
+			if fp.logger != nil {
+				fp.logger.Debugf("got Done")
+			}
+			fp.parseFinish()
+			return
+		case line, ok := <-fp.lines:
 			if ok {
 				line = bytes.TrimRight(line, "\r\n")
 				fp.parseLine(line)
 			} else {
+				if fp.logger != nil {
+					fp.logger.Debugf("channel closed")
+				}
 				fp.parseFinish()
 				return
 			}
@@ -913,33 +947,45 @@ func (fp *P4dFileParser) LogParser(inchan chan []byte, cmdchan chan Command, jso
 	}
 }
 
-// P4LogParseFile - interface for parsing a specified file
-func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan string) {
-	fp.jsonchan = outchan
-	var scanner *bufio.Scanner
-	if len(opts.testInput) > 0 {
-		scanner = bufio.NewScanner(strings.NewReader(opts.testInput))
-	} else if opts.File == "-" {
-		scanner = bufio.NewScanner(os.Stdin)
-	} else {
-		file, err := os.Open(opts.File)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-		const maxCapacity = 1024 * 1024
-		buf := make([]byte, maxCapacity)
-		reader := bufio.NewReaderSize(file, maxCapacity)
-		scanner = bufio.NewScanner(reader)
-		scanner.Buffer(buf, maxCapacity)
-	}
-	fp.lineNo = 1
-	for scanner.Scan() {
-		fp.parseLine(scanner.Bytes())
-	}
-	fp.parseFinish()
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "reading file %s:%s\n", opts.File, err)
-	}
+// } else {
+// 	lines := []string{}
+// 	lines = append(lines, fmt.Sprintf("%v", cmd))
+// 	if len(lines) > 0 && len(lines[0]) > 0 {
+// 		fp.jsonchan <- strings.Join(lines, `\n`)
+// 	}
+// }
 
-}
+// P4LogParseFile - interface for parsing a specified file
+// func (fp *P4dFileParser) P4LogParseFile(opts P4dParseOptions, outchan chan string) {
+// 	var scanner *bufio.Scanner
+// 	if len(opts.testInput) > 0 {
+// 		scanner = bufio.NewScanner(strings.NewReader(opts.testInput))
+// 	} else if opts.File == "-" {
+// 		scanner = bufio.NewScanner(os.Stdin)
+// 	} else {
+// 		file, err := os.Open(opts.File)
+// 		if err != nil {
+// 			log.Fatal(err)
+// 		}
+// 		defer file.Close()
+// 		const maxCapacity = 1024 * 1024
+// 		buf := make([]byte, maxCapacity)
+// 		reader := bufio.NewReaderSize(file, maxCapacity)
+// 		scanner = bufio.NewScanner(reader)
+// 		scanner.Buffer(buf, maxCapacity)
+// 	}
+// 	fp.lineNo = 1
+// 	for scanner.Scan() {
+// 		fp.parseLine(scanner.Bytes())
+// 	}
+// 	fp.parseFinish()
+// 	if err := scanner.Err(); err != nil {
+// 		buf := fmt.Sprintf("reading file %s:%s\n", opts.File, err)
+// 		if fp.logger != nil {
+// 			fp.logger.Debug(buf)
+// 		} else {
+// 			fmt.Fprint(os.Stderr, buf)
+// 		}
+// 	}
+
+// }

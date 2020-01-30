@@ -171,18 +171,15 @@ func main() {
 	logger.Infof("Logfiles: %v", *logfiles)
 
 	inchan := make(chan []byte, 100)
-	outchan := make(chan string, 100)
 	cmdchan := make(chan p4dlog.Command, 100)
 
-	fp := p4dlog.NewP4dFileParser()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fp := p4dlog.NewP4dFileParser(logger)
 	if *debug {
 		fp.SetDebugMode()
 	}
-	if *jsonOutput {
-		go fp.LogParser(inchan, nil, outchan)
-	} else {
-		go fp.LogParser(inchan, cmdchan, outchan)
-	}
+	go fp.LogParser(ctx, inchan, cmdchan)
 
 	go func() {
 		for _, f := range *logfiles {
@@ -208,8 +205,8 @@ func main() {
 		}
 		writeTrailer(f)
 	} else {
-		for line := range outchan {
-			fmt.Fprintf(f, "%s\n", line)
+		for cmd := range cmdchan {
+			fmt.Fprintf(f, "%s\n", cmd.String())
 		}
 	}
 
