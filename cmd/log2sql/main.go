@@ -2,12 +2,16 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"time"
 
+	"database/sql"
+
+	_ "github.com/mattn/go-sqlite3"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/machinebox/progress"
@@ -19,7 +23,7 @@ import (
 	"github.com/rcowham/p4prometheus/version"
 )
 
-const statementsPerTransaction = 50000
+const statementsPerTransaction = 50 * 1000
 
 func writeHeader(f io.Writer) {
 	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS process
@@ -45,8 +49,12 @@ func writeHeader(f io.Writer) {
 	triggerLapse FLOAT NULL,
 	PRIMARY KEY (processkey, lineNumber, tableName));
 `)
-	// Trade security for speed - easy to re-run if a problme (hopefully!)
-	fmt.Fprintf(f, "PRAGMA journal_mode = OFF;\nPRAGMA synchronous = OFF;\nBEGIN TRANSACTION;\n")
+	// Trade security for speed - easy to re-run if a problem (hopefully!)
+	fmt.Fprintf(f, "PRAGMA journal_mode = OFF;\nPRAGMA synchronous = OFF;\n")
+}
+
+func startTransaction(f io.Writer) {
+	fmt.Fprintf(f, "BEGIN TRANSACTION;\n")
 }
 
 func writeTransaction(f io.Writer) {
@@ -106,16 +114,24 @@ func byteCountDecimal(b int64) string {
 
 // Parse single log file - output is sent via logparser channel
 func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
-	file, err := os.Open(logfile)
-	if err != nil {
-		logger.Fatal(err)
+	var file *os.File
+	var fileSize int64
+	if logfile == "-" {
+		file = os.Stdin
+	} else {
+		var err error
+		file, err = os.Open(logfile)
+		if err != nil {
+			logger.Fatal(err)
+		}
 	}
 	defer file.Close()
 	stat, err := file.Stat()
 	if err != nil {
 		logger.Fatal(err)
 	}
-	logger.Debugf("Opened %s, size %v", logfile, stat.Size())
+	fileSize = stat.Size()
+	logger.Debugf("Opened %s, size %v", logfile, fileSize)
 
 	const maxCapacity = 1024 * 1024
 	ctx := context.Background()
@@ -127,9 +143,20 @@ func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
 
 	// Start a goroutine printing progress
 	go func() {
-		progressChan := progress.NewTicker(ctx, preader, stat.Size(), 1*time.Second)
+		d := 1 * time.Second
+		if stat.Size() > 1*1000*1000*1000 {
+			d = 10 * time.Second
+		}
+		if stat.Size() > 10*1000*1000*1000 {
+			d = 30 * time.Second
+		}
+		if stat.Size() > 25*1000*1000*1000 {
+			d = 60 * time.Second
+		}
+		logger.Infof("Report duration: %v", d)
+		progressChan := progress.NewTicker(ctx, preader, fileSize, d)
 		for p := range progressChan {
-			fmt.Fprintf(os.Stderr, "\r%s: %s/%s %.0f%% estimated finish %s, %v remaining...",
+			fmt.Fprintf(os.Stderr, "%s: %s/%s %.0f%% estimated finish %s, %v remaining...\n",
 				logfile, byteCountDecimal(p.N()), byteCountDecimal(stat.Size()),
 				p.Percent(), p.Estimated().Format("15:04:05"),
 				p.Remaining().Round(time.Second))
@@ -157,6 +184,10 @@ func main() {
 		jsonOutput = kingpin.Flag(
 			"json",
 			"Output JSON statements (otherwise SQL).",
+		).Bool()
+		dbOutput = kingpin.Flag(
+			"db",
+			"Create database.",
 		).Bool()
 	)
 	kingpin.Version(version.Print("p4sla"))
@@ -193,17 +224,68 @@ func main() {
 	f := bufio.NewWriterSize(os.Stdout, 1024*1024)
 	defer f.Flush()
 
+	dbname := "test.db"
+	db, err := sql.Open("sqlite3", dbname)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer db.Close()
+
+	outputSQL := !*dbOutput
+
 	if !*jsonOutput {
-		writeHeader(f)
+		if outputSQL {
+			writeHeader(f)
+			startTransaction(f)
+		} else {
+			stmt := new(bytes.Buffer)
+			writeHeader(stmt)
+			startTransaction(stmt)
+			_, err = db.Exec(stmt.String())
+			if err != nil {
+				logger.Fatalf("%q: %s\n", err, stmt)
+				return
+			}
+		}
 		i := int64(1)
 		for cmd := range cmdchan {
-			i += writeSQL(f, &cmd)
+			if outputSQL {
+				i += writeSQL(f, &cmd)
+			} else {
+				stmt := new(bytes.Buffer)
+				i += writeSQL(stmt, &cmd)
+				_, err = db.Exec(stmt.String())
+				if err != nil {
+					logger.Fatalf("%q: %s\n", err, stmt)
+					return
+				}
+			}
 			if i >= statementsPerTransaction {
-				writeTransaction(f)
+				if outputSQL {
+					writeTransaction(f)
+				} else {
+					stmt := new(bytes.Buffer)
+					writeTransaction(stmt)
+					_, err = db.Exec(stmt.String())
+					if err != nil {
+						logger.Fatalf("%q: %s\n", err, stmt)
+						return
+					}
+				}
 				i = 1
 			}
 		}
-		writeTrailer(f)
+		if outputSQL {
+			writeTrailer(f)
+		} else {
+			stmt := new(bytes.Buffer)
+			writeTrailer(stmt)
+			_, err = db.Exec(stmt.String())
+			if err != nil {
+				logger.Fatalf("%q: %s\n", err, stmt)
+				return
+			}
+		}
 	} else {
 		for cmd := range cmdchan {
 			fmt.Fprintf(f, "%s\n", cmd.String())
