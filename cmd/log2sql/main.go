@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"database/sql"
@@ -170,6 +171,20 @@ func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
 
 }
 
+func getDBName(name string, logfiles []string) string {
+	if name == "" {
+		if len(logfiles) == 0 {
+			name = "logs"
+		} else {
+			name = strings.TrimSuffix(logfiles[0], ".log")
+		}
+	}
+	if !strings.HasSuffix(name, ".db") {
+		name = fmt.Sprintf("%s.db", name)
+	}
+	return name
+}
+
 func main() {
 	// CPU profiling by default
 	// defer profile.Start().Stop()
@@ -185,10 +200,18 @@ func main() {
 			"json",
 			"Output JSON statements (otherwise SQL).",
 		).Bool()
-		dbOutput = kingpin.Flag(
-			"db",
+		outputFile = kingpin.Flag(
+			"output",
+			"Name of file to which to write SQL (or JSON if that flag is set).",
+		).Short('o').String()
+		dbName = kingpin.Flag(
+			"dbname",
 			"Create database.",
-		).Bool()
+		).Short('d').String()
+		noSQL = kingpin.Flag(
+			"no-sql",
+			"Don't create database.",
+		).Short('n').Bool()
 	)
 	kingpin.Version(version.Print("p4sla"))
 	kingpin.HelpFlag.Short('h')
@@ -221,23 +244,44 @@ func main() {
 		close(inchan)
 	}()
 
-	f := bufio.NewWriterSize(os.Stdout, 1024*1024)
-	defer f.Flush()
-
-	dbname := "test.db"
-	db, err := sql.Open("sqlite3", dbname)
-	if err != nil {
-		logger.Fatal(err)
+	writeOutput := *outputFile != ""
+	var fd *os.File
+	var f io.Writer
+	var err error
+	if writeOutput {
+		if *outputFile == "-" {
+			fd = os.Stdout
+		} else {
+			fd, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				logger.Fatal(err)
+			}
+		}
+		defer fd.Close()
+		f = bufio.NewWriterSize(fd, 1024*1024)
 	}
-	defer db.Close()
 
-	outputSQL := !*dbOutput
+	writeDB := !*noSQL
+	var db *sql.DB
+	if writeDB {
+		name := getDBName(*dbName, *logfiles)
+		logger.Infof("Creating database: %s", name)
+		var err error
+		db, err = sql.Open("sqlite3", name)
+		if err != nil {
+			logger.Fatal(err)
+		}
+		defer db.Close()
+		db.SetMaxOpenConns(1)
+	}
 
+	// TODO - fix count of statements - might be doubled
 	if !*jsonOutput {
-		if outputSQL {
+		if writeOutput {
 			writeHeader(f)
 			startTransaction(f)
-		} else {
+		}
+		if writeDB {
 			stmt := new(bytes.Buffer)
 			writeHeader(stmt)
 			startTransaction(stmt)
@@ -249,9 +293,10 @@ func main() {
 		}
 		i := int64(1)
 		for cmd := range cmdchan {
-			if outputSQL {
+			if writeOutput {
 				i += writeSQL(f, &cmd)
-			} else {
+			}
+			if writeDB {
 				stmt := new(bytes.Buffer)
 				i += writeSQL(stmt, &cmd)
 				_, err = db.Exec(stmt.String())
@@ -261,9 +306,10 @@ func main() {
 				}
 			}
 			if i >= statementsPerTransaction {
-				if outputSQL {
+				if writeOutput {
 					writeTransaction(f)
-				} else {
+				}
+				if writeDB {
 					stmt := new(bytes.Buffer)
 					writeTransaction(stmt)
 					_, err = db.Exec(stmt.String())
@@ -275,9 +321,10 @@ func main() {
 				i = 1
 			}
 		}
-		if outputSQL {
+		if writeOutput {
 			writeTrailer(f)
-		} else {
+		}
+		if writeDB {
 			stmt := new(bytes.Buffer)
 			writeTrailer(stmt)
 			_, err = db.Exec(stmt.String())
