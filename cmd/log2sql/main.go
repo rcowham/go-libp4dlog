@@ -74,6 +74,45 @@ func dateStr(t time.Time) string {
 	return t.Format("2006/01/02 15:04:05")
 }
 
+func getProcessStatement() string {
+	return `INSERT INTO process VALUES (?,?,?,?,?,?,?,?,?,?,` +
+		`?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+}
+
+func getTableUseStatement() string {
+	return `INSERT INTO tableuse VALUES (?,?,?,?,?,?,?,?,?,?,` +
+		`?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+}
+
+func preparedInsert(logger *logrus.Logger, tx *sql.Tx, stmtProcess, stmtTableuse *sql.Stmt, cmd *p4dlog.Command) int64 {
+	rows := 1
+	_, err := tx.Stmt(stmtProcess).Exec(
+		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
+		cmd.ComputeLapse, cmd.CompletedLapse,
+		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
+		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
+		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RpcMsgsIn, cmd.RpcMsgsOut,
+		cmd.RpcSizeIn, cmd.RpcSizeOut, cmd.RpcHimarkFwd, cmd.RpcHimarkRev,
+		cmd.RpcSnd, cmd.RpcRcv, cmd.Running, cmd.CmdError)
+	if err != nil {
+		logger.Errorf("Process insert: %v", err)
+	}
+	for _, t := range cmd.Tables {
+		rows++
+		_, err := tx.Stmt(stmtTableuse).Exec(
+			cmd.GetKey(), cmd.LineNo, t.TableName, t.PagesIn, t.PagesOut, t.PagesCached,
+			t.PagesSplitInternal, t.PagesSplitLeaf,
+			t.ReadLocks, t.WriteLocks, t.GetRows, t.PosRows, t.ScanRows, t.PutRows, t.DelRows,
+			t.TotalReadWait, t.TotalReadHeld, t.TotalWriteWait, t.TotalWriteHeld,
+			t.MaxReadWait, t.MaxReadHeld, t.MaxWriteWait, t.MaxWriteHeld, t.PeekCount,
+			t.TotalPeekWait, t.TotalPeekHeld, t.MaxPeekWait, t.MaxPeekHeld, t.TriggerLapse)
+		if err != nil {
+			logger.Errorf("Tableuse insert: %v", err)
+		}
+	}
+	return int64(rows)
+}
+
 func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 	rows := 1
 	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,`+
@@ -284,38 +323,46 @@ func main() {
 		if writeDB {
 			stmt := new(bytes.Buffer)
 			writeHeader(stmt)
-			startTransaction(stmt)
+			// startTransaction(stmt)
 			_, err = db.Exec(stmt.String())
 			if err != nil {
 				logger.Fatalf("%q: %s\n", err, stmt)
 				return
 			}
 		}
+		stmtProcess, err := db.Prepare(getProcessStatement())
+		if err != nil {
+			logger.Fatalf("Error preparing statement: %v", err)
+		}
+		stmtTableuse, err := db.Prepare(getTableUseStatement())
+		if err != nil {
+			logger.Fatalf("Error preparing statement: %v", err)
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			fmt.Println(err)
+		}
+
 		i := int64(1)
 		for cmd := range cmdchan {
 			if writeOutput {
 				i += writeSQL(f, &cmd)
 			}
 			if writeDB {
-				stmt := new(bytes.Buffer)
-				i += writeSQL(stmt, &cmd)
-				_, err = db.Exec(stmt.String())
-				if err != nil {
-					logger.Fatalf("%q: %s\n", err, stmt)
-					return
-				}
+				i += preparedInsert(logger, tx, stmtProcess, stmtTableuse, &cmd)
 			}
 			if i >= statementsPerTransaction {
 				if writeOutput {
 					writeTransaction(f)
 				}
 				if writeDB {
-					stmt := new(bytes.Buffer)
-					writeTransaction(stmt)
-					_, err = db.Exec(stmt.String())
+					err = tx.Commit()
 					if err != nil {
-						logger.Fatalf("%q: %s\n", err, stmt)
-						return
+						logger.Errorf("commit error: %v", err)
+					}
+					tx, err = db.Begin()
+					if err != nil {
+						fmt.Println(err)
 					}
 				}
 				i = 1
@@ -325,12 +372,9 @@ func main() {
 			writeTrailer(f)
 		}
 		if writeDB {
-			stmt := new(bytes.Buffer)
-			writeTrailer(stmt)
-			_, err = db.Exec(stmt.String())
+			err = tx.Commit()
 			if err != nil {
-				logger.Fatalf("%q: %s\n", err, stmt)
-				return
+				logger.Errorf("commit error: %v", err)
 			}
 		}
 	} else {
