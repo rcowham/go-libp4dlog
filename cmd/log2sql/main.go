@@ -10,9 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"database/sql"
-
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/bvinc/go-sqlite-lite/sqlite3"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/machinebox/progress"
@@ -84,28 +82,28 @@ func getTableUseStatement() string {
 		`?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
-func preparedInsert(logger *logrus.Logger, tx *sql.Tx, stmtProcess, stmtTableuse *sql.Stmt, cmd *p4dlog.Command) int64 {
+func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.Stmt, cmd *p4dlog.Command) int64 {
 	rows := 1
-	_, err := tx.Stmt(stmtProcess).Exec(
+	err := stmtProcess.Exec(
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
-		cmd.ComputeLapse, cmd.CompletedLapse,
+		float64(cmd.ComputeLapse), float64(cmd.CompletedLapse),
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RpcMsgsIn, cmd.RpcMsgsOut,
 		cmd.RpcSizeIn, cmd.RpcSizeOut, cmd.RpcHimarkFwd, cmd.RpcHimarkRev,
-		cmd.RpcSnd, cmd.RpcRcv, cmd.Running, cmd.CmdError)
+		float64(cmd.RpcSnd), float64(cmd.RpcRcv), cmd.Running, cmd.CmdError)
 	if err != nil {
 		logger.Errorf("Process insert: %v", err)
 	}
 	for _, t := range cmd.Tables {
 		rows++
-		_, err := tx.Stmt(stmtTableuse).Exec(
+		err := stmtTableuse.Exec(
 			cmd.GetKey(), cmd.LineNo, t.TableName, t.PagesIn, t.PagesOut, t.PagesCached,
 			t.PagesSplitInternal, t.PagesSplitLeaf,
 			t.ReadLocks, t.WriteLocks, t.GetRows, t.PosRows, t.ScanRows, t.PutRows, t.DelRows,
 			t.TotalReadWait, t.TotalReadHeld, t.TotalWriteWait, t.TotalWriteHeld,
 			t.MaxReadWait, t.MaxReadHeld, t.MaxWriteWait, t.MaxWriteHeld, t.PeekCount,
-			t.TotalPeekWait, t.TotalPeekHeld, t.MaxPeekWait, t.MaxPeekHeld, t.TriggerLapse)
+			t.TotalPeekWait, t.TotalPeekHeld, t.MaxPeekWait, t.MaxPeekHeld, float64(t.TriggerLapse))
 		if err != nil {
 			logger.Errorf("Tableuse insert: %v", err)
 		}
@@ -227,6 +225,18 @@ func getDBName(name string, logfiles []string) string {
 func main() {
 	// CPU profiling by default
 	// defer profile.Start().Stop()
+	// ft, err := os.Create("trace.out")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// defer ft.Close()
+	// err = trace.Start(ft)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// defer trace.Stop()
+	// End of trace code
+	var err error
 	var (
 		logfiles = kingpin.Arg(
 			"logfile",
@@ -286,7 +296,7 @@ func main() {
 	writeOutput := *outputFile != ""
 	var fd *os.File
 	var f io.Writer
-	var err error
+	// var err error
 	if writeOutput {
 		if *outputFile == "-" {
 			fd = os.Stdout
@@ -301,17 +311,16 @@ func main() {
 	}
 
 	writeDB := !*noSQL
-	var db *sql.DB
+	var db *sqlite3.Conn
 	if writeDB {
 		name := getDBName(*dbName, *logfiles)
 		logger.Infof("Creating database: %s", name)
 		var err error
-		db, err = sql.Open("sqlite3", name)
+		db, err = sqlite3.Open(name)
 		if err != nil {
 			logger.Fatal(err)
 		}
 		defer db.Close()
-		db.SetMaxOpenConns(1)
 	}
 
 	// TODO - fix count of statements - might be doubled
@@ -324,7 +333,7 @@ func main() {
 			stmt := new(bytes.Buffer)
 			writeHeader(stmt)
 			// startTransaction(stmt)
-			_, err = db.Exec(stmt.String())
+			err = db.Exec(stmt.String())
 			if err != nil {
 				logger.Fatalf("%q: %s\n", err, stmt)
 				return
@@ -338,7 +347,7 @@ func main() {
 		if err != nil {
 			logger.Fatalf("Error preparing statement: %v", err)
 		}
-		tx, err := db.Begin()
+		err = db.Begin()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -349,18 +358,18 @@ func main() {
 				i += writeSQL(f, &cmd)
 			}
 			if writeDB {
-				i += preparedInsert(logger, tx, stmtProcess, stmtTableuse, &cmd)
+				i += preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
 			}
 			if i >= statementsPerTransaction {
 				if writeOutput {
 					writeTransaction(f)
 				}
 				if writeDB {
-					err = tx.Commit()
+					err = db.Commit()
 					if err != nil {
 						logger.Errorf("commit error: %v", err)
 					}
-					tx, err = db.Begin()
+					err = db.Begin()
 					if err != nil {
 						fmt.Println(err)
 					}
@@ -372,7 +381,7 @@ func main() {
 			writeTrailer(f)
 		}
 		if writeDB {
-			err = tx.Commit()
+			err = db.Commit()
 			if err != nil {
 				logger.Errorf("commit error: %v", err)
 			}
