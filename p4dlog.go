@@ -489,6 +489,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 func cmdHasNoCompletionRecord(cmdName []byte) bool {
 	return bytes.Equal(cmdName, []byte("rmt-FileFetch")) ||
 		bytes.Equal(cmdName, []byte("rmt-Journal")) ||
+		bytes.Equal(cmdName, []byte("rmt-JournalPos")) ||
 		bytes.Equal(cmdName, []byte("pull"))
 }
 

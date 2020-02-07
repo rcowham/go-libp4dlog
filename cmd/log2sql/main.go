@@ -73,13 +73,28 @@ func dateStr(t time.Time) string {
 }
 
 func getProcessStatement() string {
-	return `INSERT INTO process VALUES (?,?,?,?,?,?,?,?,?,?,` +
-		`?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	return `INSERT INTO process 
+		(processkey, lineNumber, pid, 
+		startTime ,endTime, computedLapse, completedLapse,
+		user, workspace, ip, app, cmd,
+		args, uCpu, sCpu, diskIn, diskOut, ipcIn,
+		ipcOut, maxRss, pageFaults, rpcMsgsIn, rpcMsgsOut,
+		rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev,
+		rpcSnd, rpcRcv, running, error)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
-	return `INSERT INTO tableuse VALUES (?,?,?,?,?,?,?,?,?,?,` +
-		`?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	return `INSERT INTO tableuse 
+		(processkey, lineNumber, tableName, pagesIn, pagesOut, pagesCached,
+		pagesSplitInternal, pagesSplitLeaf,
+		readLocks, writeLocks, getRows, posRows, scanRows,
+		putRows, delRows, totalReadWait, totalReadHeld,
+		totalWriteWait, totalWriteHeld, maxReadWait, maxReadHeld,
+		maxWriteWait, maxWriteHeld, peekCount,
+		totalPeekWait, totalPeekHeld, maxPeekWait, maxPeekHeld,
+		triggerLapse)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.Stmt, cmd *p4dlog.Command) int64 {
@@ -87,13 +102,14 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 	err := stmtProcess.Exec(
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
 		float64(cmd.ComputeLapse), float64(cmd.CompletedLapse),
-		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
+		string(cmd.User), string(cmd.Workspace), string(cmd.IP), string(cmd.App), string(cmd.Cmd), string(cmd.Args),
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RpcMsgsIn, cmd.RpcMsgsOut,
 		cmd.RpcSizeIn, cmd.RpcSizeOut, cmd.RpcHimarkFwd, cmd.RpcHimarkRev,
 		float64(cmd.RpcSnd), float64(cmd.RpcRcv), cmd.Running, cmd.CmdError)
 	if err != nil {
-		logger.Errorf("Process insert: %v", err)
+		logger.Errorf("Process insert: %v pid %d, lineNo %d, %s",
+			err, cmd.Pid, cmd.LineNo, string(cmd.Cmd))
 	}
 	for _, t := range cmd.Tables {
 		rows++
@@ -105,7 +121,8 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 			t.MaxReadWait, t.MaxReadHeld, t.MaxWriteWait, t.MaxWriteHeld, t.PeekCount,
 			t.TotalPeekWait, t.TotalPeekHeld, t.MaxPeekWait, t.MaxPeekHeld, float64(t.TriggerLapse))
 		if err != nil {
-			logger.Errorf("Tableuse insert: %v", err)
+			logger.Errorf("Tableuse insert: %v pid %d, lineNo %d, %s, %s, %s",
+				err, cmd.Pid, cmd.LineNo, cmd.GetKey(), string(cmd.Cmd), string(cmd.Args))
 		}
 	}
 	return int64(rows)
