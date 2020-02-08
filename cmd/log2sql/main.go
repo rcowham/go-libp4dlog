@@ -169,37 +169,36 @@ func byteCountDecimal(b int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "kMGTPE"[exp])
 }
 
-func scannerFromFile(reader io.Reader) (*bufio.Scanner, error) {
-	var scanner *bufio.Scanner
+func readerFromFile(file *os.File) (io.Reader, int64, error) {
 	//create a bufio.Reader so we can 'peek' at the first few bytes
-	bReader := bufio.NewReader(reader)
-
+	bReader := bufio.NewReader(file)
 	testBytes, err := bReader.Peek(64) //read a few bytes without consuming
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	var fileSize int64
+	stat, err := file.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+	fileSize = stat.Size()
+
 	//Detect if the content is gzipped
 	contentType := http.DetectContentType(testBytes)
-
-	//If we detect gzip, then make a gzip reader, then wrap it in a scanner
 	if strings.Contains(contentType, "x-gzip") {
 		gzipReader, err := gzip.NewReader(bReader)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		scanner = bufio.NewScanner(gzipReader)
-	} else {
-		//Not gzipped, just make a scanner based on the reader
-		scanner = bufio.NewScanner(bReader)
+		// Estimate filesize
+		return gzipReader, fileSize * 20, nil
 	}
-
-	return scanner, nil
+	return bReader, fileSize, nil
 }
 
 // Parse single log file - output is sent via logparser channel
 func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
 	var file *os.File
-	var fileSize int64
 	if logfile == "-" {
 		file = os.Stdin
 	} else {
@@ -210,39 +209,37 @@ func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
 		}
 	}
 	defer file.Close()
-	stat, err := file.Stat()
-	if err != nil {
-		logger.Fatal(err)
-	}
-	fileSize = stat.Size()
-	logger.Debugf("Opened %s, size %v", logfile, fileSize)
 
 	const maxCapacity = 1024 * 1024
 	ctx := context.Background()
 	inbuf := make([]byte, maxCapacity)
-	reader := bufio.NewReaderSize(file, maxCapacity)
+	reader, fileSize, err := readerFromFile(file)
+	if err != nil {
+		logger.Fatalf("Failed to open file: %v", err)
+	}
+	logger.Debugf("Opened %s, size %v", logfile, fileSize)
+	reader = bufio.NewReaderSize(reader, maxCapacity)
 	preader := progress.NewReader(reader)
-	scanner, err := scannerFromFile(reader)
-	// scanner := bufio.NewScanner(preader)
+	scanner := bufio.NewScanner(preader)
 	scanner.Buffer(inbuf, maxCapacity)
 
 	// Start a goroutine printing progress
 	go func() {
 		d := 1 * time.Second
-		if stat.Size() > 1*1000*1000*1000 {
+		if fileSize > 1*1000*1000*1000 {
 			d = 10 * time.Second
 		}
-		if stat.Size() > 10*1000*1000*1000 {
+		if fileSize > 10*1000*1000*1000 {
 			d = 30 * time.Second
 		}
-		if stat.Size() > 25*1000*1000*1000 {
+		if fileSize > 25*1000*1000*1000 {
 			d = 60 * time.Second
 		}
 		logger.Infof("Report duration: %v", d)
 		progressChan := progress.NewTicker(ctx, preader, fileSize, d)
 		for p := range progressChan {
 			fmt.Fprintf(os.Stderr, "%s: %s/%s %.0f%% estimated finish %s, %v remaining...\n",
-				logfile, byteCountDecimal(p.N()), byteCountDecimal(stat.Size()),
+				logfile, byteCountDecimal(p.N()), byteCountDecimal(fileSize),
 				p.Percent(), p.Estimated().Format("15:04:05"),
 				p.Remaining().Round(time.Second))
 		}
