@@ -316,7 +316,8 @@ func main() {
 	if *debug {
 		logger.Level = logrus.DebugLevel
 	}
-	logger.Infof("Logfiles: %v", *logfiles)
+	startTime := time.Now()
+	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 
 	inchan := make(chan []byte, 100)
 	cmdchan := make(chan p4dlog.Command, 100)
@@ -437,4 +438,5 @@ func main() {
 		}
 	}
 
+	logger.Infof("Completed %s, elapsed %s", time.Now(), time.Since(startTime))
 }
