@@ -625,7 +625,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 		if fp.debug {
 			buf := fmt.Sprintf("Unrecognised track: %s\n", string(line))
 			if fp.logger != nil {
-				fp.logger.Debugf(buf)
+				fp.logger.Tracef(buf)
 			} else {
 				fmt.Fprint(os.Stderr, buf)
 			}
@@ -660,7 +660,7 @@ func (fp *P4dFileParser) debugOutputCommands() {
 		lines := []string{}
 		lines = append(lines, fmt.Sprintf("DEBUG: %v", cmd))
 		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.logger.Debug(strings.Join(lines, `\n`))
+			fp.logger.Trace(strings.Join(lines, `\n`))
 		}
 	}
 }
@@ -669,9 +669,7 @@ func (fp *P4dFileParser) debugOutputCommands() {
 func (fp *P4dFileParser) outputCompletedCommands() {
 	fp.m.Lock()
 	defer fp.m.Unlock()
-	if fp.logger != nil {
-		fp.logger.Debugf("outputCompletedCommands: %d", len(fp.cmds))
-	}
+	startCount := len(fp.cmds)
 	const timeWindow = 3 * time.Second
 	cmdHasBeenProcessed := false
 	currTime := time.Now()
@@ -699,21 +697,26 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
 		fp.timeLastCmdProcessed = time.Now()
 	}
+	if fp.logger != nil {
+		endCount := len(fp.cmds)
+		fp.logger.Debugf("outputCompletedCommands: start %d, end %d, count %d",
+			startCount, endCount, startCount-endCount)
+	}
 }
 
 // Processes all remaining commands whether completed or not - intended for use at end
 func (fp *P4dFileParser) outputRemainingCommands() {
 	fp.m.Lock()
 	defer fp.m.Unlock()
-	if fp.logger != nil {
-		fp.logger.Debugf("outputRemainingCommands: %d", len(fp.cmds))
-	}
+	startCount := len(fp.cmds)
 	for _, cmd := range fp.cmds {
 		fp.outputCmd(cmd)
 	}
 	fp.cmds = make(map[int64]*Command)
 	if fp.logger != nil {
-		fp.logger.Debugf("outputRemainingCommands end: %d", len(fp.cmds))
+		endCount := len(fp.cmds)
+		fp.logger.Debugf("outputRemainingCommands: start %d, end %d, count %d",
+			startCount, endCount, startCount-endCount)
 	}
 }
 
@@ -835,7 +838,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			if !lineStarts(line, []byte("server to client")) {
 				buf := fmt.Sprintf("Unrecognised: %s\n", string(line))
 				if fp.logger != nil {
-					fp.logger.Debug(buf)
+					fp.logger.Trace(buf)
 				} else {
 					fmt.Fprint(os.Stderr, buf)
 				}
@@ -937,11 +940,13 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, lines chan []byte, cmdch
 
 	// Output commands on seperate thread
 	go func() {
-		select {
-		case <-ticker.C:
-			fp.outputCompletedCommands()
-		case <-tickerDebug.C:
-			fp.debugOutputCommands()
+		for {
+			select {
+			case <-ticker.C:
+				fp.outputCompletedCommands()
+			case <-tickerDebug.C:
+				fp.debugOutputCommands()
+			}
 		}
 	}()
 

@@ -328,6 +328,7 @@ func main() {
 	if *debug {
 		fp.SetDebugMode()
 	}
+
 	go fp.LogParser(ctx, inchan, cmdchan)
 
 	go func() {
