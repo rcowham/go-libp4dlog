@@ -721,6 +721,8 @@ func (fp *P4dFileParser) outputRemainingCommands() {
 }
 
 func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse []byte) {
+	fp.m.Lock()
+	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
 		// sum all compute values for same command
 		f, _ := strconv.ParseFloat(string(computeLapse), 32)
@@ -730,6 +732,8 @@ func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse []byte) {
 }
 
 func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, completedLapse []byte) {
+	fp.m.Lock()
+	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
 		cmd.setEndTime(endTime)
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
@@ -855,6 +859,8 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 		if len(m) > 0 {
 			pid := toInt64(m[1])
 			ok := false
+			fp.m.Lock()
+			defer fp.m.Unlock()
 			if cmd, ok = fp.cmds[pid]; ok {
 				cmd.CmdError = true
 				cmd.completed = true
@@ -927,6 +933,8 @@ func (fp *P4dFileParser) parseFinish() {
 
 // CmdsPendingCount - count of unmatched commands
 func (fp *P4dFileParser) CmdsPendingCount() int {
+	fp.m.Lock()
+	defer fp.m.Unlock()
 	return len(fp.cmds)
 }
 
