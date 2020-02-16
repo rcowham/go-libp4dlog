@@ -505,14 +505,23 @@ var trackReplicaPull = []byte("--- replica/pull")
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
 var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
+var prefixTrackRPC = []byte("--- rpc msgs/size in+out ")
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
+var prefixTrackUsage = []byte("--- usage")
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
+var prefixTrackPages = []byte("---   pages in+out+cached ")
 var reTrackPages = regexp.MustCompile(`^---   pages in\+out\+cached (\d+)\+(\d+)\+(\d+)`)
+var prefixTrackPagesSplit = []byte("---   pages split internal+leaf ")
 var reTrackPagesSplit = regexp.MustCompile(`^---   pages split internal\+leaf (\d+)\+(\d+)`)
+var prefixTrackLocksRows = []byte("---   locks read/write ")
 var reTrackLocksRows = regexp.MustCompile(`^---   locks read/write (\d+)/(\d+) rows get\+pos\+scan put\+del (\d+)\+(\d+)\+(\d+) (\d+)\+(\d+)`)
+var prefixTrackTotalLock = []byte("---   total lock wait+held read/write ")
 var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+\-?(\d+)ms`)
+var prefixTrackPeek = []byte("---   peek count ")
 var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
+var prefixTrackMaxLock = []byte("---   max lock wait+held read/write ")
+var prefixTrackMaxLock2 = []byte("---   locks wait+held read/write ")
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var rePid = regexp.MustCompile(`\tPid (\d+)$`)
 
@@ -567,60 +576,77 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 		if !bytes.Equal(trackStart, line[:len(trackStart)]) {
 			continue
 		}
-		m := reTrackUsage.FindSubmatch(line)
-		if len(m) > 0 {
-			cmd.setUsage(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
-			continue
+		var m [][]byte
+		if lineStarts(line, prefixTrackUsage) {
+			m = reTrackUsage.FindSubmatch(line)
+			if len(m) > 0 {
+				cmd.setUsage(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+				continue
+			}
 		}
-		m = reTrackRPC2.FindSubmatch(line)
-		if len(m) > 0 {
-			cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
-			continue
-		}
-		m = reTrackRPC.FindSubmatch(line)
-		if len(m) > 0 {
-			cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], nil, nil)
-			continue
+		if lineStarts(line, prefixTrackRPC) {
+			m = reTrackRPC2.FindSubmatch(line)
+			if len(m) > 0 {
+				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+				continue
+			}
+			m = reTrackRPC.FindSubmatch(line)
+			if len(m) > 0 {
+				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], nil, nil)
+				continue
+			}
 		}
 		// One of the special tables - discard track records
 		if len(tableName) == 0 {
 			continue
 		}
-		m = reTrackPages.FindSubmatch(line)
-		if len(m) > 0 {
-			t := getTable(cmd, tableName)
-			t.setPages(m[1], m[2], m[3])
-			continue
+		if lineStarts(line, prefixTrackPages) {
+			m = reTrackPages.FindSubmatch(line)
+			if len(m) > 0 {
+				t := getTable(cmd, tableName)
+				t.setPages(m[1], m[2], m[3])
+				continue
+			}
 		}
-		m = reTrackLocksRows.FindSubmatch(line)
-		if len(m) > 0 {
-			t := getTable(cmd, tableName)
-			t.setLocksRows(m[1], m[2], m[3], m[4], m[5], m[6], m[7])
-			continue
+		if lineStarts(line, prefixTrackLocksRows) {
+			m = reTrackLocksRows.FindSubmatch(line)
+			if len(m) > 0 {
+				t := getTable(cmd, tableName)
+				t.setLocksRows(m[1], m[2], m[3], m[4], m[5], m[6], m[7])
+				continue
+			}
 		}
-		m = reTrackTotalLock.FindSubmatch(line)
-		if len(m) > 0 {
-			t := getTable(cmd, tableName)
-			t.setTotalLock(m[1], m[2], m[3], m[4])
-			continue
+		if lineStarts(line, prefixTrackTotalLock) {
+			m = reTrackTotalLock.FindSubmatch(line)
+			if len(m) > 0 {
+				t := getTable(cmd, tableName)
+				t.setTotalLock(m[1], m[2], m[3], m[4])
+				continue
+			}
 		}
-		m = reTrackMaxLock.FindSubmatch(line)
-		if len(m) > 0 {
-			t := getTable(cmd, tableName)
-			t.setMaxLock(m[1], m[2], m[3], m[4])
-			continue
+		if lineStarts(line, prefixTrackMaxLock) || lineStarts(line, prefixTrackMaxLock2) {
+			m = reTrackMaxLock.FindSubmatch(line)
+			if len(m) > 0 {
+				t := getTable(cmd, tableName)
+				t.setMaxLock(m[1], m[2], m[3], m[4])
+				continue
+			}
 		}
-		m = reTrackPeek.FindSubmatch(line)
-		if len(m) > 0 {
-			t := getTable(cmd, tableName)
-			t.setPeek(m[1], m[2], m[3], m[4], m[5])
-			continue
+		if lineStarts(line, prefixTrackPeek) {
+			m = reTrackPeek.FindSubmatch(line)
+			if len(m) > 0 {
+				t := getTable(cmd, tableName)
+				t.setPeek(m[1], m[2], m[3], m[4], m[5])
+				continue
+			}
 		}
-		m = reTrackPagesSplit.FindSubmatch(line)
-		if len(m) > 0 {
-			t := getTable(cmd, tableName)
-			t.setPagesSplit(m[1], m[2])
-			continue
+		if lineStarts(line, prefixTrackPagesSplit) {
+			m = reTrackPagesSplit.FindSubmatch(line)
+			if len(m) > 0 {
+				t := getTable(cmd, tableName)
+				t.setPagesSplit(m[1], m[2])
+				continue
+			}
 		}
 		if fp.debug {
 			buf := fmt.Sprintf("Unrecognised track: %s\n", string(line))
