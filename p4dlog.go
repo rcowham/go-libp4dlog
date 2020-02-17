@@ -57,20 +57,40 @@ type P4dParseOptions struct {
 	testInput string // For testing only
 }
 
+type blockType int
+
+const (
+	blankType blockType = iota
+	infoType
+	errorType
+)
+
 // Block is a block of lines parsed from a file
 type Block struct {
 	lineNo int64
+	btype  blockType
 	lines  [][]byte
 }
 
 func (block *Block) addLine(line []byte, lineNo int64) {
+	// if first line we detect block type and avoid copy
+	if block.lineNo == 0 {
+		block.lineNo = lineNo
+	}
+	if len(block.lines) == 0 && block.btype == blankType {
+		if len(line) == 0 {
+			block.btype = blankType
+		} else if lineStarts(line, infoBlock) {
+			block.btype = infoType
+		} else {
+			block.btype = errorType
+		}
+		return
+	}
 	// Need to copy original line
 	newLine := make([]byte, len(line))
 	copy(newLine, line)
 	block.lines = append(block.lines, newLine)
-	if block.lineNo == 0 {
-		block.lineNo = lineNo
-	}
 }
 
 // Command is a command found in the block
@@ -730,7 +750,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 	}
 }
 
-// Processes all remaining commands whether completed or not - intended for use at end
+// Processes all remaining commands whether completed or not - intended for use at end of processing
 func (fp *P4dFileParser) outputRemainingCommands() {
 	fp.m.Lock()
 	defer fp.m.Unlock()
@@ -795,12 +815,12 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 
 	var cmd *Command
 	i := 0
-	for _, line := range block.lines[1:] {
-		i++
-		if cmd != nil && bytes.Equal(trackStart, line[:3]) {
+	for _, line := range block.lines {
+		if cmd != nil && lineStarts(line, trackStart) {
 			fp.processTrackRecords(cmd, block.lines[i:])
 			return // Block has been processed
 		}
+		i++
 
 		matched := false
 		m := reCmd.FindSubmatch(line)
@@ -880,7 +900,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 
 func (fp *P4dFileParser) processErrorBlock(block *Block) {
 	var cmd *Command
-	for _, line := range block.lines[1:] {
+	for _, line := range block.lines {
 		m := rePid.FindSubmatch(line)
 		if len(m) > 0 {
 			pid := toInt64(m[1])
@@ -896,9 +916,9 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 }
 
 func (fp *P4dFileParser) processBlock(block *Block) {
-	if bytes.Equal(fp.block.lines[0], infoBlock) {
+	if fp.block.btype == infoType {
 		fp.processInfoBlock(fp.block)
-	} else if bytes.Equal(fp.block.lines[0], errorBlock) {
+	} else if fp.block.btype == errorType {
 		fp.processErrorBlock(fp.block)
 	} //TODO: output unrecognised block if wanted
 }
