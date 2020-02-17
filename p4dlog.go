@@ -530,6 +530,7 @@ var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var prefixTrackUsage = []byte("--- usage")
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
+var reCmdUsage = regexp.MustCompile(` (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 var prefixTrackPages = []byte("---   pages in+out+cached ")
 var reTrackPages = regexp.MustCompile(`^---   pages in\+out\+cached (\d+)\+(\d+)\+(\d+)`)
 var prefixTrackPagesSplit = []byte("---   pages split internal+leaf ")
@@ -593,7 +594,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 			tableName = ""
 			continue
 		}
-		if !bytes.Equal(trackStart, line[:len(trackStart)]) {
+		if !lineStarts(line, trackStart) {
 			continue
 		}
 		var m [][]byte
@@ -686,6 +687,9 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
 	cmdcopy := *cmd
+	if cmdHasNoCompletionRecord(cmd.Cmd) {
+		cmdcopy.EndTime = cmdcopy.StartTime
+	}
 	cmdcopy.Tables = make(map[string]*Table, len(cmd.Tables))
 	i := 0
 	for k, v := range cmd.Tables {
@@ -790,6 +794,14 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, complet
 	}
 }
 
+func (fp *P4dFileParser) updateUsage(pid int64, uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults []byte) {
+	fp.m.Lock()
+	defer fp.m.Unlock()
+	if cmd, ok := fp.cmds[pid]; ok {
+		cmd.setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults)
+	}
+}
+
 func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line []byte) {
 	// Expects a single line with a lapse statement on it
 	var triggerLapse float64
@@ -866,13 +878,21 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 		}
 		if !matched {
 			// process completed and computed
+			var pid int64
 			m := reCompleted.FindSubmatch(line)
 			if len(m) > 0 {
 				matched = true
 				endTime := m[1]
-				pid := toInt64(m[2])
+				pid = toInt64(m[2])
 				completedLapse := m[3]
 				fp.updateCompletionTime(pid, endTime, completedLapse)
+			}
+			// Note cmd completion also has usage data potentially
+			if matched {
+				m = reCmdUsage.FindSubmatch(line)
+				if len(m) > 0 {
+					fp.updateUsage(pid, m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+				}
 			}
 		}
 		if !matched {
