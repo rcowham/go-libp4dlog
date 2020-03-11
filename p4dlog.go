@@ -871,10 +871,10 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			}
 			h := md5.Sum(line)
 			cmd.ProcessKey = hex.EncodeToString(h[:])
-			fp.addCommand(cmd, false)
 			if len(trigger) > 0 {
 				fp.processTriggerLapse(cmd, trigger, block.lines[len(block.lines)-1])
 			}
+			fp.addCommand(cmd, false)
 		}
 		if !matched {
 			// process completed and computed
