@@ -435,6 +435,7 @@ type P4dFileParser struct {
 	debug                bool
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
+	TimeLatestStartCmd   time.Time
 	pidsSeenThisSecond   map[int64]bool
 	running              int64
 	block                *Block
@@ -470,6 +471,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
 		fp.pidsSeenThisSecond = make(map[int64]bool)
+	}
+	if newCmd.StartTime.After(fp.TimeLatestStartCmd) {
+		fp.TimeLatestStartCmd = newCmd.StartTime
 	}
 	if cmd, ok := fp.cmds[newCmd.Pid]; ok {
 		if cmd.ProcessKey != newCmd.ProcessKey {
@@ -561,7 +565,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 	hasTrackInfo := false
 	var tableName string
 	for _, line := range lines {
-		if bytes.Equal(trackLapse, line[:len(trackLapse)]) {
+		if lineStarts(line, trackLapse) {
 			val := line[len(trackLapse):]
 			i := bytes.IndexByte(val, '.')
 			j := bytes.IndexByte(val, 's')
