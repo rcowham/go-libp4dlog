@@ -51,7 +51,6 @@ type P4DMetrics struct {
 	totalTriggerLapse   map[string]float64
 	cmdsProcessed       int64
 	linesRead           int64
-	lastOutputTime      time.Time
 }
 
 // NewP4DMetricsLogParser - wraps P4dFileParser
@@ -122,8 +121,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	fixedLabels := []labelStruct{{name: "serverid", value: p4m.config.ServerID},
 		{name: "sdpinst", value: p4m.config.SDPInstance}}
 	metrics := new(bytes.Buffer)
-	p4m.logger.Infof("Writing stats")
-	p4m.lastOutputTime = time.Now()
+	p4m.logger.Debugf("Writing stats")
 
 	var mname string
 	var buf string
@@ -294,34 +292,43 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 	if !p4m.historical {
 		return false
 	}
-	// This next section is much more efficient than regex parsing - we return ASAP
+	// This next section is more efficient than regex parsing - we return ASAP
 	lenPrefix := len("\t2020/03/04 12:13:14")
 	if len(line) < lenPrefix {
 		return false
 	}
+	// Check for expected chars at specific points
 	if line[0] != '\t' || line[5] != '/' || line[8] != '/' ||
 		line[11] != ' ' || line[14] != ':' || line[17] != ':' {
 		return false
 	}
+	// Check for digits
 	for _, i := range []int{1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19} {
 		if line[i] < byte('0') || line[i] > byte('9') {
 			return false
 		}
 	}
+	if len(p4m.latestStartCmdBuf) == 0 {
+		p4m.latestStartCmdBuf = make([]byte, lenPrefix)
+		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
+		return false
+	}
 	if len(p4m.latestStartCmdBuf) > 0 && bytes.Equal(p4m.latestStartCmdBuf, line[:lenPrefix]) {
 		return false
 	}
 	// Update only if greater (due to log format we do see out of sequence dates with track records)
-	if bytes.Compare(line[:lenPrefix], p4m.latestStartCmdBuf) > 0 {
-		p4m.latestStartCmdBuf = line[:lenPrefix]
+	if bytes.Compare(line[:lenPrefix], p4m.latestStartCmdBuf) <= 0 {
+		return false
 	}
-	dt, _ := time.Parse(p4timeformat, string(p4m.latestStartCmdBuf[1:]))
+	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
 	if p4m.timeLatestStartCmd.IsZero() {
 		p4m.timeLatestStartCmd = dt
+		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
 		return false
 	}
 	if dt.Sub(p4m.timeLatestStartCmd) >= p4m.config.UpdateInterval {
 		p4m.timeLatestStartCmd = dt
+		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
 		return true
 	}
 	return false
