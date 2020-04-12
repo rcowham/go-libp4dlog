@@ -320,9 +320,9 @@ func main() {
 	startTime := time.Now()
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 
-	inChan := make(chan []byte, 100)
-	cmdChan := make(chan p4dlog.Command, 100)
-	metricsChan := make(chan string, 100)
+	inChan := make(chan []byte, 10000)
+	cmdChan := make(chan p4dlog.Command, 1000)
+	metricsChan := make(chan string, 1000)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -344,7 +344,7 @@ func main() {
 			logger.Infof("Processing: %s\n", f)
 			parseLog(logger, f, inChan)
 		}
-		logger.Debugf("Finished all log files\n")
+		logger.Infof("Finished all log files\n")
 		close(inChan)
 	}()
 
@@ -396,6 +396,7 @@ func main() {
 				logger.Errorf("Error closing file: %v", err)
 			}
 		}
+		logger.Info("Main: metrics closed")
 	}()
 
 	// TODO - fix count of statements - might be doubled

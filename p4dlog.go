@@ -429,9 +429,8 @@ type P4dFileParser struct {
 	lineNo               int64
 	m                    sync.Mutex
 	cmds                 map[int64]*Command
-	lines                <-chan []byte
-	jsonchan             chan<- string
-	cmdchan              chan<- Command
+	CmdsProcessed        int
+	cmdChan              chan<- Command
 	debug                bool
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
@@ -696,7 +695,8 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 		cmdcopy.Tables[k] = v
 		i++
 	}
-	fp.cmdchan <- cmdcopy
+	fp.cmdChan <- cmdcopy
+	fp.CmdsProcessed++
 }
 
 // Output pending commands on debug channel if set - for debug purposes
@@ -992,9 +992,12 @@ func (fp *P4dFileParser) parseFinish() {
 		fp.processBlock(fp.block)
 	}
 	fp.outputRemainingCommands()
-	if fp.cmdchan != nil {
-		close(fp.cmdchan)
-		fp.cmdchan = nil
+	if fp.cmdChan != nil {
+		if fp.logger != nil {
+			fp.logger.Debugf("parseFinish - close cmd channel")
+		}
+		close(fp.cmdChan)
+		fp.cmdChan = nil
 	}
 }
 
@@ -1006,9 +1009,8 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4dFileParser) LogParser(ctx context.Context, lines <-chan []byte, cmdchan chan<- Command) {
-	fp.lines = lines
-	fp.cmdchan = cmdchan
+func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan []byte, cmdchan chan<- Command) {
+	fp.cmdChan = cmdchan
 	fp.lineNo = 1
 	ticker := time.NewTicker(fp.outputDuration)
 	tickerDebug := time.NewTicker(fp.debugDuration)
@@ -1033,7 +1035,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, lines <-chan []byte, cmd
 			}
 			fp.parseFinish()
 			return
-		case line, ok := <-fp.lines:
+		case line, ok := <-linesChan:
 			if ok {
 				line = bytes.TrimRight(line, "\r\n")
 				fp.parseLine(line)
