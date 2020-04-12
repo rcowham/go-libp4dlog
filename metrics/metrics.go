@@ -140,13 +140,12 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.logger.Debugf(buf)
 	fmt.Fprint(metrics, buf)
 
-	//TODO - fix reference to fp.
-	// mname = "p4_prom_cmds_pending"
-	// p4m.printMetricHeader(metrics, mname, "A count of all current cmds (not completed)", "gauge")
-	// metricVal = fmt.Sprintf("%d", p4m.fp.CmdsPendingCount())
-	// buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	// p4m.logger.Debugf(buf)
-	// fmt.Fprint(metrics, buf)
+	mname = "p4_prom_cmds_pending"
+	p4m.printMetricHeader(metrics, mname, "A count of all current cmds (not completed)", "gauge")
+	metricVal = fmt.Sprintf("%d", p4m.fp.CmdsPendingCount())
+	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
+	p4m.logger.Debugf(buf)
+	fmt.Fprint(metrics, buf)
 
 	mname = "p4_cmd_counter"
 	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by cmd)", "counter")
@@ -287,7 +286,7 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 // GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
 const p4timeformat = "2006/01/02 15:04:05"
 
-// Searches for log lines starting with a date - assumes increasing dates in log
+// Searches for log lines starting with a <tab>date - assumes increasing dates in log
 func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 	if !p4m.historical {
 		return false
@@ -311,6 +310,7 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 	if len(p4m.latestStartCmdBuf) == 0 {
 		p4m.latestStartCmdBuf = make([]byte, lenPrefix)
 		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
+		p4m.timeLatestStartCmd, _ = time.Parse(p4timeformat, string(line[1:lenPrefix]))
 		return false
 	}
 	if len(p4m.latestStartCmdBuf) > 0 && bytes.Equal(p4m.latestStartCmdBuf, line[:lenPrefix]) {
@@ -321,11 +321,6 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 		return false
 	}
 	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
-	if p4m.timeLatestStartCmd.IsZero() {
-		p4m.timeLatestStartCmd = dt
-		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
-		return false
-	}
 	if dt.Sub(p4m.timeLatestStartCmd) >= p4m.config.UpdateInterval {
 		p4m.timeLatestStartCmd = dt
 		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
