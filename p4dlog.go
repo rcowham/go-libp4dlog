@@ -429,9 +429,9 @@ type P4dFileParser struct {
 	lineNo               int64
 	m                    sync.Mutex
 	cmds                 map[int64]*Command
-	lines                chan []byte
-	jsonchan             chan string
-	cmdchan              chan Command
+	lines                <-chan []byte
+	jsonchan             chan<- string
+	cmdchan              chan<- Command
 	debug                bool
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
@@ -931,6 +931,7 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 				cmd.CmdError = true
 				cmd.completed = true
 			}
+			return
 		}
 	}
 }
@@ -1005,7 +1006,7 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4dFileParser) LogParser(ctx context.Context, lines chan []byte, cmdchan chan Command) {
+func (fp *P4dFileParser) LogParser(ctx context.Context, lines <-chan []byte, cmdchan chan<- Command) {
 	fp.lines = lines
 	fp.cmdchan = cmdchan
 	fp.lineNo = 1
@@ -1038,7 +1039,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, lines chan []byte, cmdch
 				fp.parseLine(line)
 			} else {
 				if fp.logger != nil {
-					fp.logger.Debugf("channel closed")
+					fp.logger.Debugf("LogParser lines channel closed")
 				}
 				fp.parseFinish()
 				return

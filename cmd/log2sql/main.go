@@ -20,8 +20,9 @@ import (
 
 	// "github.com/pkg/profile"
 
+	"github.com/perforce/p4prometheus/version"
 	p4dlog "github.com/rcowham/go-libp4dlog"
-	"github.com/rcowham/p4prometheus/version"
+	"github.com/rcowham/go-libp4dlog/metrics"
 )
 
 const statementsPerTransaction = 50 * 1000
@@ -183,7 +184,7 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 	}
 	fileSize = stat.Size()
 
-	//Detect if the content is gzipped
+	// Detect if the content is gzipped
 	contentType := http.DetectContentType(testBytes)
 	if strings.Contains(contentType, "x-gzip") {
 		gzipReader, err := gzip.NewReader(bReader)
@@ -196,8 +197,8 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 	return bReader, fileSize, nil
 }
 
-// Parse single log file - output is sent via logparser channel
-func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
+// Parse single log file - output is sent via inChan channel
+func parseLog(logger *logrus.Logger, logfile string, inChan chan []byte) {
 	var file *os.File
 	if logfile == "-" {
 		file = os.Stdin
@@ -246,7 +247,7 @@ func parseLog(logger *logrus.Logger, logfile string, inchan chan []byte) {
 	}()
 
 	for scanner.Scan() {
-		inchan <- scanner.Bytes()
+		inChan <- scanner.Bytes()
 	}
 	fmt.Fprintln(os.Stderr, "\nprocessing completed")
 
@@ -319,25 +320,32 @@ func main() {
 	startTime := time.Now()
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 
-	inchan := make(chan []byte, 100)
-	cmdchan := make(chan p4dlog.Command, 100)
+	inChan := make(chan []byte, 100)
+	cmdChan := make(chan p4dlog.Command, 100)
+	metricsChan := make(chan string, 100)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	fp := p4dlog.NewP4dFileParser(logger)
-	if *debug {
-		fp.SetDebugMode()
-	}
 
-	go fp.LogParser(ctx, inchan, cmdchan)
+	mconfig := &metrics.Config{
+		Debug:               *debug,
+		ServerID:            "test",
+		SDPInstance:         "",
+		UpdateInterval:      10 * time.Second,
+		OutputCmdsByUser:    true,
+		CaseSensitiveServer: true,
+	}
+	mp := metrics.NewP4DMetricsLogParser(mconfig, logger, true)
+
+	go mp.ProcessEvents(ctx, inChan, cmdChan, metricsChan)
 
 	go func() {
 		for _, f := range *logfiles {
 			logger.Infof("Processing: %s\n", f)
-			parseLog(logger, f, inchan)
+			parseLog(logger, f, inChan)
 		}
 		logger.Debugf("Finished all log files\n")
-		close(inchan)
+		close(inChan)
 	}()
 
 	writeOutput := *outputFile != ""
@@ -370,6 +378,26 @@ func main() {
 		defer db.Close()
 	}
 
+	const metricsFile = "metrics.txt"
+
+	// Process all metrics
+	go func() {
+		for metric := range metricsChan {
+			var f *os.File
+			var err error
+			f, err = os.OpenFile(metricsFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				logger.Errorf("Error opening %s: %v", metricsFile, err)
+				return
+			}
+			f.Write([]byte(metric))
+			err = f.Close()
+			if err != nil {
+				logger.Errorf("Error closing file: %v", err)
+			}
+		}
+	}()
+
 	// TODO - fix count of statements - might be doubled
 	if !*jsonOutput {
 		if writeOutput {
@@ -400,7 +428,7 @@ func main() {
 		}
 
 		i := int64(1)
-		for cmd := range cmdchan {
+		for cmd := range cmdChan {
 			if writeOutput {
 				i += writeSQL(f, &cmd)
 			}
@@ -434,7 +462,7 @@ func main() {
 			}
 		}
 	} else {
-		for cmd := range cmdchan {
+		for cmd := range cmdChan {
 			fmt.Fprintf(f, "%s\n", cmd.String())
 		}
 	}
