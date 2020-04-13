@@ -198,7 +198,7 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 }
 
 // Parse single log file - output is sent via inChan channel
-func parseLog(logger *logrus.Logger, logfile string, inChan chan []byte) {
+func parseLog(logger *logrus.Logger, logfile string, inChan chan string) {
 	var file *os.File
 	if logfile == "-" {
 		file = os.Stdin
@@ -247,7 +247,7 @@ func parseLog(logger *logrus.Logger, logfile string, inChan chan []byte) {
 	}()
 
 	for scanner.Scan() {
-		inChan <- scanner.Bytes()
+		inChan <- scanner.Text()
 	}
 	fmt.Fprintln(os.Stderr, "\nprocessing completed")
 
@@ -264,6 +264,21 @@ func getDBName(name string, logfiles []string) string {
 	}
 	if !strings.HasSuffix(name, ".db") {
 		name = fmt.Sprintf("%s.db", name)
+	}
+	return name
+}
+
+func getMetricsFileName(name string, logfiles []string) string {
+	if name == "" {
+		if len(logfiles) == 0 {
+			name = "logs"
+		} else {
+			name = strings.TrimSuffix(logfiles[0], ".gz")
+			name = strings.TrimSuffix(name, ".log")
+		}
+		if !strings.HasSuffix(name, ".metrics") {
+			name = fmt.Sprintf("%s.metrics", name)
+		}
 	}
 	return name
 }
@@ -301,14 +316,45 @@ func main() {
 		).Short('o').String()
 		dbName = kingpin.Flag(
 			"dbname",
-			"Create database.",
+			"Create database with this name. Defaults to <logfile>.db",
 		).Short('d').String()
 		noSQL = kingpin.Flag(
 			"no-sql",
 			"Don't create database.",
 		).Short('n').Bool()
+		serverID = kingpin.Flag(
+			"server.id",
+			"server id for historical metrics - useful to identify site.",
+		).Short('s').String()
+		sdpInstance = kingpin.Flag(
+			"sdp.instance",
+			"SDP instance if required in historical metrics. (Not usually required)",
+		).String()
+		updateInterval = kingpin.Flag(
+			"update.interval",
+			"Update interval for historical metrics - time is assumed to advance as per time in log entries.",
+		).Default("10s").Duration()
+		noOutputCmdsByUser = kingpin.Flag(
+			"no.output.cmds.by.user",
+			"Turns off the output of cmds_by_user - can be useful for large sites with many thousands of users.",
+		).Default("false").Bool()
+		caseInsensitiveServer = kingpin.Flag(
+			"case.insensitive.server",
+			"Set if server is case insensitive and usernames may occur in either case.",
+		).Default("false").Bool()
+		noMetrics = kingpin.Flag(
+			"no.metrics",
+			"Disable historical metrics output in VictoriaMetrics format (via Graphite interface).",
+		).Bool()
+		historicalMetricsFile = kingpin.Flag(
+			"historical.metrics.file",
+			"File to write historical metrics to in Graphite format for use with VictoriaMetrics. Default is <logfile>.metrics",
+		).Short('m').String()
 	)
-	kingpin.Version(version.Print("p4sla"))
+	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("log2sql")).Author("Robert Cowham")
+	kingpin.CommandLine.Help = "Parses a p4d text log file into a Sqlite3 database and/or JSON or SQL format.\n" +
+		"The output of historical Prometheus compatible metrics is also possible." +
+		"These can be viewed using VictoriaMetrics which is a Prometheus compatible data store, and viewed in Grafana."
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
@@ -320,7 +366,7 @@ func main() {
 	startTime := time.Now()
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 
-	inChan := make(chan []byte, 10000)
+	inChan := make(chan string, 10000)
 	cmdChan := make(chan p4dlog.Command, 1000)
 	metricsChan := make(chan string, 1000)
 
@@ -329,11 +375,11 @@ func main() {
 
 	mconfig := &metrics.Config{
 		Debug:               *debug,
-		ServerID:            "test",
-		SDPInstance:         "",
-		UpdateInterval:      10 * time.Second,
-		OutputCmdsByUser:    true,
-		CaseSensitiveServer: true,
+		ServerID:            *serverID,
+		SDPInstance:         *sdpInstance,
+		UpdateInterval:      *updateInterval,
+		OutputCmdsByUser:    !*noOutputCmdsByUser,
+		CaseSensitiveServer: !*caseInsensitiveServer,
 	}
 	mp := metrics.NewP4DMetricsLogParser(mconfig, logger, true)
 
@@ -352,8 +398,8 @@ func main() {
 	var fd *os.File
 	var f io.Writer
 	// var err error
-	if writeOutput {
-		if *outputFile == "-" {
+	if writeOutput || *jsonOutput {
+		if *outputFile == "-" || *outputFile == "" {
 			fd = os.Stdout
 		} else {
 			fd, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -378,28 +424,36 @@ func main() {
 		defer db.Close()
 	}
 
-	const metricsFile = "metrics.txt"
+	writeMetrics := !*noMetrics
+	var metricsFile string
+	if writeMetrics {
+		metricsFile = getMetricsFileName(*historicalMetricsFile, *logfiles)
+		logger.Infof("Creating historical metrics: %s, config: %+v", metricsFile, mconfig)
+	}
 
 	// Process all metrics
 	go func() {
 		for metric := range metricsChan {
-			var f *os.File
-			var err error
-			f, err = os.OpenFile(metricsFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				logger.Errorf("Error opening %s: %v", metricsFile, err)
-				return
-			}
-			f.Write([]byte(metric))
-			err = f.Close()
-			if err != nil {
-				logger.Errorf("Error closing file: %v", err)
+			if writeMetrics {
+				var f *os.File
+				var err error
+				f, err = os.OpenFile(metricsFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if err != nil {
+					logger.Errorf("Error opening %s: %v", metricsFile, err)
+					return
+				}
+				f.Write([]byte(metric))
+				err = f.Close()
+				if err != nil {
+					logger.Errorf("Error closing file: %v", err)
+				}
 			}
 		}
 		logger.Info("Main: metrics closed")
 	}()
 
 	// TODO - fix count of statements - might be doubled
+	var stmtProcess, stmtTableuse *sqlite3.Stmt
 	if !*jsonOutput {
 		if writeOutput {
 			writeHeader(f)
@@ -414,18 +468,18 @@ func main() {
 				logger.Fatalf("%q: %s\n", err, stmt)
 				return
 			}
-		}
-		stmtProcess, err := db.Prepare(getProcessStatement())
-		if err != nil {
-			logger.Fatalf("Error preparing statement: %v", err)
-		}
-		stmtTableuse, err := db.Prepare(getTableUseStatement())
-		if err != nil {
-			logger.Fatalf("Error preparing statement: %v", err)
-		}
-		err = db.Begin()
-		if err != nil {
-			fmt.Println(err)
+			stmtProcess, err = db.Prepare(getProcessStatement())
+			if err != nil {
+				logger.Fatalf("Error preparing statement: %v", err)
+			}
+			stmtTableuse, err = db.Prepare(getTableUseStatement())
+			if err != nil {
+				logger.Fatalf("Error preparing statement: %v", err)
+			}
+			err = db.Begin()
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 
 		i := int64(1)

@@ -96,18 +96,18 @@ func (block *Block) addLine(line []byte, lineNo int64) {
 // Command is a command found in the block
 type Command struct {
 	ProcessKey     string    `json:"processKey"`
-	Cmd            []byte    `json:"cmd"`
+	Cmd            string    `json:"cmd"`
 	Pid            int64     `json:"pid"`
 	LineNo         int64     `json:"lineNo"`
-	User           []byte    `json:"user"`
-	Workspace      []byte    `json:"workspace"`
+	User           string    `json:"user"`
+	Workspace      string    `json:"workspace"`
 	StartTime      time.Time `json:"startTime"`
 	EndTime        time.Time `json:"endTime"`
 	ComputeLapse   float32   `json:"computeLapse"`
 	CompletedLapse float32   `json:"completedLapse"`
-	IP             []byte    `json:"ip"`
-	App            []byte    `json:"app"`
-	Args           []byte    `json:"args"`
+	IP             string    `json:"ip"`
+	App            string    `json:"app"`
+	Args           string    `json:"args"`
 	Running        int64     `json:"running"`
 	UCpu           int64     `json:"uCpu"`
 	SCpu           int64     `json:"sCpu"`
@@ -268,6 +268,22 @@ func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimark
 	}
 }
 
+// Validate table names - looking for corruptions
+func (c *Command) checkTables(msg string) {
+	found := false
+	var s string
+	for _, t := range c.Tables {
+		if strings.ContainsAny(t.TableName, " \n") {
+			found = true
+			s = t.TableName
+			break
+		}
+	}
+	if found {
+		fmt.Fprintf(os.Stderr, "Corrupt: %s %s %d %d %s\n", msg, c.Cmd, c.Pid, c.LineNo, s)
+	}
+}
+
 // MarshalJSON - handle time formatting
 func (c *Command) MarshalJSON() ([]byte, error) {
 	tables := make([]Table, len(c.Tables))
@@ -314,16 +330,16 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Tables         []Table `json:"tables"`
 	}{
 		ProcessKey:     c.GetKey(),
-		Cmd:            string(c.Cmd),
+		Cmd:            c.Cmd,
 		Pid:            c.Pid,
 		LineNo:         c.LineNo,
-		User:           string(c.User),
-		Workspace:      string(c.Workspace),
+		User:           c.User,
+		Workspace:      c.Workspace,
 		ComputeLapse:   c.ComputeLapse,
 		CompletedLapse: c.CompletedLapse,
-		IP:             string(c.IP),
-		App:            string(c.App),
-		Args:           string(c.Args),
+		IP:             c.IP,
+		App:            c.App,
+		Args:           c.Args,
 		StartTime:      c.StartTime.Format(p4timeformat),
 		EndTime:        c.EndTime.Format(p4timeformat),
 		Running:        c.Running,
@@ -465,6 +481,7 @@ func (fp *P4dFileParser) SetDurations(outputDuration, debugDuration time.Duratio
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
+	newCmd.checkTables("add0")
 	newCmd.Running = fp.running
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
@@ -494,6 +511,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		if hasTrackInfo {
 			cmd.hasTrackInfo = true
 		}
+		cmd.checkTables("add1")
 	} else {
 		fp.cmds[newCmd.Pid] = newCmd
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
@@ -501,15 +519,16 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		}
 		fp.pidsSeenThisSecond[newCmd.Pid] = true
 		fp.running++
+		newCmd.checkTables("add2")
 	}
 }
 
 // Special commands which only have start records not completion records
-func cmdHasNoCompletionRecord(cmdName []byte) bool {
-	return bytes.Equal(cmdName, []byte("rmt-FileFetch")) ||
-		bytes.Equal(cmdName, []byte("rmt-Journal")) ||
-		bytes.Equal(cmdName, []byte("rmt-JournalPos")) ||
-		bytes.Equal(cmdName, []byte("pull"))
+func cmdHasNoCompletionRecord(cmdName string) bool {
+	return cmdName == "rmt-FileFetch" ||
+		cmdName == "rmt-Journal" ||
+		cmdName == "rmt-JournalPos" ||
+		cmdName == "pull"
 }
 
 var trackStart = []byte("---")
@@ -685,6 +704,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 // Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
+	cmd.checkTables("outputCmd")
 	cmdcopy := *cmd
 	if cmdHasNoCompletionRecord(cmd.Cmd) {
 		cmdcopy.EndTime = cmdcopy.StartTime
@@ -845,19 +865,19 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			cmd.LineNo = block.lineNo
 			cmd.setStartTime(m[1])
 			cmd.Pid = toInt64(m[2])
-			cmd.User = m[3]
-			cmd.Workspace = m[4]
-			cmd.IP = m[5]
-			cmd.App = m[6]
-			cmd.Cmd = m[7]
+			cmd.User = string(m[3])
+			cmd.Workspace = string(m[4])
+			cmd.IP = string(m[5])
+			cmd.App = string(m[6])
+			cmd.Cmd = string(m[7])
 			// # following gsub required due to a 2009.2 P4V bug
 			// App = match.group(6).replace("\x00", "/")
 			if len(m) > 8 {
-				cmd.Args = m[8]
+				cmd.Args = string(m[8])
 				// Strip Swarm/Git Fusion commands with lots of json
-				sm := reJSONCmdargs.FindSubmatch(cmd.Args)
+				sm := reJSONCmdargs.FindSubmatch([]byte(cmd.Args))
 				if len(sm) > 0 {
-					cmd.Args = sm[1]
+					cmd.Args = string(sm[1])
 				}
 			}
 			// Detect trigger entries
@@ -1009,7 +1029,7 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan []byte, cmdchan chan<- Command) {
+func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string, cmdchan chan<- Command) {
 	fp.cmdChan = cmdchan
 	fp.lineNo = 1
 	ticker := time.NewTicker(fp.outputDuration)
@@ -1037,8 +1057,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan []byte,
 			return
 		case line, ok := <-linesChan:
 			if ok {
-				line = bytes.TrimRight(line, "\r\n")
-				fp.parseLine(line)
+				fp.parseLine([]byte(strings.TrimRight(line, "\r\n")))
 			} else {
 				if fp.logger != nil {
 					fp.logger.Debugf("LogParser lines channel closed")

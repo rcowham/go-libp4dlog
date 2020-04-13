@@ -23,12 +23,12 @@ import (
 
 // Config for metrics
 type Config struct {
-	Debug               bool
-	ServerID            string
-	SDPInstance         string
-	UpdateInterval      time.Duration
-	OutputCmdsByUser    bool
-	CaseSensitiveServer bool
+	Debug               bool          `yaml:"debug"`
+	ServerID            string        `yaml:"server.id"`
+	SDPInstance         string        `yaml:"sdp.instance"`
+	UpdateInterval      time.Duration `yaml:"update.interval"`
+	OutputCmdsByUser    bool          `yaml:"output.cmds.by.user"`
+	CaseSensitiveServer bool          `yaml:"case.sensitive.server"`
 }
 
 // P4DMetrics structure
@@ -242,7 +242,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 }
 
 func (p4m *P4DMetrics) getSeconds(tmap map[string]interface{}, fieldName string) float64 {
-	p4m.logger.Debugf("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
 	if total, ok := tmap[fieldName].(float64); ok {
 		return (total)
 	}
@@ -250,7 +250,7 @@ func (p4m *P4DMetrics) getSeconds(tmap map[string]interface{}, fieldName string)
 }
 
 func (p4m *P4DMetrics) getMilliseconds(tmap map[string]interface{}, fieldName string) float64 {
-	p4m.logger.Debugf("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
 	if total, ok := tmap[fieldName].(float64); ok {
 		return (total / 1000)
 	}
@@ -292,7 +292,7 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 		return false
 	}
 	// This next section is more efficient than regex parsing - we return ASAP
-	lenPrefix := len("\t2020/03/04 12:13:14")
+	const lenPrefix = len("\t2020/03/04 12:13:14")
 	if len(line) < lenPrefix {
 		return false
 	}
@@ -332,13 +332,13 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 // ProcessEvents - main event loop for P4Prometheus - reads lines and outputs metrics
 // Wraps p4dlog.LogParser event loop
 func (p4m *P4DMetrics) ProcessEvents(ctx context.Context,
-	linesInChan <-chan []byte, cmdsOutChan chan<- p4dlog.Command, metricsChan chan<- string) int {
+	linesInChan <-chan string, cmdsOutChan chan<- p4dlog.Command, metricsChan chan<- string) int {
 	ticker := time.NewTicker(p4m.config.UpdateInterval)
 
 	if p4m.config.Debug {
 		p4m.fp.SetDebugMode()
 	}
-	fpLines := make(chan []byte, 10000)
+	fpLines := make(chan string, 10000)
 	cmdsInChan := make(chan p4dlog.Command, 10000)
 	go p4m.fp.LogParser(ctx, fpLines, cmdsInChan)
 
@@ -372,10 +372,10 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context,
 				p4m.logger.Debugf("Line: %s", line)
 				p4m.linesRead++
 				// Need to copy original line to avoid overwrites
-				newLine := make([]byte, len(line))
-				copy(newLine, line)
-				fpLines <- newLine
-				if p4m.historical && p4m.historicalUpdateRequired(line) {
+				// newLine := make([]byte, len(line))
+				// copy(newLine, line)
+				fpLines <- line
+				if p4m.historical && p4m.historicalUpdateRequired([]byte(line)) {
 					metricsChan <- p4m.getCumulativeMetrics()
 				}
 			} else {
