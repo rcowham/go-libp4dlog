@@ -15,7 +15,6 @@ See p4dlog_test.go for examples of log entries.
 package p4dlog
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
@@ -41,10 +40,10 @@ var reCompute = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (
 var reCompleted = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) completed ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reJSONCmdargs = regexp.MustCompile(`^(.*) \{.*\}$`)
 
-var infoBlock = []byte("Perforce server info:")
-var errorBlock = []byte("Perforce server error:")
+var infoBlock = "Perforce server info:"
+var errorBlock = "Perforce server error:"
 
-func toInt64(buf []byte) (n int64) {
+func toInt64(buf string) (n int64) {
 	for _, v := range buf {
 		n = n*10 + int64(v-'0')
 	}
@@ -69,10 +68,10 @@ const (
 type Block struct {
 	lineNo int64
 	btype  blockType
-	lines  [][]byte
+	lines  []string
 }
 
-func (block *Block) addLine(line []byte, lineNo int64) {
+func (block *Block) addLine(line string, lineNo int64) {
 	// if first line we detect block type and avoid copy
 	if block.lineNo == 0 {
 		block.lineNo = lineNo
@@ -80,17 +79,14 @@ func (block *Block) addLine(line []byte, lineNo int64) {
 	if len(block.lines) == 0 && block.btype == blankType {
 		if len(line) == 0 {
 			block.btype = blankType
-		} else if lineStarts(line, infoBlock) {
+		} else if strings.HasPrefix(line, infoBlock) {
 			block.btype = infoType
 		} else {
 			block.btype = errorType
 		}
 		return
 	}
-	// Need to copy original line
-	newLine := make([]byte, len(line))
-	copy(newLine, line)
-	block.lines = append(block.lines, newLine)
+	block.lines = append(block.lines, line)
 }
 
 // Command is a command found in the block
@@ -163,48 +159,48 @@ type Table struct {
 	TriggerLapse       float32 `json:"triggerLapse"`
 }
 
-func (t *Table) setPages(pagesIn, pagesOut, pagesCached []byte) {
-	t.PagesIn, _ = strconv.ParseInt(string(pagesIn), 10, 64)
-	t.PagesOut, _ = strconv.ParseInt(string(pagesOut), 10, 64)
-	t.PagesCached, _ = strconv.ParseInt(string(pagesCached), 10, 64)
+func (t *Table) setPages(pagesIn, pagesOut, pagesCached string) {
+	t.PagesIn, _ = strconv.ParseInt(pagesIn, 10, 64)
+	t.PagesOut, _ = strconv.ParseInt(pagesOut, 10, 64)
+	t.PagesCached, _ = strconv.ParseInt(pagesCached, 10, 64)
 }
 
-func (t *Table) setPagesSplit(pagesSplitInternal, pagesSplitLeaf []byte) {
-	t.PagesSplitInternal, _ = strconv.ParseInt(string(pagesSplitInternal), 10, 64)
-	t.PagesSplitLeaf, _ = strconv.ParseInt(string(pagesSplitLeaf), 10, 64)
+func (t *Table) setPagesSplit(pagesSplitInternal, pagesSplitLeaf string) {
+	t.PagesSplitInternal, _ = strconv.ParseInt(pagesSplitInternal, 10, 64)
+	t.PagesSplitLeaf, _ = strconv.ParseInt(pagesSplitLeaf, 10, 64)
 }
 
 func (t *Table) setLocksRows(readLocks, writeLocks, getRows, posRows,
-	scanRows, putRows, delRows []byte) {
-	t.ReadLocks, _ = strconv.ParseInt(string(readLocks), 10, 64)
-	t.WriteLocks, _ = strconv.ParseInt(string(writeLocks), 10, 64)
-	t.GetRows, _ = strconv.ParseInt(string(getRows), 10, 64)
-	t.PosRows, _ = strconv.ParseInt(string(posRows), 10, 64)
-	t.ScanRows, _ = strconv.ParseInt(string(scanRows), 10, 64)
-	t.PutRows, _ = strconv.ParseInt(string(putRows), 10, 64)
-	t.DelRows, _ = strconv.ParseInt(string(delRows), 10, 64)
+	scanRows, putRows, delRows string) {
+	t.ReadLocks, _ = strconv.ParseInt(readLocks, 10, 64)
+	t.WriteLocks, _ = strconv.ParseInt(writeLocks, 10, 64)
+	t.GetRows, _ = strconv.ParseInt(getRows, 10, 64)
+	t.PosRows, _ = strconv.ParseInt(posRows, 10, 64)
+	t.ScanRows, _ = strconv.ParseInt(scanRows, 10, 64)
+	t.PutRows, _ = strconv.ParseInt(putRows, 10, 64)
+	t.DelRows, _ = strconv.ParseInt(delRows, 10, 64)
 }
 
-func (t *Table) setTotalLock(totalReadWait, totalReadHeld, totalWriteWait, totalWriteHeld []byte) {
-	t.TotalReadWait, _ = strconv.ParseInt(string(totalReadWait), 10, 64)
-	t.TotalReadHeld, _ = strconv.ParseInt(string(totalReadHeld), 10, 64)
-	t.TotalWriteWait, _ = strconv.ParseInt(string(totalWriteWait), 10, 64)
-	t.TotalWriteHeld, _ = strconv.ParseInt(string(totalWriteHeld), 10, 64)
+func (t *Table) setTotalLock(totalReadWait, totalReadHeld, totalWriteWait, totalWriteHeld string) {
+	t.TotalReadWait, _ = strconv.ParseInt(totalReadWait, 10, 64)
+	t.TotalReadHeld, _ = strconv.ParseInt(totalReadHeld, 10, 64)
+	t.TotalWriteWait, _ = strconv.ParseInt(totalWriteWait, 10, 64)
+	t.TotalWriteHeld, _ = strconv.ParseInt(totalWriteHeld, 10, 64)
 }
 
-func (t *Table) setMaxLock(maxReadWait, maxReadHeld, maxWriteWait, maxWriteHeld []byte) {
-	t.MaxReadWait, _ = strconv.ParseInt(string(maxReadWait), 10, 64)
-	t.MaxReadHeld, _ = strconv.ParseInt(string(maxReadHeld), 10, 64)
-	t.MaxWriteWait, _ = strconv.ParseInt(string(maxWriteWait), 10, 64)
-	t.MaxWriteHeld, _ = strconv.ParseInt(string(maxWriteHeld), 10, 64)
+func (t *Table) setMaxLock(maxReadWait, maxReadHeld, maxWriteWait, maxWriteHeld string) {
+	t.MaxReadWait, _ = strconv.ParseInt(maxReadWait, 10, 64)
+	t.MaxReadHeld, _ = strconv.ParseInt(maxReadHeld, 10, 64)
+	t.MaxWriteWait, _ = strconv.ParseInt(maxWriteWait, 10, 64)
+	t.MaxWriteHeld, _ = strconv.ParseInt(maxWriteHeld, 10, 64)
 }
 
-func (t *Table) setPeek(peekCount, totalPeekWait, totalPeekHeld, maxPeekWait, maxPeekHeld []byte) {
-	t.PeekCount, _ = strconv.ParseInt(string(peekCount), 10, 64)
-	t.TotalPeekWait, _ = strconv.ParseInt(string(totalPeekWait), 10, 64)
-	t.TotalPeekHeld, _ = strconv.ParseInt(string(totalPeekHeld), 10, 64)
-	t.MaxPeekWait, _ = strconv.ParseInt(string(maxPeekWait), 10, 64)
-	t.MaxPeekHeld, _ = strconv.ParseInt(string(maxPeekHeld), 10, 64)
+func (t *Table) setPeek(peekCount, totalPeekWait, totalPeekHeld, maxPeekWait, maxPeekHeld string) {
+	t.PeekCount, _ = strconv.ParseInt(peekCount, 10, 64)
+	t.TotalPeekWait, _ = strconv.ParseInt(totalPeekWait, 10, 64)
+	t.TotalPeekHeld, _ = strconv.ParseInt(totalPeekHeld, 10, 64)
+	t.MaxPeekWait, _ = strconv.ParseInt(maxPeekWait, 10, 64)
+	t.MaxPeekHeld, _ = strconv.ParseInt(maxPeekHeld, 10, 64)
 }
 
 func newCommand() *Command {
@@ -232,38 +228,38 @@ func (c *Command) String() string {
 	return string(j)
 }
 
-func (c *Command) setStartTime(t []byte) {
-	c.StartTime, _ = time.Parse(p4timeformat, string(t))
+func (c *Command) setStartTime(t string) {
+	c.StartTime, _ = time.Parse(p4timeformat, t)
 }
 
-func (c *Command) setEndTime(t []byte) {
-	c.EndTime, _ = time.Parse(p4timeformat, string(t))
+func (c *Command) setEndTime(t string) {
+	c.EndTime, _ = time.Parse(p4timeformat, t)
 }
 
-func (c *Command) setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults []byte) {
-	c.UCpu, _ = strconv.ParseInt(string(uCpu), 10, 64)
-	c.SCpu, _ = strconv.ParseInt(string(sCpu), 10, 64)
-	c.DiskIn, _ = strconv.ParseInt(string(diskIn), 10, 64)
-	c.DiskOut, _ = strconv.ParseInt(string(diskOut), 10, 64)
-	c.IpcIn, _ = strconv.ParseInt(string(ipcIn), 10, 64)
-	c.IpcOut, _ = strconv.ParseInt(string(ipcOut), 10, 64)
-	c.MaxRss, _ = strconv.ParseInt(string(maxRss), 10, 64)
-	c.PageFaults, _ = strconv.ParseInt(string(pageFaults), 10, 64)
+func (c *Command) setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
+	c.UCpu, _ = strconv.ParseInt(uCpu, 10, 64)
+	c.SCpu, _ = strconv.ParseInt(sCpu, 10, 64)
+	c.DiskIn, _ = strconv.ParseInt(diskIn, 10, 64)
+	c.DiskOut, _ = strconv.ParseInt(diskOut, 10, 64)
+	c.IpcIn, _ = strconv.ParseInt(ipcIn, 10, 64)
+	c.IpcOut, _ = strconv.ParseInt(ipcOut, 10, 64)
+	c.MaxRss, _ = strconv.ParseInt(maxRss, 10, 64)
+	c.PageFaults, _ = strconv.ParseInt(pageFaults, 10, 64)
 }
 
-func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev, rpcSnd, rpcRcv []byte) {
-	c.RpcMsgsIn, _ = strconv.ParseInt(string(rpcMsgsIn), 10, 64)
-	c.RpcMsgsOut, _ = strconv.ParseInt(string(rpcMsgsOut), 10, 64)
-	c.RpcSizeIn, _ = strconv.ParseInt(string(rpcSizeIn), 10, 64)
-	c.RpcSizeOut, _ = strconv.ParseInt(string(rpcSizeOut), 10, 64)
-	c.RpcHimarkFwd, _ = strconv.ParseInt(string(rpcHimarkFwd), 10, 64)
-	c.RpcHimarkRev, _ = strconv.ParseInt(string(rpcHimarkRev), 10, 64)
-	if rpcSnd != nil {
-		f, _ := strconv.ParseFloat(string(rpcSnd), 32)
+func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev, rpcSnd, rpcRcv string) {
+	c.RpcMsgsIn, _ = strconv.ParseInt(rpcMsgsIn, 10, 64)
+	c.RpcMsgsOut, _ = strconv.ParseInt(rpcMsgsOut, 10, 64)
+	c.RpcSizeIn, _ = strconv.ParseInt(rpcSizeIn, 10, 64)
+	c.RpcSizeOut, _ = strconv.ParseInt(rpcSizeOut, 10, 64)
+	c.RpcHimarkFwd, _ = strconv.ParseInt(rpcHimarkFwd, 10, 64)
+	c.RpcHimarkRev, _ = strconv.ParseInt(rpcHimarkRev, 10, 64)
+	if rpcSnd != "" {
+		f, _ := strconv.ParseFloat(rpcSnd, 32)
 		c.RpcSnd = float32(f)
 	}
-	if rpcRcv != nil {
-		f, _ := strconv.ParseFloat(string(rpcRcv), 32)
+	if rpcRcv != "" {
+		f, _ := strconv.ParseFloat(rpcRcv, 32)
 		c.RpcRcv = float32(f)
 	}
 }
@@ -531,36 +527,36 @@ func cmdHasNoCompletionRecord(cmdName string) bool {
 		cmdName == "pull"
 }
 
-var trackStart = []byte("---")
-var trackLapse = []byte("--- lapse ")
-var trackDB = []byte("--- db.")
-var trackRdbLbr = []byte("--- rdb.lbr")
-var trackMeta = []byte("--- meta")
-var trackClients = []byte("--- clients")
-var trackChange = []byte("--- change")
-var trackClientEntity = []byte("--- clientEntity")
-var trackReplicaPull = []byte("--- replica/pull")
+var trackStart = "---"
+var trackLapse = "--- lapse "
+var trackDB = "--- db."
+var trackRdbLbr = "--- rdb.lbr"
+var trackMeta = "--- meta"
+var trackClients = "--- clients"
+var trackChange = "--- change"
+var trackClientEntity = "--- clientEntity"
+var trackReplicaPull = "--- replica/pull"
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
 var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
-var prefixTrackRPC = []byte("--- rpc msgs/size in+out ")
+var prefixTrackRPC = "--- rpc msgs/size in+out "
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
-var prefixTrackUsage = []byte("--- usage")
+var prefixTrackUsage = "--- usage"
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 var reCmdUsage = regexp.MustCompile(` (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
-var prefixTrackPages = []byte("---   pages in+out+cached ")
+var prefixTrackPages = "---   pages in+out+cached "
 var reTrackPages = regexp.MustCompile(`^---   pages in\+out\+cached (\d+)\+(\d+)\+(\d+)`)
-var prefixTrackPagesSplit = []byte("---   pages split internal+leaf ")
+var prefixTrackPagesSplit = "---   pages split internal+leaf "
 var reTrackPagesSplit = regexp.MustCompile(`^---   pages split internal\+leaf (\d+)\+(\d+)`)
-var prefixTrackLocksRows = []byte("---   locks read/write ")
+var prefixTrackLocksRows = "---   locks read/write "
 var reTrackLocksRows = regexp.MustCompile(`^---   locks read/write (\d+)/(\d+) rows get\+pos\+scan put\+del (\d+)\+(\d+)\+(\d+) (\d+)\+(\d+)`)
-var prefixTrackTotalLock = []byte("---   total lock wait+held read/write ")
+var prefixTrackTotalLock = "---   total lock wait+held read/write "
 var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+\-?(\d+)ms`)
-var prefixTrackPeek = []byte("---   peek count ")
+var prefixTrackPeek = "---   peek count "
 var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
-var prefixTrackMaxLock = []byte("---   max lock wait+held read/write ")
-var prefixTrackMaxLock2 = []byte("---   locks wait+held read/write ")
+var prefixTrackMaxLock = "---   max lock wait+held read/write "
+var prefixTrackMaxLock2 = "---   locks wait+held read/write "
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var rePid = regexp.MustCompile(`\tPid (\d+)$`)
 
@@ -571,67 +567,63 @@ func getTable(cmd *Command, tableName string) *Table {
 	return cmd.Tables[tableName]
 }
 
-func lineStarts(line []byte, matchText []byte) bool {
-	return len(line) >= len(matchText) && bytes.Equal(matchText, line[:len(matchText)])
-}
-
-func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
+func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 	hasTrackInfo := false
 	var tableName string
 	for _, line := range lines {
-		if lineStarts(line, trackLapse) {
+		if strings.HasPrefix(line, trackLapse) {
 			val := line[len(trackLapse):]
-			i := bytes.IndexByte(val, '.')
-			j := bytes.IndexByte(val, 's')
+			i := strings.Index(val, ".")
+			j := strings.Index(val, "s")
 			if i >= 0 && j > 0 {
 				f, _ := strconv.ParseFloat(string(val[i:j-i]), 32)
 				cmd.CompletedLapse = float32(f)
 			}
 			continue
 		}
-		if lineStarts(line, trackDB) {
+		if strings.HasPrefix(line, trackDB) {
 			tableName = string(line[len(trackDB):])
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
 			hasTrackInfo = true
 			continue
 		}
-		if lineStarts(line, trackRdbLbr) {
+		if strings.HasPrefix(line, trackRdbLbr) {
 			tableName = "rdb.lbr"
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
 			hasTrackInfo = true
 			continue
 		}
-		if lineStarts(line, trackMeta) ||
-			lineStarts(line, trackChange) ||
-			lineStarts(line, trackClients) ||
-			lineStarts(line, trackClientEntity) ||
-			lineStarts(line, trackReplicaPull) {
+		if strings.HasPrefix(line, trackMeta) ||
+			strings.HasPrefix(line, trackChange) ||
+			strings.HasPrefix(line, trackClients) ||
+			strings.HasPrefix(line, trackClientEntity) ||
+			strings.HasPrefix(line, trackReplicaPull) {
 			// Special tables don't have trackInfo set
 			tableName = ""
 			continue
 		}
-		if !lineStarts(line, trackStart) {
+		if !strings.HasPrefix(line, trackStart) {
 			continue
 		}
-		var m [][]byte
-		if lineStarts(line, prefixTrackUsage) {
-			m = reTrackUsage.FindSubmatch(line)
+		var m []string
+		if strings.HasPrefix(line, prefixTrackUsage) {
+			m = reTrackUsage.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setUsage(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
 				continue
 			}
 		}
-		if lineStarts(line, prefixTrackRPC) {
-			m = reTrackRPC2.FindSubmatch(line)
+		if strings.HasPrefix(line, prefixTrackRPC) {
+			m = reTrackRPC2.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
 				continue
 			}
-			m = reTrackRPC.FindSubmatch(line)
+			m = reTrackRPC.FindStringSubmatch(line)
 			if len(m) > 0 {
-				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], nil, nil)
+				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], "", "")
 				continue
 			}
 		}
@@ -639,48 +631,48 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines [][]byte) {
 		if len(tableName) == 0 {
 			continue
 		}
-		if lineStarts(line, prefixTrackPages) {
-			m = reTrackPages.FindSubmatch(line)
+		if strings.HasPrefix(line, prefixTrackPages) {
+			m = reTrackPages.FindStringSubmatch(line)
 			if len(m) > 0 {
 				t := getTable(cmd, tableName)
 				t.setPages(m[1], m[2], m[3])
 				continue
 			}
 		}
-		if lineStarts(line, prefixTrackLocksRows) {
-			m = reTrackLocksRows.FindSubmatch(line)
+		if strings.HasPrefix(line, prefixTrackLocksRows) {
+			m = reTrackLocksRows.FindStringSubmatch(line)
 			if len(m) > 0 {
 				t := getTable(cmd, tableName)
 				t.setLocksRows(m[1], m[2], m[3], m[4], m[5], m[6], m[7])
 				continue
 			}
 		}
-		if lineStarts(line, prefixTrackTotalLock) {
-			m = reTrackTotalLock.FindSubmatch(line)
+		if strings.HasPrefix(line, prefixTrackTotalLock) {
+			m = reTrackTotalLock.FindStringSubmatch(line)
 			if len(m) > 0 {
 				t := getTable(cmd, tableName)
 				t.setTotalLock(m[1], m[2], m[3], m[4])
 				continue
 			}
 		}
-		if lineStarts(line, prefixTrackMaxLock) || lineStarts(line, prefixTrackMaxLock2) {
-			m = reTrackMaxLock.FindSubmatch(line)
+		if strings.HasPrefix(line, prefixTrackMaxLock) || strings.HasPrefix(line, prefixTrackMaxLock2) {
+			m = reTrackMaxLock.FindStringSubmatch(line)
 			if len(m) > 0 {
 				t := getTable(cmd, tableName)
 				t.setMaxLock(m[1], m[2], m[3], m[4])
 				continue
 			}
 		}
-		if lineStarts(line, prefixTrackPeek) {
-			m = reTrackPeek.FindSubmatch(line)
+		if strings.HasPrefix(line, prefixTrackPeek) {
+			m = reTrackPeek.FindStringSubmatch(line)
 			if len(m) > 0 {
 				t := getTable(cmd, tableName)
 				t.setPeek(m[1], m[2], m[3], m[4], m[5])
 				continue
 			}
 		}
-		if lineStarts(line, prefixTrackPagesSplit) {
-			m = reTrackPagesSplit.FindSubmatch(line)
+		if strings.HasPrefix(line, prefixTrackPagesSplit) {
+			m = reTrackPagesSplit.FindStringSubmatch(line)
 			if len(m) > 0 {
 				t := getTable(cmd, tableName)
 				t.setPagesSplit(m[1], m[2])
@@ -790,7 +782,7 @@ func (fp *P4dFileParser) outputRemainingCommands() {
 	}
 }
 
-func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse []byte) {
+func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
@@ -801,7 +793,7 @@ func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse []byte) {
 
 }
 
-func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, completedLapse []byte) {
+func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime string, completedLapse string) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
@@ -814,7 +806,7 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime []byte, complet
 	}
 }
 
-func (fp *P4dFileParser) updateUsage(pid int64, uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults []byte) {
+func (fp *P4dFileParser) updateUsage(pid int64, uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
@@ -822,14 +814,14 @@ func (fp *P4dFileParser) updateUsage(pid int64, uCpu, sCpu, diskIn, diskOut, ipc
 	}
 }
 
-func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line []byte) {
+func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line string) {
 	// Expects a single line with a lapse statement on it
 	var triggerLapse float64
-	m := reTriggerLapse.FindSubmatch(line)
+	m := reTriggerLapse.FindStringSubmatch(line)
 	if len(m) > 0 {
 		triggerLapse, _ = strconv.ParseFloat(string(m[1]), 32)
 	} else {
-		m = reTriggerLapse2.FindSubmatch(line)
+		m = reTriggerLapse2.FindStringSubmatch(line)
 		if len(m) > 0 {
 			s := fmt.Sprintf("0.%s", string(m[1]))
 			triggerLapse, _ = strconv.ParseFloat(s, 32)
@@ -848,16 +840,16 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 	var cmd *Command
 	i := 0
 	for _, line := range block.lines {
-		if cmd != nil && lineStarts(line, trackStart) {
+		if cmd != nil && strings.HasPrefix(line, trackStart) {
 			fp.processTrackRecords(cmd, block.lines[i:])
 			return // Block has been processed
 		}
 		i++
 
 		matched := false
-		m := reCmd.FindSubmatch(line)
+		m := reCmd.FindStringSubmatch(line)
 		if len(m) == 0 {
-			m = reCmdNoarg.FindSubmatch(line)
+			m = reCmdNoarg.FindStringSubmatch(line)
 		}
 		if len(m) > 0 {
 			matched = true
@@ -865,31 +857,31 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			cmd.LineNo = block.lineNo
 			cmd.setStartTime(m[1])
 			cmd.Pid = toInt64(m[2])
-			cmd.User = string(m[3])
-			cmd.Workspace = string(m[4])
-			cmd.IP = string(m[5])
-			cmd.App = string(m[6])
-			cmd.Cmd = string(m[7])
+			cmd.User = m[3]
+			cmd.Workspace = m[4]
+			cmd.IP = m[5]
+			cmd.App = m[6]
+			cmd.Cmd = m[7]
 			// # following gsub required due to a 2009.2 P4V bug
 			// App = match.group(6).replace("\x00", "/")
 			if len(m) > 8 {
 				cmd.Args = string(m[8])
 				// Strip Swarm/Git Fusion commands with lots of json
-				sm := reJSONCmdargs.FindSubmatch([]byte(cmd.Args))
+				sm := reJSONCmdargs.FindStringSubmatch(cmd.Args)
 				if len(sm) > 0 {
 					cmd.Args = string(sm[1])
 				}
 			}
 			// Detect trigger entries
 			trigger := ""
-			if i := bytes.Index(line, []byte("' trigger ")); i >= 0 {
-				tm := reCmdTrigger.FindSubmatch(line[i:])
+			if i := strings.Index(line, "' trigger "); i >= 0 {
+				tm := reCmdTrigger.FindStringSubmatch(line[i:])
 				if len(tm) > 0 {
 					trigger = string(tm[1])
 				}
 				line = line[:i+1] // Strip from the line
 			}
-			h := md5.Sum(line)
+			h := md5.Sum([]byte(line))
 			cmd.ProcessKey = hex.EncodeToString(h[:])
 			if len(trigger) > 0 {
 				fp.processTriggerLapse(cmd, trigger, block.lines[len(block.lines)-1])
@@ -899,7 +891,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 		if !matched {
 			// process completed and computed
 			var pid int64
-			m := reCompleted.FindSubmatch(line)
+			m := reCompleted.FindStringSubmatch(line)
 			if len(m) > 0 {
 				matched = true
 				endTime := m[1]
@@ -909,14 +901,14 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			}
 			// Note cmd completion also has usage data potentially
 			if matched {
-				m = reCmdUsage.FindSubmatch(line)
+				m = reCmdUsage.FindStringSubmatch(line)
 				if len(m) > 0 {
 					fp.updateUsage(pid, m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
 				}
 			}
 		}
 		if !matched {
-			m := reCompute.FindSubmatch(line)
+			m := reCompute.FindStringSubmatch(line)
 			if len(m) > 0 {
 				matched = true
 				pid := toInt64(m[2])
@@ -925,7 +917,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			}
 		}
 		if !matched && fp.debug {
-			if !lineStarts(line, []byte("server to client")) {
+			if !strings.HasPrefix(line, "server to client") {
 				buf := fmt.Sprintf("Unrecognised: %s\n", string(line))
 				if fp.logger != nil {
 					fp.logger.Trace(buf)
@@ -941,7 +933,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 func (fp *P4dFileParser) processErrorBlock(block *Block) {
 	var cmd *Command
 	for _, line := range block.lines {
-		m := rePid.FindSubmatch(line)
+		m := rePid.FindStringSubmatch(line)
 		if len(m) > 0 {
 			pid := toInt64(m[1])
 			ok := false
@@ -964,23 +956,23 @@ func (fp *P4dFileParser) processBlock(block *Block) {
 	} //TODO: output unrecognised block if wanted
 }
 
-func blankLine(line []byte) bool {
+func blankLine(line string) bool {
 	return len(line) == 0
 }
 
-var blockEnds = [][]byte{
-	[]byte("Perforce server info:"),
-	[]byte("Perforce server error:"),
-	[]byte("locks acquired by blocking after"),
-	[]byte("Rpc himark:"),
-	[]byte("server to client")}
+var blockEnds = []string{
+	"Perforce server info:",
+	"Perforce server error:",
+	"locks acquired by blocking after",
+	"Rpc himark:",
+	"server to client"}
 
-func blockEnd(line []byte) bool {
+func blockEnd(line string) bool {
 	if blankLine(line) {
 		return true
 	}
 	for _, str := range blockEnds {
-		if bytes.Equal(line, str) {
+		if line == str {
 			return true
 		}
 	}
@@ -988,7 +980,7 @@ func blockEnd(line []byte) bool {
 }
 
 // parseLine - interface for incremental parsing
-func (fp *P4dFileParser) parseLine(line []byte) {
+func (fp *P4dFileParser) parseLine(line string) {
 	if blockEnd(line) {
 		if len(fp.block.lines) > 0 {
 			if !blankLine(fp.block.lines[0]) {
@@ -1057,7 +1049,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 			return
 		case line, ok := <-linesChan:
 			if ok {
-				fp.parseLine([]byte(strings.TrimRight(line, "\r\n")))
+				fp.parseLine(strings.TrimRight(line, "\r\n"))
 			} else {
 				if fp.logger != nil {
 					fp.logger.Debugf("LogParser lines channel closed")

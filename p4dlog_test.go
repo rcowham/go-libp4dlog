@@ -26,8 +26,8 @@ func getResult(output chan string) []string {
 
 func parseLogLines(input string) []string {
 
-	inchan := make(chan []byte, 100)
-	cmdchan := make(chan Command, 100)
+	inchan := make(chan string, 10)
+	cmdchan := make(chan Command, 10)
 
 	fp := NewP4dFileParser(nil)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -36,8 +36,7 @@ func parseLogLines(input string) []string {
 
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		inchan <- line
+		inchan <- scanner.Text()
 	}
 	close(inchan)
 

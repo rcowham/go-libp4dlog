@@ -86,7 +86,7 @@ func basicTest(t *testing.T, cfg *Config, input string, historical bool) []strin
 	fp.SetDebugMode()
 	// Shorten durations for testing
 	fp.SetDurations(10*time.Millisecond, 20*time.Millisecond)
-	linesChan := make(chan []byte, 100)
+	linesChan := make(chan string, 100)
 	metricsChan := make(chan string, 100)
 	cmdsChan := make(chan<- p4dlog.Command, 100)
 	p4m := NewP4DMetricsLogParser(cfg, logger, historical)
@@ -103,7 +103,7 @@ func basicTest(t *testing.T, cfg *Config, input string, historical bool) []strin
 	}()
 
 	for _, l := range eol.Split(input, -1) {
-		linesChan <- []byte(l)
+		linesChan <- l
 	}
 
 	output := []string{}
