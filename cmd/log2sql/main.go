@@ -236,7 +236,7 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 		if fileSize > 25*1000*1000*1000 {
 			d = 60 * time.Second
 		}
-		logger.Infof("Report duration: %v", d)
+		logger.Infof("Progress reporting frequency: %v", d)
 		progressChan := progress.NewTicker(ctx, preader, fileSize, d)
 		for p := range progressChan {
 			fmt.Fprintf(os.Stderr, "%s: %s/%s %.0f%% estimated finish %s, %v remaining...\n",
@@ -244,43 +244,62 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 				p.Percent(), p.Estimated().Format("15:04:05"),
 				p.Remaining().Round(time.Second))
 		}
+		fmt.Fprintln(os.Stderr, "\nprocessing completed")
 	}()
 
 	for scanner.Scan() {
 		linesChan <- scanner.Text()
 	}
-	fmt.Fprintln(os.Stderr, "\nprocessing completed")
 
+}
+
+func getFilename(name, suffix string, requireSuffix bool, logfiles []string) string {
+	if name == "" {
+		if len(logfiles) == 0 {
+			name = "logs"
+		} else {
+			name = strings.TrimSuffix(logfiles[0], ".gz")
+			name = strings.TrimSuffix(name, ".log")
+		}
+		if !requireSuffix && !strings.HasSuffix(name, suffix) {
+			name = fmt.Sprintf("%s%s", name, suffix)
+		}
+	}
+	// Check again
+	if requireSuffix && !strings.HasSuffix(name, suffix) {
+		name = fmt.Sprintf("%s%s", name, suffix)
+	}
+	return name
 }
 
 func getDBName(name string, logfiles []string) string {
-	if name == "" {
-		if len(logfiles) == 0 {
-			name = "logs"
-		} else {
-			name = strings.TrimSuffix(logfiles[0], ".gz")
-			name = strings.TrimSuffix(name, ".log")
-		}
-	}
-	if !strings.HasSuffix(name, ".db") {
-		name = fmt.Sprintf("%s.db", name)
-	}
-	return name
+	return getFilename(name, ".db", true, logfiles)
 }
 
-func getMetricsFileName(name string, logfiles []string) string {
-	if name == "" {
-		if len(logfiles) == 0 {
-			name = "logs"
-		} else {
-			name = strings.TrimSuffix(logfiles[0], ".gz")
-			name = strings.TrimSuffix(name, ".log")
-		}
-		if !strings.HasSuffix(name, ".metrics") {
-			name = fmt.Sprintf("%s.metrics", name)
+func getMetricsFilename(name string, logfiles []string) string {
+	return getFilename(name, ".metrics", false, logfiles)
+}
+
+func getJSONFilename(name string, logfiles []string) string {
+	return getFilename(name, ".json", false, logfiles)
+}
+
+func getSQLFilename(name string, logfiles []string) string {
+	return getFilename(name, ".sql", false, logfiles)
+}
+
+func openFile(outputName string) (*os.File, *bufio.Writer, error) {
+	var fd *os.File
+	var err error
+	if outputName == "-" {
+		fd = os.Stdout
+	} else {
+		fd, err = os.OpenFile(outputName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
-	return name
+	return fd, bufio.NewWriterSize(fd, 1024*1024), nil
 }
 
 func main() {
@@ -308,20 +327,36 @@ func main() {
 		).Bool()
 		jsonOutput = kingpin.Flag(
 			"json",
-			"Output JSON statements (otherwise SQL).",
+			"Output JSON statements (to default or --json.output file).",
 		).Bool()
-		outputFile = kingpin.Flag(
-			"output",
-			"Name of file to which to write SQL (or JSON if that flag is set).",
-		).Short('o').String()
+		sqlOutput = kingpin.Flag(
+			"sql",
+			"Output SQL statements (to default or --sql.output file).",
+		).Bool()
+		jsonOutputFile = kingpin.Flag(
+			"json.output",
+			"Name of file to which to write JSON if that flag is set. Defaults to <logfile-prefix>.json",
+		).String()
+		sqlOutputFile = kingpin.Flag(
+			"sql.output",
+			"Name of file to which to write SQL if that flag is set. Defaults to <logfile-prefix>.sql",
+		).String()
 		dbName = kingpin.Flag(
 			"dbname",
-			"Create database with this name. Defaults to <logfile>.db",
+			"Create database with this name. Defaults to <logfile-prefix>.db",
 		).Short('d').String()
 		noSQL = kingpin.Flag(
-			"no-sql",
+			"no.sql",
 			"Don't create database.",
 		).Short('n').Bool()
+		noMetrics = kingpin.Flag(
+			"no.metrics",
+			"Disable historical metrics output in VictoriaMetrics format (via Graphite interface).",
+		).Bool()
+		metricsOutputFile = kingpin.Flag(
+			"metrics.output",
+			"File to write historical metrics to in Graphite format for use with VictoriaMetrics. Default is <logfile-prefix>.metrics",
+		).Short('m').String()
 		serverID = kingpin.Flag(
 			"server.id",
 			"server id for historical metrics - useful to identify site.",
@@ -342,19 +377,12 @@ func main() {
 			"case.insensitive.server",
 			"Set if server is case insensitive and usernames may occur in either case.",
 		).Default("false").Bool()
-		noMetrics = kingpin.Flag(
-			"no.metrics",
-			"Disable historical metrics output in VictoriaMetrics format (via Graphite interface).",
-		).Bool()
-		historicalMetricsFile = kingpin.Flag(
-			"historical.metrics.file",
-			"File to write historical metrics to in Graphite format for use with VictoriaMetrics. Default is <logfile>.metrics",
-		).Short('m').String()
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("log2sql")).Author("Robert Cowham")
-	kingpin.CommandLine.Help = "Parses a p4d text log file into a Sqlite3 database and/or JSON or SQL format.\n" +
-		"The output of historical Prometheus compatible metrics is also possible." +
-		"These can be viewed using VictoriaMetrics which is a Prometheus compatible data store, and viewed in Grafana."
+	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) into a Sqlite3 database and/or JSON or SQL format.\n" +
+		"The output of historical Prometheus compatible metrics is also by default." +
+		"These can be viewed using VictoriaMetrics which is a Prometheus compatible data store, and viewed in Grafana. " +
+		"Where referred to in help <logfile-prefix> is the first logfile specified with any .gz or .log suffix removed."
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
@@ -392,21 +420,36 @@ func main() {
 		close(linesChan)
 	}()
 
-	writeOutput := *outputFile != ""
-	var fd *os.File
-	var f io.Writer
-	// var err error
-	if writeOutput || *jsonOutput {
-		if *outputFile == "-" || *outputFile == "" {
-			fd = os.Stdout
-		} else {
-			fd, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				logger.Fatal(err)
-			}
+	var fJSON, fSQL, fMetrics *bufio.Writer
+	var fdJSON, fdSQL, fdMetrics *os.File
+	var jsonFilename, sqlFilename, metricsFilename string
+	if *jsonOutput {
+		jsonFilename = getJSONFilename(*jsonOutputFile, *logfiles)
+		fdJSON, fJSON, err = openFile(jsonFilename)
+		if err != nil {
+			logger.Fatal(err)
 		}
-		defer fd.Close()
-		f = bufio.NewWriterSize(fd, 1024*1024)
+		defer fdJSON.Close()
+		logger.Infof("Creating JSON output: %s", jsonFilename)
+	}
+	if *sqlOutput {
+		sqlFilename = getSQLFilename(*sqlOutputFile, *logfiles)
+		fdSQL, fSQL, err = openFile(sqlFilename)
+		if err != nil {
+			logger.Fatal(err)
+		}
+		defer fdSQL.Close()
+		logger.Infof("Creating SQL output: %s", sqlFilename)
+	}
+	writeMetrics := !*noMetrics
+	if writeMetrics {
+		metricsFilename = getMetricsFilename(*metricsOutputFile, *logfiles)
+		fdMetrics, fMetrics, err = openFile(metricsFilename)
+		if err != nil {
+			logger.Fatal(err)
+		}
+		defer fdMetrics.Close()
+		logger.Infof("Creating metrics output: %s, config: %+v", metricsFilename, mconfig)
 	}
 
 	writeDB := !*noSQL
@@ -422,101 +465,82 @@ func main() {
 		defer db.Close()
 	}
 
-	writeMetrics := !*noMetrics
-	var metricsFile string
-	if writeMetrics {
-		metricsFile = getMetricsFileName(*historicalMetricsFile, *logfiles)
-		logger.Infof("Creating historical metrics: %s, config: %+v", metricsFile, mconfig)
-	}
-
-	// Process all metrics
+	// Process all metrics - need to consume them even if we ignore them (overhead is minimal)
 	go func() {
 		for metric := range metricsChan {
 			if writeMetrics {
-				var f *os.File
-				var err error
-				f, err = os.OpenFile(metricsFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					logger.Errorf("Error opening %s: %v", metricsFile, err)
-					return
-				}
-				f.Write([]byte(metric))
-				err = f.Close()
-				if err != nil {
-					logger.Errorf("Error closing file: %v", err)
-				}
+				fMetrics.Write([]byte(metric))
 			}
 		}
 		logger.Debug("Main: metrics closed")
 	}()
 
-	// TODO - fix count of statements - might be doubled
 	var stmtProcess, stmtTableuse *sqlite3.Stmt
-	if !*jsonOutput {
-		if writeOutput {
-			writeHeader(f)
-			startTransaction(f)
+	if *sqlOutput {
+		writeHeader(fSQL)
+		startTransaction(fSQL)
+	}
+	if writeDB {
+		stmt := new(bytes.Buffer)
+		writeHeader(stmt)
+		// startTransaction(stmt)
+		err = db.Exec(stmt.String())
+		if err != nil {
+			logger.Fatalf("%q: %s\n", err, stmt)
+			return
+		}
+		stmtProcess, err = db.Prepare(getProcessStatement())
+		if err != nil {
+			logger.Fatalf("Error preparing statement: %v", err)
+		}
+		stmtTableuse, err = db.Prepare(getTableUseStatement())
+		if err != nil {
+			logger.Fatalf("Error preparing statement: %v", err)
+		}
+		err = db.Begin()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	i := int64(1)
+	for cmd := range cmdChan {
+		if *jsonOutput {
+			fmt.Fprintf(fJSON, "%s\n", cmd.String())
+		}
+		if *sqlOutput {
+			i += writeSQL(fSQL, &cmd)
 		}
 		if writeDB {
-			stmt := new(bytes.Buffer)
-			writeHeader(stmt)
-			// startTransaction(stmt)
-			err = db.Exec(stmt.String())
-			if err != nil {
-				logger.Fatalf("%q: %s\n", err, stmt)
-				return
-			}
-			stmtProcess, err = db.Prepare(getProcessStatement())
-			if err != nil {
-				logger.Fatalf("Error preparing statement: %v", err)
-			}
-			stmtTableuse, err = db.Prepare(getTableUseStatement())
-			if err != nil {
-				logger.Fatalf("Error preparing statement: %v", err)
-			}
-			err = db.Begin()
-			if err != nil {
-				fmt.Println(err)
+			j := preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
+			if !*sqlOutput { // Avoid double counting
+				i += j
 			}
 		}
-
-		i := int64(1)
-		for cmd := range cmdChan {
-			if writeOutput {
-				i += writeSQL(f, &cmd)
+		if i >= statementsPerTransaction && (*sqlOutput || writeDB) {
+			if *sqlOutput {
+				writeTransaction(fSQL)
 			}
 			if writeDB {
-				i += preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
-			}
-			if i >= statementsPerTransaction {
-				if writeOutput {
-					writeTransaction(f)
+				err = db.Commit()
+				if err != nil {
+					logger.Errorf("commit error: %v", err)
 				}
-				if writeDB {
-					err = db.Commit()
-					if err != nil {
-						logger.Errorf("commit error: %v", err)
-					}
-					err = db.Begin()
-					if err != nil {
-						fmt.Println(err)
-					}
+				err = db.Begin()
+				if err != nil {
+					fmt.Println(err)
 				}
-				i = 1
 			}
+			i = 1
 		}
-		if writeOutput {
-			writeTrailer(f)
-		}
-		if writeDB {
-			err = db.Commit()
-			if err != nil {
-				logger.Errorf("commit error: %v", err)
-			}
-		}
-	} else {
-		for cmd := range cmdChan {
-			fmt.Fprintf(f, "%s\n", cmd.String())
+	}
+	if *sqlOutput {
+		writeTrailer(fSQL)
+	}
+	if writeDB {
+		err = db.Commit()
+		if err != nil {
+			logger.Errorf("commit error: %v", err)
 		}
 	}
 
