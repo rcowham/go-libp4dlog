@@ -27,12 +27,12 @@ func getResult(output chan string) []string {
 func parseLogLines(input string) []string {
 
 	inchan := make(chan string, 10)
-	cmdchan := make(chan Command, 10)
 
 	fp := NewP4dFileParser(nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go fp.LogParser(ctx, inchan, cmdchan)
+
+	cmdChan := fp.LogParser(ctx, inchan)
 
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	for scanner.Scan() {
@@ -41,7 +41,7 @@ func parseLogLines(input string) []string {
 	close(inchan)
 
 	output := []string{}
-	for cmd := range cmdchan {
+	for cmd := range cmdChan {
 		output = append(output, fmt.Sprintf("%s", cmd.String()))
 	}
 	sort.Strings(output)

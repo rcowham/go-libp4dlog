@@ -197,8 +197,8 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 	return bReader, fileSize, nil
 }
 
-// Parse single log file - output is sent via inChan channel
-func parseLog(logger *logrus.Logger, logfile string, inChan chan string) {
+// Parse single log file - output is sent via linesChan channel
+func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 	var file *os.File
 	if logfile == "-" {
 		file = os.Stdin
@@ -247,7 +247,7 @@ func parseLog(logger *logrus.Logger, logfile string, inChan chan string) {
 	}()
 
 	for scanner.Scan() {
-		inChan <- scanner.Text()
+		linesChan <- scanner.Text()
 	}
 	fmt.Fprintln(os.Stderr, "\nprocessing completed")
 
@@ -366,9 +366,7 @@ func main() {
 	startTime := time.Now()
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 
-	inChan := make(chan string, 10000)
-	cmdChan := make(chan p4dlog.Command, 1000)
-	metricsChan := make(chan string, 1000)
+	linesChan := make(chan string, 10000)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -383,15 +381,15 @@ func main() {
 	}
 	mp := metrics.NewP4DMetricsLogParser(mconfig, logger, true)
 
-	go mp.ProcessEvents(ctx, inChan, cmdChan, metricsChan)
+	cmdChan, metricsChan := mp.ProcessEvents(ctx, linesChan)
 
 	go func() {
 		for _, f := range *logfiles {
 			logger.Infof("Processing: %s\n", f)
-			parseLog(logger, f, inChan)
+			parseLog(logger, f, linesChan)
 		}
 		logger.Infof("Finished all log files\n")
-		close(inChan)
+		close(linesChan)
 	}()
 
 	writeOutput := *outputFile != ""
@@ -449,7 +447,7 @@ func main() {
 				}
 			}
 		}
-		logger.Info("Main: metrics closed")
+		logger.Debug("Main: metrics closed")
 	}()
 
 	// TODO - fix count of statements - might be doubled

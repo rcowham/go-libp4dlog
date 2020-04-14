@@ -442,7 +442,7 @@ type P4dFileParser struct {
 	m                    sync.Mutex
 	cmds                 map[int64]*Command
 	CmdsProcessed        int
-	cmdChan              chan<- Command
+	cmdChan              chan Command
 	debug                bool
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
@@ -1004,13 +1004,6 @@ func (fp *P4dFileParser) parseFinish() {
 		fp.processBlock(fp.block)
 	}
 	fp.outputRemainingCommands()
-	if fp.cmdChan != nil {
-		if fp.logger != nil {
-			fp.logger.Debugf("parseFinish - close cmd channel")
-		}
-		close(fp.cmdChan)
-		fp.cmdChan = nil
-	}
 }
 
 // CmdsPendingCount - count of unmatched commands
@@ -1021,11 +1014,12 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string, cmdchan chan<- Command) {
-	fp.cmdChan = cmdchan
+func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string) chan Command {
 	fp.lineNo = 1
 	ticker := time.NewTicker(fp.outputDuration)
 	tickerDebug := time.NewTicker(fp.debugDuration)
+
+	fp.cmdChan = make(chan Command, 10000)
 
 	// Output commands on seperate thread
 	go func() {
@@ -1039,24 +1033,29 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 		}
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			if fp.logger != nil {
-				fp.logger.Debugf("got Done")
-			}
-			fp.parseFinish()
-			return
-		case line, ok := <-linesChan:
-			if ok {
-				fp.parseLine(strings.TrimRight(line, "\r\n"))
-			} else {
+	go func() {
+		defer close(fp.cmdChan)
+		for {
+			select {
+			case <-ctx.Done():
 				if fp.logger != nil {
-					fp.logger.Debugf("LogParser lines channel closed")
+					fp.logger.Debugf("got Done")
 				}
 				fp.parseFinish()
 				return
+			case line, ok := <-linesChan:
+				if ok {
+					fp.parseLine(strings.TrimRight(line, "\r\n"))
+				} else {
+					if fp.logger != nil {
+						fp.logger.Debugf("LogParser lines channel closed")
+					}
+					fp.parseFinish()
+					return
+				}
 			}
 		}
-	}
+	}()
+
+	return fp.cmdChan
 }

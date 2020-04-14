@@ -87,20 +87,13 @@ func basicTest(t *testing.T, cfg *Config, input string, historical bool) []strin
 	// Shorten durations for testing
 	fp.SetDurations(10*time.Millisecond, 20*time.Millisecond)
 	linesChan := make(chan string, 100)
-	metricsChan := make(chan string, 100)
-	cmdsChan := make(chan<- p4dlog.Command, 100)
+
 	p4m := NewP4DMetricsLogParser(cfg, logger, historical)
 	p4m.fp = fp
 
 	var wg sync.WaitGroup
 
-	go func() {
-		defer wg.Done()
-		logger.Debugf("Starting to process events")
-		result := p4m.ProcessEvents(ctx, linesChan, cmdsChan, metricsChan)
-		logger.Debugf("Finished process events")
-		assert.Equal(t, 0, result)
-	}()
+	_, metricsChan := p4m.ProcessEvents(ctx, linesChan)
 
 	for _, l := range eol.Split(input, -1) {
 		linesChan <- l
@@ -115,7 +108,7 @@ func basicTest(t *testing.T, cfg *Config, input string, historical bool) []strin
 		output = getOutput(metricsChan, historical)
 	}()
 
-	wg.Add(2)
+	wg.Add(1)
 	time.Sleep(50 * time.Millisecond)
 	close(linesChan)
 	logger.Debugf("Waiting for finish")
