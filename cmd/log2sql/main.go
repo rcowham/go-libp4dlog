@@ -244,7 +244,7 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 				p.Percent(), p.Estimated().Format("15:04:05"),
 				p.Remaining().Round(time.Second))
 		}
-		fmt.Fprintln(os.Stderr, "\nprocessing completed")
+		fmt.Fprintln(os.Stderr, "processing completed")
 	}()
 
 	for scanner.Scan() {
@@ -413,10 +413,10 @@ func main() {
 
 	go func() {
 		for _, f := range *logfiles {
-			logger.Infof("Processing: %s\n", f)
+			logger.Infof("Processing: %s", f)
 			parseLog(logger, f, linesChan)
 		}
-		logger.Infof("Finished all log files\n")
+		logger.Infof("Finished all log files")
 		close(linesChan)
 	}()
 
@@ -486,7 +486,7 @@ func main() {
 		// startTransaction(stmt)
 		err = db.Exec(stmt.String())
 		if err != nil {
-			logger.Fatalf("%q: %s\n", err, stmt)
+			logger.Fatalf("%q: %s", err, stmt)
 			return
 		}
 		stmtProcess, err = db.Prepare(getProcessStatement())
