@@ -11,7 +11,7 @@ REVISION=`git rev-parse --short HEAD`
 
 # Setup the -ldflags option for go build here, interpolate the variable values.
 # Note the Version module is in a different git repo.
-MODULE="github.com/rcowham/p4prometheus"
+MODULE="github.com/perforce/p4prometheus"
 LDFLAGS=-ldflags="-w -s -X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/version.BuildDate=${BUILD_DATE} -X ${MODULE}/version.Branch=${BRANCH} -X ${MODULE}/version.Revision=${REVISION} -X ${MODULE}/version.BuildUser=${USER}"
 
 # Builds the project
