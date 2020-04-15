@@ -91,41 +91,42 @@ func (block *Block) addLine(line string, lineNo int64) {
 
 // Command is a command found in the block
 type Command struct {
-	ProcessKey     string    `json:"processKey"`
-	Cmd            string    `json:"cmd"`
-	Pid            int64     `json:"pid"`
-	LineNo         int64     `json:"lineNo"`
-	User           string    `json:"user"`
-	Workspace      string    `json:"workspace"`
-	StartTime      time.Time `json:"startTime"`
-	EndTime        time.Time `json:"endTime"`
-	ComputeLapse   float32   `json:"computeLapse"`
-	CompletedLapse float32   `json:"completedLapse"`
-	IP             string    `json:"ip"`
-	App            string    `json:"app"`
-	Args           string    `json:"args"`
-	Running        int64     `json:"running"`
-	UCpu           int64     `json:"uCpu"`
-	SCpu           int64     `json:"sCpu"`
-	DiskIn         int64     `json:"diskIn"`
-	DiskOut        int64     `json:"diskOut"`
-	IpcIn          int64     `json:"ipcIn"`
-	IpcOut         int64     `json:"ipcOut"`
-	MaxRss         int64     `json:"maxRss"`
-	PageFaults     int64     `json:"pageFaults"`
-	RpcMsgsIn      int64     `json:"rpcMsgsIn"`
-	RpcMsgsOut     int64     `json:"rpcMsgsOut"`
-	RpcSizeIn      int64     `json:"rpcSizeIn"`
-	RpcSizeOut     int64     `json:"rpcSizeOut"`
-	RpcHimarkFwd   int64     `json:"rpcHimarkFwd"`
-	RpcHimarkRev   int64     `json:"rpcHimarkRev"`
-	RpcSnd         float32   `json:"rpcSnd"`
-	RpcRcv         float32   `json:"rpcRcv"`
-	CmdError       bool      `json:"cmderror"`
-	Tables         map[string]*Table
-	duplicateKey   bool
-	completed      bool
-	hasTrackInfo   bool
+	ProcessKey       string    `json:"processKey"`
+	Cmd              string    `json:"cmd"`
+	Pid              int64     `json:"pid"`
+	LineNo           int64     `json:"lineNo"`
+	User             string    `json:"user"`
+	Workspace        string    `json:"workspace"`
+	StartTime        time.Time `json:"startTime"`
+	EndTime          time.Time `json:"endTime"`
+	ComputeLapse     float32   `json:"computeLapse"`
+	CompletedLapse   float32   `json:"completedLapse"`
+	IP               string    `json:"ip"`
+	App              string    `json:"app"`
+	Args             string    `json:"args"`
+	Running          int64     `json:"running"`
+	UCpu             int64     `json:"uCpu"`
+	SCpu             int64     `json:"sCpu"`
+	DiskIn           int64     `json:"diskIn"`
+	DiskOut          int64     `json:"diskOut"`
+	IpcIn            int64     `json:"ipcIn"`
+	IpcOut           int64     `json:"ipcOut"`
+	MaxRss           int64     `json:"maxRss"`
+	PageFaults       int64     `json:"pageFaults"`
+	RpcMsgsIn        int64     `json:"rpcMsgsIn"`
+	RpcMsgsOut       int64     `json:"rpcMsgsOut"`
+	RpcSizeIn        int64     `json:"rpcSizeIn"`
+	RpcSizeOut       int64     `json:"rpcSizeOut"`
+	RpcHimarkFwd     int64     `json:"rpcHimarkFwd"`
+	RpcHimarkRev     int64     `json:"rpcHimarkRev"`
+	RpcSnd           float32   `json:"rpcSnd"`
+	RpcRcv           float32   `json:"rpcRcv"`
+	CmdError         bool      `json:"cmderror"`
+	Tables           map[string]*Table
+	duplicateKey     bool
+	completed        bool
+	countedInRunning bool
+	hasTrackInfo     bool
 }
 
 // Table stores track information per table (part of Command)
@@ -264,7 +265,7 @@ func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimark
 	}
 }
 
-// Validate table names - looking for corruptions
+// Validate table names - looking for corruptions - crept in when we were using []byte channels
 func (c *Command) checkTables(msg string) {
 	found := false
 	var s string
@@ -477,7 +478,6 @@ func (fp *P4dFileParser) SetDurations(outputDuration, debugDuration time.Duratio
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
-	newCmd.checkTables("add0")
 	newCmd.Running = fp.running
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
@@ -487,6 +487,8 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		if cmd.ProcessKey != newCmd.ProcessKey {
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+			fp.running++
+			newCmd.countedInRunning = true
 		} else if cmdHasNoCompletionRecord(newCmd.Cmd) {
 			if hasTrackInfo {
 				cmd.updateFrom(newCmd)
@@ -496,10 +498,12 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 			}
 		} else {
-			if cmd.hasTrackInfo {
+			if cmd.hasTrackInfo { // Typically track info only present when command has completed - especially for duplicates
 				fp.outputCmd(cmd)
 				newCmd.duplicateKey = true
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+				fp.running++
+				newCmd.countedInRunning = true
 			} else {
 				cmd.updateFrom(newCmd)
 			}
@@ -507,21 +511,23 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		if hasTrackInfo {
 			cmd.hasTrackInfo = true
 		}
-		cmd.checkTables("add1")
 	} else {
 		fp.cmds[newCmd.Pid] = newCmd
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
 			newCmd.duplicateKey = true
 		}
 		fp.pidsSeenThisSecond[newCmd.Pid] = true
-		fp.running++
-		newCmd.checkTables("add2")
+		if !cmdHasNoCompletionRecord(newCmd.Cmd) {
+			fp.running++
+			newCmd.countedInRunning = true
+		}
 	}
 }
 
 // Special commands which only have start records not completion records
 func cmdHasNoCompletionRecord(cmdName string) bool {
 	return cmdName == "rmt-FileFetch" ||
+		cmdName == "rmt-FileFetchMulti" ||
 		cmdName == "rmt-Journal" ||
 		cmdName == "rmt-JournalPos" ||
 		cmdName == "pull"
@@ -573,10 +579,9 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 	for _, line := range lines {
 		if strings.HasPrefix(line, trackLapse) {
 			val := line[len(trackLapse):]
-			i := strings.Index(val, ".")
 			j := strings.Index(val, "s")
-			if i >= 0 && j > 0 {
-				f, _ := strconv.ParseFloat(string(val[i:j-i]), 32)
+			if j > 0 {
+				f, _ := strconv.ParseFloat(string(val[:j]), 32)
 				cmd.CompletedLapse = float32(f)
 			}
 			continue
@@ -695,8 +700,11 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 
 // Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
+	if cmd.countedInRunning {
+		fp.running--
+		cmd.countedInRunning = false
+	}
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
-	cmd.checkTables("outputCmd")
 	cmdcopy := *cmd
 	if cmdHasNoCompletionRecord(cmd.Cmd) {
 		cmdcopy.EndTime = cmdcopy.StartTime
@@ -753,7 +761,6 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 			cmdHasBeenProcessed = true
 			fp.outputCmd(cmd)
 			delete(fp.cmds, cmd.Pid)
-			fp.running--
 		}
 	}
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
@@ -801,8 +808,14 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime string, complet
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
 		cmd.CompletedLapse = float32(f)
 		cmd.completed = true
+		if cmd.countedInRunning {
+			fp.running--
+			cmd.countedInRunning = false
+		}
 	} else {
-
+		if fp.logger != nil {
+			fp.logger.Debugf("Completion for unknown pid: %d %s", pid, endTime)
+		}
 	}
 }
 
