@@ -735,10 +735,11 @@ func (fp *P4dFileParser) debugOutputCommands() {
 	}
 }
 
-// Output all completed commands 3 or more seconds ago
+// Output all completed commands 3 or more seconds ago - we wait that time for possible delayed track info to come in
 func (fp *P4dFileParser) outputCompletedCommands() {
 	fp.m.Lock()
 	defer fp.m.Unlock()
+	cmdsToOutput := make([]Command, 0)
 	startCount := len(fp.cmds)
 	const timeWindow = 3 * time.Second
 	cmdHasBeenProcessed := false
@@ -759,10 +760,18 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		}
 		if completed {
 			cmdHasBeenProcessed = true
-			fp.outputCmd(cmd)
+			cmdsToOutput = append(cmdsToOutput, *cmd)
 			delete(fp.cmds, cmd.Pid)
 		}
 	}
+	// Sort by line no in log and output
+	sort.Slice(cmdsToOutput[:], func(i, j int) bool {
+		return cmdsToOutput[i].LineNo < cmdsToOutput[j].LineNo
+	})
+	for _, cmd := range cmdsToOutput {
+		fp.outputCmd(&cmd)
+	}
+
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
 		fp.timeLastCmdProcessed = time.Now()
 	}
