@@ -430,6 +430,7 @@ func main() {
 			logger.Fatal(err)
 		}
 		defer fdJSON.Close()
+		defer fJSON.Flush()
 		logger.Infof("Creating JSON output: %s", jsonFilename)
 	}
 	if *sqlOutput {
@@ -439,6 +440,7 @@ func main() {
 			logger.Fatal(err)
 		}
 		defer fdSQL.Close()
+		defer fSQL.Flush()
 		logger.Infof("Creating SQL output: %s", sqlFilename)
 	}
 	writeMetrics := !*noMetrics
@@ -449,6 +451,7 @@ func main() {
 			logger.Fatal(err)
 		}
 		defer fdMetrics.Close()
+		defer fMetrics.Flush()
 		logger.Infof("Creating metrics output: %s, config: %+v", metricsFilename, mconfig)
 	}
 
@@ -505,13 +508,17 @@ func main() {
 
 	i := int64(1)
 	for cmd := range cmdChan {
+		logger.Debugf("Main processing cmd: %v", cmd.String())
 		if *jsonOutput {
+			logger.Debugf("outputting JSON")
 			fmt.Fprintf(fJSON, "%s\n", cmd.String())
 		}
 		if *sqlOutput {
+			logger.Debugf("writing SQL")
 			i += writeSQL(fSQL, &cmd)
 		}
 		if writeDB {
+			logger.Debugf("writing to DB")
 			j := preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
 			if !*sqlOutput { // Avoid double counting
 				i += j
