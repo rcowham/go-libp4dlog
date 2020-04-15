@@ -40,8 +40,12 @@ type P4DMetrics struct {
 	latestStartCmdBuf   []byte
 	logger              *logrus.Logger
 	metricWriter        io.Writer
+	cmdRunning          int32
 	cmdCounter          map[string]int32
+	cmdErrorCounter     map[string]int32
 	cmdCumulative       map[string]float64
+	cmduCPUCumulative   map[string]float64
+	cmdsCPUCumulative   map[string]float64
 	cmdByUserCounter    map[string]int32
 	cmdByUserCumulative map[string]float64
 	totalReadWait       map[string]float64
@@ -61,7 +65,10 @@ func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bo
 		fp:                  p4dlog.NewP4dFileParser(logger),
 		historical:          historical,
 		cmdCounter:          make(map[string]int32),
+		cmdErrorCounter:     make(map[string]int32),
 		cmdCumulative:       make(map[string]float64),
+		cmduCPUCumulative:   make(map[string]float64),
+		cmdsCPUCumulative:   make(map[string]float64),
 		cmdByUserCounter:    make(map[string]int32),
 		cmdByUserCumulative: make(map[string]float64),
 		totalReadWait:       make(map[string]float64),
@@ -147,6 +154,13 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.logger.Debugf(buf)
 	fmt.Fprint(metrics, buf)
 
+	mname = "p4_cmd_running"
+	p4m.printMetricHeader(metrics, mname, "The number of running commands at any one time", "gauge")
+	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
+	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
+	p4m.logger.Debugf(buf)
+	fmt.Fprint(metrics, buf)
+
 	mname = "p4_cmd_counter"
 	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by cmd)", "counter")
 	for cmd, count := range p4m.cmdCounter {
@@ -160,6 +174,33 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.printMetricHeader(metrics, mname, "The total in seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmdCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
+		labels := append(fixedLabels, labelStruct{"cmd", cmd})
+		buf = p4m.formatMetric(mname, labels, metricVal)
+		p4m.logger.Debugf(buf)
+		fmt.Fprint(metrics, buf)
+	}
+	mname = "p4_cmd_user_cpu_cumulative_seconds"
+	p4m.printMetricHeader(metrics, mname, "The total in user CPU seconds (by cmd)", "counter")
+	for cmd, lapse := range p4m.cmduCPUCumulative {
+		metricVal = fmt.Sprintf("%0.3f", lapse)
+		labels := append(fixedLabels, labelStruct{"cmd", cmd})
+		buf = p4m.formatMetric(mname, labels, metricVal)
+		p4m.logger.Debugf(buf)
+		fmt.Fprint(metrics, buf)
+	}
+	mname = "p4_cmd_system_cpu_cumulative_seconds"
+	p4m.printMetricHeader(metrics, mname, "The total in system CPU seconds (by cmd)", "counter")
+	for cmd, lapse := range p4m.cmdsCPUCumulative {
+		metricVal = fmt.Sprintf("%0.3f", lapse)
+		labels := append(fixedLabels, labelStruct{"cmd", cmd})
+		buf = p4m.formatMetric(mname, labels, metricVal)
+		p4m.logger.Debugf(buf)
+		fmt.Fprint(metrics, buf)
+	}
+	mname = "p4_cmd_error_counter"
+	p4m.printMetricHeader(metrics, mname, "A count of cmd errors (by cmd)", "counter")
+	for cmd, count := range p4m.cmdErrorCounter {
+		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		buf = p4m.formatMetric(mname, labels, metricVal)
 		p4m.logger.Debugf(buf)
@@ -260,9 +301,15 @@ func (p4m *P4DMetrics) getMilliseconds(tmap map[string]interface{}, fieldName st
 func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 	// p4m.logger.Debugf("publish cmd: %s\n", cmd.String())
 
-	p4m.cmdCounter[string(cmd.Cmd)]++
-	p4m.cmdCumulative[string(cmd.Cmd)] += float64(cmd.CompletedLapse)
-	user := string(cmd.User)
+	p4m.cmdCounter[cmd.Cmd]++
+	p4m.cmdCumulative[cmd.Cmd] += float64(cmd.CompletedLapse)
+	p4m.cmduCPUCumulative[cmd.Cmd] += float64(cmd.UCpu) / 1000
+	p4m.cmdsCPUCumulative[cmd.Cmd] += float64(cmd.SCpu) / 1000
+	if cmd.CmdError {
+		p4m.cmdErrorCounter[cmd.Cmd]++
+	}
+	p4m.cmdRunning = int32(cmd.Running)
+	user := cmd.User
 	if !p4m.config.CaseSensitiveServer {
 		user = strings.ToLower(user)
 	}
