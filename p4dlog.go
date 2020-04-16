@@ -450,6 +450,8 @@ type P4dFileParser struct {
 	pidsSeenThisSecond   map[int64]bool
 	running              int64
 	block                *Block
+	lineHandler          func(string)
+	cmdHandler           func(*Command)
 }
 
 // NewP4dFileParser - create and initialise properly
@@ -715,6 +717,9 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 		cmdcopy.Tables[k] = v
 		i++
 	}
+	if fp.cmdHandler != nil {
+		fp.cmdHandler(&cmdcopy)
+	}
 	fp.cmdChan <- cmdcopy
 	fp.CmdsProcessed++
 }
@@ -739,7 +744,7 @@ func (fp *P4dFileParser) debugOutputCommands() {
 func (fp *P4dFileParser) outputCompletedCommands() {
 	fp.m.Lock()
 	defer fp.m.Unlock()
-	cmdsToOutput := make([]Command, 0)
+	cmdsToOutput := make([]*Command, 0)
 	startCount := len(fp.cmds)
 	const timeWindow = 3 * time.Second
 	cmdHasBeenProcessed := false
@@ -760,7 +765,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		}
 		if completed {
 			cmdHasBeenProcessed = true
-			cmdsToOutput = append(cmdsToOutput, *cmd)
+			cmdsToOutput = append(cmdsToOutput, cmd)
 			delete(fp.cmds, cmd.Pid)
 		}
 	}
@@ -769,7 +774,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		return cmdsToOutput[i].LineNo < cmdsToOutput[j].LineNo
 	})
 	for _, cmd := range cmdsToOutput {
-		fp.outputCmd(&cmd)
+		fp.outputCmd(cmd)
 	}
 
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
@@ -1035,6 +1040,12 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 	return len(fp.cmds)
 }
 
+// SetHandlers - for use with metrics module
+func (fp *P4dFileParser) SetHandlers(lineHandler func(string), cmdHandler func(*Command)) {
+	fp.lineHandler = lineHandler
+	fp.cmdHandler = cmdHandler
+}
+
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
 func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string) chan Command {
 	fp.lineNo = 1
@@ -1067,6 +1078,9 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string)
 				return
 			case line, ok := <-linesChan:
 				if ok {
+					if fp.lineHandler != nil {
+						fp.lineHandler(line)
+					}
 					fp.parseLine(strings.TrimRight(line, "\r\n"))
 				} else {
 					if fp.logger != nil {

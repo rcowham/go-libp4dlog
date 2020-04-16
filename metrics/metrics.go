@@ -40,6 +40,7 @@ type P4DMetrics struct {
 	latestStartCmdBuf   []byte
 	logger              *logrus.Logger
 	metricWriter        io.Writer
+	metricsChan         chan string
 	cmdRunning          int32
 	cmdCounter          map[string]int32
 	cmdErrorCounter     map[string]int32
@@ -298,7 +299,7 @@ func (p4m *P4DMetrics) getMilliseconds(tmap map[string]interface{}, fieldName st
 	return 0
 }
 
-func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
+func (p4m *P4DMetrics) publishEvent(cmd *p4dlog.Command) {
 	// p4m.logger.Debugf("publish cmd: %s\n", cmd.String())
 
 	p4m.cmdCounter[cmd.Cmd]++
@@ -376,24 +377,38 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 	return false
 }
 
+// LineHandler - callback for use with LogParser
+func (p4m *P4DMetrics) LineHandler(line string) {
+	p4m.logger.Debugf("P4M Line: %s", line)
+	p4m.linesRead++
+	if p4m.historical && p4m.historicalUpdateRequired([]byte(line)) {
+		p4m.metricsChan <- p4m.getCumulativeMetrics()
+	}
+}
+
+// CommandHandler - callback for use with LogParser
+func (p4m *P4DMetrics) CommandHandler(cmd *p4dlog.Command) {
+	p4m.logger.Debugf("Publishing cmd: %s", cmd.String())
+	p4m.cmdsProcessed++
+	p4m.publishEvent(cmd)
+}
+
 // ProcessEvents - main event loop for P4Prometheus - reads lines and outputs metrics
 // Wraps p4dlog.LogParser event loop
 func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan string) (
 	chan p4dlog.Command, chan string) {
 	ticker := time.NewTicker(p4m.config.UpdateInterval)
 
+	p4m.metricsChan = make(chan string, 1000)
 	if p4m.config.Debug {
 		p4m.fp.SetDebugMode()
 	}
-	fpLinesChan := make(chan string, 10000)
 
-	metricsChan := make(chan string, 1000)
-	cmdsOutChan := make(chan p4dlog.Command, 10000)
-	cmdsInChan := p4m.fp.LogParser(ctx, fpLinesChan)
+	p4m.fp.SetHandlers(p4m.LineHandler, p4m.CommandHandler)
+	cmdsOutChan := p4m.fp.LogParser(ctx, linesInChan)
 
 	go func() {
-		defer close(metricsChan)
-		defer close(cmdsOutChan)
+		defer close(p4m.metricsChan)
 		for {
 			select {
 			case <-ctx.Done():
@@ -403,37 +418,11 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				// Ticker only relevant for live log processing
 				p4m.logger.Debugf("publishCumulative")
 				if !p4m.historical {
-					metricsChan <- p4m.getCumulativeMetrics()
-				}
-			case cmd, ok := <-cmdsInChan:
-				if ok {
-					p4m.logger.Debugf("Publishing cmd: %s", cmd.String())
-					p4m.cmdsProcessed++
-					p4m.publishEvent(cmd)
-					cmdsOutChan <- cmd
-				} else {
-					p4m.logger.Debugf("FP Cmd closed")
-					metricsChan <- p4m.getCumulativeMetrics()
-					return
-				}
-			case line, ok := <-linesInChan:
-				if ok {
-					p4m.logger.Debugf("Line: %s", line)
-					p4m.linesRead++
-					fpLinesChan <- line
-					if p4m.historical && p4m.historicalUpdateRequired([]byte(line)) {
-						metricsChan <- p4m.getCumulativeMetrics()
-					}
-				} else {
-					if fpLinesChan != nil {
-						p4m.logger.Debugf("Lines closed")
-						close(fpLinesChan)
-						fpLinesChan = nil
-					}
+					p4m.metricsChan <- p4m.getCumulativeMetrics()
 				}
 			}
 		}
 	}()
 
-	return cmdsOutChan, metricsChan
+	return cmdsOutChan, p4m.metricsChan
 }
