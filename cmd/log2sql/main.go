@@ -508,7 +508,9 @@ func main() {
 
 	i := int64(1)
 	for cmd := range cmdChan {
-		logger.Debugf("Main processing cmd: %v", cmd.String())
+		if logger.Level >= logrus.DebugLevel {
+			logger.Debugf("Main processing cmd: %v", cmd.String())
+		}
 		if *jsonOutput {
 			logger.Debugf("outputting JSON")
 			fmt.Fprintf(fJSON, "%s\n", cmd.String())
