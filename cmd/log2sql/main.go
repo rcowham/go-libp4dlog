@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bvinc/go-sqlite-lite/sqlite3"
@@ -398,7 +399,6 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	mconfig := &metrics.Config{
 		Debug:               *debug,
 		ServerID:            *serverID,
@@ -407,18 +407,6 @@ func main() {
 		OutputCmdsByUser:    !*noOutputCmdsByUser,
 		CaseSensitiveServer: !*caseInsensitiveServer,
 	}
-	mp := metrics.NewP4DMetricsLogParser(mconfig, logger, true)
-
-	cmdChan, metricsChan := mp.ProcessEvents(ctx, linesChan)
-
-	go func() {
-		for _, f := range *logfiles {
-			logger.Infof("Processing: %s", f)
-			parseLog(logger, f, linesChan)
-		}
-		logger.Infof("Finished all log files")
-		close(linesChan)
-	}()
 
 	var fJSON, fSQL, fMetrics *bufio.Writer
 	var fdJSON, fdSQL, fdMetrics *os.File
@@ -468,90 +456,128 @@ func main() {
 		defer db.Close()
 	}
 
-	// Process all metrics - need to consume them even if we ignore them (overhead is minimal)
-	go func() {
-		for metric := range metricsChan {
-			if writeMetrics {
+	var wg sync.WaitGroup
+	wgCount := 0
+	var mp *metrics.P4DMetrics
+	var fp *p4dlog.P4dFileParser
+	var metricsChan chan string
+	var cmdChan chan p4dlog.Command
+	needCmdChan := writeDB || *sqlOutput || *jsonOutput
+
+	logger.Debugf("Metrics: %v, needCmdChan: %v", writeMetrics, needCmdChan)
+
+	if writeMetrics {
+		wgCount++
+		logger.Debugf("Main: creating metrics")
+		mp = metrics.NewP4DMetricsLogParser(mconfig, logger, true)
+		cmdChan, metricsChan = mp.ProcessEvents(ctx, linesChan, needCmdChan)
+
+		// Process all metrics - need to consume them even if we ignore them (overhead is minimal)
+		go func() {
+			defer wg.Done()
+			for metric := range metricsChan {
 				fMetrics.Write([]byte(metric))
 			}
+			logger.Infof("Main: metrics closed")
+		}()
+
+	} else {
+		fp = p4dlog.NewP4dFileParser(logger)
+		cmdChan = fp.LogParser(ctx, linesChan)
+	}
+
+	// Process all input files, sending lines into linesChan
+	wgCount++
+	go func() {
+		defer wg.Done()
+
+		for _, f := range *logfiles {
+			logger.Infof("Processing: %s", f)
+			parseLog(logger, f, linesChan)
 		}
-		logger.Debug("Main: metrics closed")
+		logger.Infof("Finished all log files")
+		close(linesChan)
 	}()
 
-	var stmtProcess, stmtTableuse *sqlite3.Stmt
-	if *sqlOutput {
-		writeHeader(fSQL)
-		startTransaction(fSQL)
-	}
-	if writeDB {
-		stmt := new(bytes.Buffer)
-		writeHeader(stmt)
-		// startTransaction(stmt)
-		err = db.Exec(stmt.String())
-		if err != nil {
-			logger.Fatalf("%q: %s", err, stmt)
-			return
-		}
-		stmtProcess, err = db.Prepare(getProcessStatement())
-		if err != nil {
-			logger.Fatalf("Error preparing statement: %v", err)
-		}
-		stmtTableuse, err = db.Prepare(getTableUseStatement())
-		if err != nil {
-			logger.Fatalf("Error preparing statement: %v", err)
-		}
-		err = db.Begin()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}
-
-	i := int64(1)
-	for cmd := range cmdChan {
-		if logger.Level >= logrus.DebugLevel {
-			logger.Debugf("Main processing cmd: %v", cmd.String())
-		}
-		if *jsonOutput {
-			logger.Debugf("outputting JSON")
-			fmt.Fprintf(fJSON, "%s\n", cmd.String())
-		}
+	if needCmdChan {
+		var stmtProcess, stmtTableuse *sqlite3.Stmt
 		if *sqlOutput {
-			logger.Debugf("writing SQL")
-			i += writeSQL(fSQL, &cmd)
+			writeHeader(fSQL)
+			startTransaction(fSQL)
 		}
 		if writeDB {
-			logger.Debugf("writing to DB")
-			j := preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
-			if !*sqlOutput { // Avoid double counting
-				i += j
+			stmt := new(bytes.Buffer)
+			writeHeader(stmt)
+			// startTransaction(stmt)
+			err = db.Exec(stmt.String())
+			if err != nil {
+				logger.Fatalf("%q: %s", err, stmt)
+				return
+			}
+			stmtProcess, err = db.Prepare(getProcessStatement())
+			if err != nil {
+				logger.Fatalf("Error preparing statement: %v", err)
+			}
+			stmtTableuse, err = db.Prepare(getTableUseStatement())
+			if err != nil {
+				logger.Fatalf("Error preparing statement: %v", err)
+			}
+			err = db.Begin()
+			if err != nil {
+				fmt.Println(err)
 			}
 		}
-		if i >= statementsPerTransaction && (*sqlOutput || writeDB) {
+
+		i := int64(1)
+		for cmd := range cmdChan {
+			if logger.Level >= logrus.DebugLevel {
+				logger.Debugf("Main processing cmd: %v", cmd.String())
+			}
+			if *jsonOutput {
+				logger.Debugf("outputting JSON")
+				fmt.Fprintf(fJSON, "%s\n", cmd.String())
+			}
 			if *sqlOutput {
-				writeTransaction(fSQL)
+				logger.Debugf("writing SQL")
+				i += writeSQL(fSQL, &cmd)
 			}
 			if writeDB {
-				err = db.Commit()
-				if err != nil {
-					logger.Errorf("commit error: %v", err)
-				}
-				err = db.Begin()
-				if err != nil {
-					fmt.Println(err)
+				logger.Debugf("writing to DB")
+				j := preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
+				if !*sqlOutput { // Avoid double counting
+					i += j
 				}
 			}
-			i = 1
+			if i >= statementsPerTransaction && (*sqlOutput || writeDB) {
+				if *sqlOutput {
+					writeTransaction(fSQL)
+				}
+				if writeDB {
+					err = db.Commit()
+					if err != nil {
+						logger.Errorf("commit error: %v", err)
+					}
+					err = db.Begin()
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+				i = 1
+			}
 		}
-	}
-	if *sqlOutput {
-		writeTrailer(fSQL)
-	}
-	if writeDB {
-		err = db.Commit()
-		if err != nil {
-			logger.Errorf("commit error: %v", err)
+		if *sqlOutput {
+			writeTrailer(fSQL)
+		}
+		if writeDB {
+			err = db.Commit()
+			if err != nil {
+				logger.Errorf("commit error: %v", err)
+			}
 		}
 	}
 
+	logger.Debugf("Waiting for %d threads", wgCount)
+	wg.Add(wgCount)
+	wg.Wait()
 	logger.Infof("Completed %s, elapsed %s", time.Now(), time.Since(startTime))
 }

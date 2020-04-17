@@ -487,8 +487,10 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		if cmd.ProcessKey != newCmd.ProcessKey {
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
-			fp.running++
-			newCmd.countedInRunning = true
+			if !cmdHasNoCompletionRecord(newCmd.Cmd) {
+				fp.running++
+				newCmd.countedInRunning = true
+			}
 		} else if cmdHasNoCompletionRecord(newCmd.Cmd) {
 			if hasTrackInfo {
 				cmd.updateFrom(newCmd)
@@ -964,6 +966,10 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 			if cmd, ok = fp.cmds[pid]; ok {
 				cmd.CmdError = true
 				cmd.completed = true
+				if !cmdHasNoCompletionRecord(cmd.Cmd) {
+					fp.running--
+					cmd.countedInRunning = false
+				}
 			}
 			return
 		}
