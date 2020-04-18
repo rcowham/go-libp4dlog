@@ -156,7 +156,7 @@ Perforce server info:
 
 func TestLongCommand(t *testing.T) {
 	testInput := `
-	Perforce server info:
+Perforce server info:
 	2015/09/02 16:43:36 pid 4500 robert@robert-test 127.0.0.1 [Microsoft Visual Studio 2013/12.0.21005.1] 'user-reconcile -eadf -c 12253 c:\temp\robert-test\test\VEER!-%-#-@-$-&-(-)\fred - Copy.txt c:\temp\robert-test\test\VEER!-%-#-@-$-&-(-)\fred - Copy.txt c:\temp\robert-test\test\VEER!-%-#-@-$-&-(-)\fred - Copy.txt c:\temp\robert-test\test\VEER!-%-#-@-$-&-(-)\fred - Copy.txt'
 Perforce server info:
 	2015/09/02 16:43:36 pid 4500 completed .187s
@@ -167,7 +167,7 @@ Perforce server info:
 `
 	output := parseLogLines(testInput)
 	assert.Equal(t, 1, len(output))
-	assert.JSONEq(t, `{"processKey":"e2bf456007fe305acdae759996dbbeb9","cmd":"user-reconcile","pid":4500,"lineNo":6,"user":"robert","workspace":"robert-test","computeLapse":0,"completedLapse":0,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"-eadf -c 12253 c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt","startTime":"2015/09/02 16:43:36","endTime":"0001/01/01 00:00:00","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[]}`,
+	assert.JSONEq(t, `{"processKey":"e2bf456007fe305acdae759996dbbeb9","cmd":"user-reconcile","pid":4500,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0,"completedLapse":0.187,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"-eadf -c 12253 c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt c:\\temp\\robert-test\\test\\VEER!-%-#-@-$-\u0026-(-)\\fred - Copy.txt","startTime":"2015/09/02 16:43:36","endTime":"2015/09/02 16:43:36","running":0,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[]}`,
 		output[0])
 }
 
@@ -421,6 +421,33 @@ Perforce server info:
 		output[0])
 }
 
+func TestNoStartRecord(t *testing.T) {
+	testInput := `
+Perforce server info:
+	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
+Perforce server info:
+	2020/01/11 02:00:02 pid 25390 completed .008s 0+0us 0+8io 0+0net 7632k 0pf 
+Perforce server info:
+	2020/01/11 02:00:02 pid 25390 bot-integ@_____CLIENT_UNSET_____ 127.0.0.1/10.5.40.103 [jenkins.p4-plugin/1.10.3-SNAPSHOT/Linux (brokered)] 'user-login -s'
+--- failed authentication check
+--- lapse .008s
+--- rpc msgs/size in+out 2+3/0mb+0mb himarks 795800/185540 snd/rcv .000s/.007s
+
+Perforce server info:
+	2020/01/11 02:00:02 pid 25396 completed .002s 0+0us 0+8io 0+0net 8036k 0pf 
+Perforce server info:
+	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
+--- lapse .002s
+--- rpc msgs/size in+out 2+3/0mb+0mb himarks 795800/795656 snd/rcv .000s/.000s
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 2, len(output))
+	assert.JSONEq(t, `{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","computeLapse":0,"completedLapse":0.002,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":0,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":8,"ipcIn":0,"ipcOut":0,"maxRss":8036,"pageFaults":0,"rpcMsgsIn":2,"rpcMsgsOut":3,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":795800,"rpcHimarkRev":795656,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[]}`,
+		output[0])
+	assert.JSONEq(t, `{"processKey":"9bbbb204208b1af212c38a906294708c","cmd":"user-login","pid":25390,"lineNo":4,"user":"bot-integ","workspace":"_____CLIENT_UNSET_____","computeLapse":0,"completedLapse":0.008,"ip":"127.0.0.1/10.5.40.103","app":"jenkins.p4-plugin/1.10.3-SNAPSHOT/Linux (brokered)","args":"-s","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":8,"ipcIn":0,"ipcOut":0,"maxRss":7632,"pageFaults":0,"rpcMsgsIn":2,"rpcMsgsOut":3,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":795800,"rpcHimarkRev":185540,"rpcSnd":0,"rpcRcv":0.007,"cmdError":false,"tables":[]}`,
+		output[1])
+}
+
 func TestLogErrors(t *testing.T) {
 	testInput := `
 Perforce server info:
@@ -646,9 +673,6 @@ Perforce server info:
 ---   locks read/write 1/0 rows get+pos+scan put+del 1+0+0 0+0
 
 Perforce server info:
-	2020/03/11 06:08:17 pid 15854 completed .338s 0+4us 0+56io 0+0net 8356k 0pf 
-
-Perforce server info:
 	2020/03/11 06:08:16 pid 15855 fred@fred_ws 10.1.4.213/10.1.3.243 [Helix P4V/NTX64/2019.2/1904275/v86] 'user-change -i' trigger swarm.changesave
 lapse .076s
 Perforce server info:
@@ -683,10 +707,10 @@ Perforce server info:
 `
 	output := parseLogLines(testInput)
 	assert.Equal(t, 3, len(output))
-	assert.Equal(t, `{"processKey":"b9ec8da8ea642419a06f8ac4060f261c","cmd":"rmt-Journal","pid":17916,"lineNo":4,"user":"svc_p4d_ha_chi","workspace":"unknown","computeLapse":0,"completedLapse":0.202,"ip":"10.5.70.41","app":"p4d/2019.2/LINUX26X86_64/1908095","args":"","startTime":"2020/03/11 06:08:16","endTime":"2020/03/11 06:08:16","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":1,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":280100,"rpcHimarkRev":278660,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"counters","pagesIn":6,"pagesOut":0,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":6,"writeLocks":0,"getRows":6,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+	assert.JSONEq(t, `{"processKey":"b9ec8da8ea642419a06f8ac4060f261c","cmd":"rmt-Journal","pid":17916,"lineNo":4,"user":"svc_p4d_ha_chi","workspace":"unknown","computeLapse":0,"completedLapse":0.202,"ip":"10.5.70.41","app":"p4d/2019.2/LINUX26X86_64/1908095","args":"","startTime":"2020/03/11 06:08:16","endTime":"2020/03/11 06:08:16","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":1,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":280100,"rpcHimarkRev":278660,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"counters","pagesIn":6,"pagesOut":0,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":6,"writeLocks":0,"getRows":6,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
 		output[0])
-	assert.Equal(t, `{"processKey":"b9ec8da8ea642419a06f8ac4060f261c.13","cmd":"rmt-Journal","pid":17916,"lineNo":13,"user":"svc_p4d_ha_chi","workspace":"unknown","computeLapse":0,"completedLapse":0.001,"ip":"10.5.70.41","app":"p4d/2019.2/LINUX26X86_64/1908095","args":"","startTime":"2020/03/11 06:08:16","endTime":"2020/03/11 06:08:16","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":1,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":280100,"rpcHimarkRev":278660,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"counters","pagesIn":1,"pagesOut":0,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":1,"writeLocks":0,"getRows":1,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+	assert.JSONEq(t, `{"processKey":"b9ec8da8ea642419a06f8ac4060f261c.13","cmd":"rmt-Journal","pid":17916,"lineNo":13,"user":"svc_p4d_ha_chi","workspace":"unknown","computeLapse":0,"completedLapse":0.001,"ip":"10.5.70.41","app":"p4d/2019.2/LINUX26X86_64/1908095","args":"","startTime":"2020/03/11 06:08:16","endTime":"2020/03/11 06:08:16","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":1,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":280100,"rpcHimarkRev":278660,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"counters","pagesIn":1,"pagesOut":0,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":1,"writeLocks":0,"getRows":1,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
 		output[1])
-	assert.Equal(t, `{"processKey":"b9f9aee10027df004a0e35a3c9931e27","cmd":"user-change","pid":15855,"lineNo":2,"user":"fred","workspace":"fred_ws","computeLapse":0,"completedLapse":0.276,"ip":"10.1.4.213/10.1.3.243","app":"Helix P4V/NTX64/2019.2/1904275/v86","args":"-i","startTime":"2020/03/11 06:08:16","endTime":"2020/03/11 06:08:17","running":0,"uCpu":4,"sCpu":4,"diskIn":256,"diskOut":240,"ipcIn":0,"ipcOut":0,"maxRss":9212,"pageFaults":0,"rpcMsgsIn":3,"rpcMsgsOut":5,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":280100,"rpcHimarkRev":280100,"rpcSnd":0,"rpcRcv":0.19,"cmdError":false,"tables":[{"tableName":"counters","pagesIn":7,"pagesOut":6,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":1,"writeLocks":2,"getRows":3,"posRows":0,"scanRows":0,"putRows":2,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"monitor","pagesIn":2,"pagesOut":4,"pagesCached":256,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":2,"getRows":0,"posRows":0,"scanRows":0,"putRows":2,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"protect","pagesIn":9,"pagesOut":0,"pagesCached":7,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":1,"writeLocks":0,"getRows":0,"posRows":1,"scanRows":345,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":1,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"trigger_swarm.changesave","pagesIn":0,"pagesOut":0,"pagesCached":0,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":0,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0.076}]}`,
+	assert.JSONEq(t, `{"processKey":"b9f9aee10027df004a0e35a3c9931e27","cmd":"user-change","pid":15855,"lineNo":2,"user":"fred","workspace":"fred_ws","computeLapse":0,"completedLapse":0.276,"ip":"10.1.4.213/10.1.3.243","app":"Helix P4V/NTX64/2019.2/1904275/v86","args":"-i","startTime":"2020/03/11 06:08:16","endTime":"2020/03/11 06:08:17","running":0,"uCpu":4,"sCpu":4,"diskIn":256,"diskOut":240,"ipcIn":0,"ipcOut":0,"maxRss":9212,"pageFaults":0,"rpcMsgsIn":3,"rpcMsgsOut":5,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":280100,"rpcHimarkRev":280100,"rpcSnd":0,"rpcRcv":0.19,"cmdError":false,"tables":[{"tableName":"counters","pagesIn":7,"pagesOut":6,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":1,"writeLocks":2,"getRows":3,"posRows":0,"scanRows":0,"putRows":2,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"monitor","pagesIn":2,"pagesOut":4,"pagesCached":256,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":2,"getRows":0,"posRows":0,"scanRows":0,"putRows":2,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"protect","pagesIn":9,"pagesOut":0,"pagesCached":7,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":1,"writeLocks":0,"getRows":0,"posRows":1,"scanRows":345,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":1,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"trigger_swarm.changesave","pagesIn":0,"pagesOut":0,"pagesCached":0,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":0,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0.076}]}`,
 		output[2])
 }

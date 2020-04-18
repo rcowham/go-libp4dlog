@@ -364,9 +364,36 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 var blankTime time.Time
 
 func (c *Command) updateFrom(other *Command) {
-	if other.EndTime != blankTime {
+	// The first two fields are unusual but occur when we get a completed record with no start record
+	// and then get a record with track info.
+	if c.StartTime == blankTime {
+		c.StartTime = other.StartTime
+	}
+	if c.ProcessKey == "" {
+		c.ProcessKey = other.ProcessKey
+	}
+	if c.User == "" {
+		c.User = other.User
+	}
+	if c.Workspace == "" {
+		c.Workspace = other.Workspace
+	}
+	if c.Cmd == "" {
+		c.Cmd = other.Cmd
+	}
+	if c.Args == "" {
+		c.Args = other.Args
+	}
+	if c.IP == "" {
+		c.IP = other.IP
+	}
+	if c.App == "" {
+		c.App = other.App
+	}
+	if c.EndTime == blankTime {
 		c.EndTime = other.EndTime
 	}
+	// The rest are often updated
 	if other.ComputeLapse > 0 {
 		c.ComputeLapse = other.ComputeLapse
 	}
@@ -475,6 +502,13 @@ func (fp *P4dFileParser) SetDurations(outputDuration, debugDuration time.Duratio
 	fp.debugDuration = debugDuration
 }
 
+func (fp *P4dFileParser) logRunning(msg string, cmd *Command, delta int) {
+	if fp.logger == nil || fp.logger.Level < logrus.DebugLevel {
+		return
+	}
+	fp.logger.Debugf("running: %d delta %d %s cmd %s pid %d line %d", fp.running, delta, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+}
+
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
@@ -484,11 +518,12 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		fp.pidsSeenThisSecond = make(map[int64]bool)
 	}
 	if cmd, ok := fp.cmds[newCmd.Pid]; ok {
-		if cmd.ProcessKey != newCmd.ProcessKey {
+		if cmd.ProcessKey != "" && cmd.ProcessKey != newCmd.ProcessKey {
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 			if !cmdHasNoCompletionRecord(newCmd.Cmd) {
 				fp.running++
+				fp.logRunning("t01", newCmd, 1)
 				newCmd.countedInRunning = true
 			}
 		} else if cmdHasNoCompletionRecord(newCmd.Cmd) {
@@ -501,11 +536,14 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			}
 		} else {
 			if cmd.hasTrackInfo { // Typically track info only present when command has completed - especially for duplicates
+				if !cmd.countedInRunning {
+					fp.running++
+					fp.logRunning("t02", newCmd, 1)
+					newCmd.countedInRunning = true
+				}
 				fp.outputCmd(cmd)
 				newCmd.duplicateKey = true
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
-				fp.running++
-				newCmd.countedInRunning = true
 			} else {
 				cmd.updateFrom(newCmd)
 			}
@@ -519,8 +557,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			newCmd.duplicateKey = true
 		}
 		fp.pidsSeenThisSecond[newCmd.Pid] = true
-		if !cmdHasNoCompletionRecord(newCmd.Cmd) {
+		if !cmdHasNoCompletionRecord(newCmd.Cmd) && !newCmd.completed {
 			fp.running++
+			fp.logRunning("t03", newCmd, 1)
 			newCmd.countedInRunning = true
 		}
 	}
@@ -704,6 +743,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	if cmd.countedInRunning {
 		fp.running--
+		fp.logRunning("t04", cmd, -1)
 		cmd.countedInRunning = false
 	}
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
@@ -811,22 +851,31 @@ func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 
 }
 
-func (fp *P4dFileParser) updateCompletionTime(pid int64, endTime string, completedLapse string) {
+func (fp *P4dFileParser) updateCompletionTime(pid int64, lineNo int64, endTime string, completedLapse string) {
 	fp.m.Lock()
-	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
+		defer fp.m.Unlock()
 		cmd.setEndTime(endTime)
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
 		cmd.CompletedLapse = float32(f)
 		cmd.completed = true
 		if cmd.countedInRunning {
 			fp.running--
+			fp.logRunning("t05", cmd, -1)
 			cmd.countedInRunning = false
 		}
 	} else {
-		if fp.logger != nil {
-			fp.logger.Debugf("Completion for unknown pid: %d %s", pid, endTime)
-		}
+		// This is a completion record for an unknown cmd start - maybe previous log file
+		// We create a new command because there may be a track record along soon with more info
+		cmd = newCommand()
+		cmd.Pid = pid
+		cmd.LineNo = lineNo
+		cmd.setEndTime(endTime)
+		f, _ := strconv.ParseFloat(string(completedLapse), 32)
+		cmd.CompletedLapse = float32(f)
+		cmd.completed = true
+		fp.m.Unlock()
+		fp.addCommand(cmd, false)
 	}
 }
 
@@ -921,7 +970,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				endTime := m[1]
 				pid = toInt64(m[2])
 				completedLapse := m[3]
-				fp.updateCompletionTime(pid, endTime, completedLapse)
+				fp.updateCompletionTime(pid, block.lineNo, endTime, completedLapse)
 			}
 			// Note cmd completion also has usage data potentially
 			if matched {
@@ -968,6 +1017,7 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 				cmd.completed = true
 				if !cmdHasNoCompletionRecord(cmd.Cmd) {
 					fp.running--
+					fp.logRunning("t06", cmd, -1)
 					cmd.countedInRunning = false
 				}
 			}
