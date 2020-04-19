@@ -37,7 +37,7 @@ type P4DMetrics struct {
 	historical          bool
 	fp                  *p4dlog.P4dFileParser
 	timeLatestStartCmd  time.Time
-	latestStartCmdBuf   []byte
+	latestStartCmdBuf   string
 	logger              *logrus.Logger
 	metricWriter        io.Writer
 	cmdRunning          int32
@@ -337,7 +337,7 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 const p4timeformat = "2006/01/02 15:04:05"
 
 // Searches for log lines starting with a <tab>date - assumes increasing dates in log
-func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
+func (p4m *P4DMetrics) historicalUpdateRequired(line string) bool {
 	if !p4m.historical {
 		return false
 	}
@@ -358,22 +358,21 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line []byte) bool {
 		}
 	}
 	if len(p4m.latestStartCmdBuf) == 0 {
-		p4m.latestStartCmdBuf = make([]byte, lenPrefix)
-		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
-		p4m.timeLatestStartCmd, _ = time.Parse(p4timeformat, string(line[1:lenPrefix]))
+		p4m.latestStartCmdBuf = line[:lenPrefix]
+		p4m.timeLatestStartCmd, _ = time.Parse(p4timeformat, line[1:lenPrefix])
 		return false
 	}
-	if len(p4m.latestStartCmdBuf) > 0 && bytes.Equal(p4m.latestStartCmdBuf, line[:lenPrefix]) {
+	if len(p4m.latestStartCmdBuf) > 0 && p4m.latestStartCmdBuf == line[:lenPrefix] {
 		return false
 	}
 	// Update only if greater (due to log format we do see out of sequence dates with track records)
-	if bytes.Compare(line[:lenPrefix], p4m.latestStartCmdBuf) <= 0 {
+	if strings.Compare(line[:lenPrefix], p4m.latestStartCmdBuf) <= 0 {
 		return false
 	}
 	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
 	if dt.Sub(p4m.timeLatestStartCmd) >= p4m.config.UpdateInterval {
 		p4m.timeLatestStartCmd = dt
-		copy(p4m.latestStartCmdBuf, line[:lenPrefix])
+		p4m.latestStartCmdBuf = line[:lenPrefix]
 		return true
 	}
 	return false
@@ -428,10 +427,10 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				}
 			case line, ok := <-linesInChan:
 				if ok {
-					p4m.logger.Debugf("Line: %s", line)
+					p4m.logger.Tracef("Line: %s", line)
 					p4m.linesRead++
 					fpLinesChan <- line
-					if p4m.historical && p4m.historicalUpdateRequired([]byte(line)) {
+					if p4m.historical && p4m.historicalUpdateRequired(line) {
 						metricsChan <- p4m.getCumulativeMetrics()
 					}
 				} else {
