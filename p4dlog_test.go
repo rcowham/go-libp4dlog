@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,7 +29,9 @@ func parseLogLines(input string) []string {
 
 	inchan := make(chan string, 10)
 
-	fp := NewP4dFileParser(nil)
+	logger := logrus.New()
+	logger.Level = logrus.InfoLevel
+	fp := NewP4dFileParser(logger)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -475,6 +478,27 @@ Perforce server info:
 `
 	output := parseLogLines(testInput)
 	assert.Equal(t, 0, len(output))
+}
+
+func TestServerActiveThreads(t *testing.T) {
+	testInput := `
+Perforce server info:
+	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
+Perforce server info:
+	2020/01/11 02:00:02 pid 25396 completed .008s 0+0us 0+8io 0+0net 7632k 0pf 
+2020/01/11 02:00:05 731966731 pid 24961: Server is now using 148 active threads.
+Perforce server info:
+	2020/01/11 02:00:06 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
+--- db.view
+---   pages in+out+cached 2+3+96
+---   locks read/write 4/5 rows get+pos+scan put+del 6+7+8 9+10
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 2, len(output))
+	assert.JSONEq(t, `{"processKey":"33ac9675a65f8c437998987e55c11f9f","cmd":"pull","pid":6170,"lineNo":7,"user":"svc_wok","workspace":"unknown","computeLapse":0,"completedLapse":0,"ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2020/01/11 02:00:06","endTime":"2020/01/11 02:00:06","running":148,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":4,"writeLocks":5,"getRows":6,"posRows":7,"scanRows":8,"putRows":9,"delRows":10,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+		output[0])
+	assert.JSONEq(t, `{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","computeLapse":0,"completedLapse":0.008,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":8,"ipcIn":0,"ipcOut":0,"maxRss":7632,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"cmdError":false,"tables":[]}`,
+		output[1])
 }
 
 func TestDuplicatePulls(t *testing.T) {

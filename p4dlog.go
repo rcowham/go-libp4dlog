@@ -62,6 +62,7 @@ const (
 	blankType blockType = iota
 	infoType
 	errorType
+	activeThreadsType
 )
 
 // Block is a block of lines parsed from a file
@@ -81,6 +82,9 @@ func (block *Block) addLine(line string, lineNo int64) {
 			block.btype = blankType
 		} else if strings.HasPrefix(line, infoBlock) {
 			block.btype = infoType
+		} else if strings.HasSuffix(line, msgActiveThreads) {
+			block.btype = activeThreadsType
+			block.lines = append(block.lines, line)
 		} else {
 			block.btype = errorType
 		}
@@ -478,6 +482,7 @@ type P4dFileParser struct {
 	running              int64
 	block                *Block
 	runningPids          map[int64]int64 // Maps pids to line nos
+	hadServerThreadsMsg  bool
 }
 
 // NewP4dFileParser - create and initialise properly
@@ -1047,9 +1052,27 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 	}
 }
 
+func (fp *P4dFileParser) processServerThreadsBlock(block *Block) {
+	if fp.hadServerThreadsMsg { // Only do once
+		return
+	}
+	fp.hadServerThreadsMsg = true
+	line := block.lines[0]
+	m := reServerThreads.FindStringSubmatch(line)
+	if len(m) > 0 {
+		i, err := strconv.ParseInt(m[2], 10, 64)
+		if err == nil {
+			fp.running = i
+			fp.logger.Infof("Resetting running to %d as encountered server threads message", i)
+		}
+	}
+}
+
 func (fp *P4dFileParser) processBlock(block *Block) {
 	if fp.block.btype == infoType {
 		fp.processInfoBlock(fp.block)
+	} else if fp.block.btype == activeThreadsType {
+		fp.processServerThreadsBlock(fp.block)
 	} else if fp.block.btype == errorType {
 		fp.processErrorBlock(fp.block)
 	} //TODO: output unrecognised block if wanted
@@ -1066,12 +1089,20 @@ var blockEnds = []string{
 	"Rpc himark:",
 	"server to client"}
 
+var msgActiveThreads = " active threads."
+var reServerThreads = regexp.MustCompile(`^\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d \d+ pid (\d+): Server is now using (\d+) active threads.`)
+
 func blockEnd(line string) bool {
 	if blankLine(line) {
 		return true
 	}
 	for _, str := range blockEnds {
 		if line == str {
+			return true
+		}
+	}
+	if strings.HasSuffix(line, msgActiveThreads) { // OK to do a regex as does occur frequently
+		if m := reServerThreads.FindStringSubmatch(line); len(m) > 0 {
 			return true
 		}
 	}
