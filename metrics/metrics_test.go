@@ -77,7 +77,7 @@ func getOutput(testchan chan string, historical bool) []string {
 func basicTest(t *testing.T, cfg *Config, input string, historical bool) []string {
 	logrus.SetFormatter(&logrus.TextFormatter{TimestampFormat: "15:04:05.000", FullTimestamp: true})
 	logger.SetReportCaller(true)
-	logger.Infof("Function: %s", funcName())
+	logger.Debugf("Function: %s", funcName())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -93,28 +93,42 @@ func basicTest(t *testing.T, cfg *Config, input string, historical bool) []strin
 
 	var wg sync.WaitGroup
 
-	_, metricsChan := p4m.ProcessEvents(ctx, linesChan)
+	_, metricsChan := p4m.ProcessEvents(ctx, linesChan, false)
 
 	for _, l := range eol.Split(input, -1) {
 		linesChan <- l
 	}
+	close(linesChan)
 
 	output := []string{}
 
 	go func() {
 		defer wg.Done()
-		time.Sleep(20 * time.Millisecond)
 		logger.Debugf("Waiting for metrics")
 		output = getOutput(metricsChan, historical)
 	}()
 
 	wg.Add(1)
-	time.Sleep(50 * time.Millisecond)
-	close(linesChan)
 	logger.Debugf("Waiting for finish")
 	wg.Wait()
 	logger.Debugf("Finished")
 	return output
+}
+
+func compareOutput(t *testing.T, expected, actual []string) {
+	nExpected := make([]string, 0)
+	nActual := make([]string, 0)
+	for _, line := range expected {
+		if !strings.HasPrefix(line, "p4_prom_cmds_pending") {
+			nExpected = append(nExpected, line)
+		}
+	}
+	for _, line := range actual {
+		if !strings.HasPrefix(line, "p4_prom_cmds_pending") {
+			nActual = append(nActual, line)
+		}
+	}
+	assert.Equal(t, nExpected, nActual)
 }
 
 func TestP4PromBasic(t *testing.T) {
@@ -134,30 +148,36 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 7, len(output))
+	assert.Equal(t, 10, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
+p4_cmd_running{serverid="myserverid"} 1
+p4_cmd_system_cpu_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
+p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.031
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 1
 p4_prom_log_lines_read{serverid="myserverid"} 8`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 
 	historical = true
 	output = basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 7, len(output))
+	assert.Equal(t, 10, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
 	expected = eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
+p4_cmd_running;serverid=myserverid 1 1441207389
+p4_cmd_system_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_user_counter;serverid=myserverid;user=robert 1 1441207389
+p4_cmd_user_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_user_cumulative_seconds;serverid=myserverid;user=robert 0.031 1441207389
 p4_prom_cmds_pending;serverid=myserverid 0 1441207389
 p4_prom_cmds_processed;serverid=myserverid 1 1441207389
 p4_prom_log_lines_read;serverid=myserverid 8 1441207389`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 
 }
 
@@ -180,26 +200,32 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 5, len(output))
+	assert.Equal(t, 8, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
+p4_cmd_running{serverid="myserverid"} 1
+p4_cmd_system_cpu_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
+p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 1
 p4_prom_log_lines_read{serverid="myserverid"} 8`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 
 	historical = true
 	output = basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 5, len(output))
+	assert.Equal(t, 8, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
 	expected = eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
+p4_cmd_running;serverid=myserverid 1 1441207389
+p4_cmd_system_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_cmd_user_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_prom_cmds_pending;serverid=myserverid 0 1441207389
 p4_prom_cmds_processed;serverid=myserverid 1 1441207389
 p4_prom_log_lines_read;serverid=myserverid 8 1441207389`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 }
 
 func TestP4PromBasicHistorical(t *testing.T) {
@@ -236,11 +262,16 @@ Perforce server info:
 	historical := true
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 11, len(output))
+	assert.Equal(t, 16, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
 	expected := eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 3 1441207511
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.096 1441207511
+p4_cmd_running;serverid=myserverid 0 1441207450
+p4_cmd_running;serverid=myserverid 0 1441207511
+p4_cmd_running;serverid=myserverid 1 1441207511
+p4_cmd_system_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207511
+p4_cmd_user_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207511
 p4_prom_cmds_pending;serverid=myserverid 0 1441207450
 p4_prom_cmds_pending;serverid=myserverid 0 1441207511
 p4_prom_cmds_pending;serverid=myserverid 0 1441207511
@@ -250,7 +281,7 @@ p4_prom_cmds_processed;serverid=myserverid 3 1441207511
 p4_prom_log_lines_read;serverid=myserverid 10 1441207450
 p4_prom_log_lines_read;serverid=myserverid 17 1441207511
 p4_prom_log_lines_read;serverid=myserverid 22 1441207511`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 }
 
 func TestP4PromMultiCmds(t *testing.T) {
@@ -300,12 +331,17 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 22, len(output))
+	assert.Equal(t, 27, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="dm-CommitSubmit"} 1
 p4_cmd_counter{serverid="myserverid",cmd="user-change"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 1.380
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.413
+p4_cmd_running{serverid="myserverid"} 1
+p4_cmd_system_cpu_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 0.061
+p4_cmd_system_cpu_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.011
 p4_cmd_user_counter{serverid="myserverid",user="fred"} 2
+p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 0.034
+p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.010
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="fred"} 1.793
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
@@ -323,12 +359,12 @@ p4_total_write_held_seconds{serverid="myserverid",table="integed"} 0.795
 p4_total_write_wait_seconds{serverid="myserverid",table="archmap"} 0.034
 p4_total_write_wait_seconds{serverid="myserverid",table="counters"} 0.000
 p4_total_write_wait_seconds{serverid="myserverid",table="integed"} 0.024`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 
 	historical = true
 	output = basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 28, len(output))
+	assert.Equal(t, 35, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	// assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime1.Unix()))
 	assert.Contains(t, output[len(output)-1], fmt.Sprintf("%d", cmdTime2.Unix()))
@@ -336,11 +372,18 @@ p4_total_write_wait_seconds{serverid="myserverid",table="integed"} 0.024`, -1)
 p4_cmd_counter;serverid=myserverid;cmd=user-change 1 1528673409
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=dm-CommitSubmit 1.380 1528673409
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-change 0.413 1528673409
+p4_cmd_running;serverid=myserverid 0 1528673408
+p4_cmd_running;serverid=myserverid 0 1528673409
+p4_cmd_running;serverid=myserverid 1 1528673409
+p4_cmd_system_cpu_cumulative_seconds;serverid=myserverid;cmd=dm-CommitSubmit 0.061 1528673409
+p4_cmd_system_cpu_cumulative_seconds;serverid=myserverid;cmd=user-change 0.011 1528673409
 p4_cmd_user_counter;serverid=myserverid;user=fred 2 1528673409
+p4_cmd_user_cpu_cumulative_seconds;serverid=myserverid;cmd=dm-CommitSubmit 0.034 1528673409
+p4_cmd_user_cpu_cumulative_seconds;serverid=myserverid;cmd=user-change 0.010 1528673409
 p4_cmd_user_cumulative_seconds;serverid=myserverid;user=fred 1.793 1528673409
+p4_prom_cmds_pending;serverid=myserverid 0 1528673408
 p4_prom_cmds_pending;serverid=myserverid 0 1528673409
-p4_prom_cmds_pending;serverid=myserverid 1 1528673408
-p4_prom_cmds_pending;serverid=myserverid 1 1528673409
+p4_prom_cmds_pending;serverid=myserverid 0 1528673409
 p4_prom_cmds_processed;serverid=myserverid 0 1528673408
 p4_prom_cmds_processed;serverid=myserverid 0 1528673409
 p4_prom_cmds_processed;serverid=myserverid 2 1528673409
@@ -360,7 +403,7 @@ p4_total_write_held_seconds;serverid=myserverid;table=integed 0.795 1528673409
 p4_total_write_wait_seconds;serverid=myserverid;table=archmap 0.034 1528673409
 p4_total_write_wait_seconds;serverid=myserverid;table=counters 0.000 1528673409
 p4_total_write_wait_seconds;serverid=myserverid;table=integed 0.024 1528673409`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 
 }
 
@@ -384,17 +427,20 @@ func TestP4PromBasicMultiUserCaseSensitive(t *testing.T) {
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: true}
 	output := basicTest(t, cfg, multiUserIntput, false)
-	assert.Equal(t, 9, len(output))
+	assert.Equal(t, 12, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
+p4_cmd_running{serverid="myserverid"} 1
+p4_cmd_system_cpu_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_user_counter{serverid="myserverid",user="ROBERT"} 1
 p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
+p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
 p4_prom_log_lines_read{serverid="myserverid"} 11`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 
 }
 
@@ -406,14 +452,17 @@ func TestP4PromBasicMultiUserCaseInsensitive(t *testing.T) {
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: false}
 	output := basicTest(t, cfg, multiUserIntput, false)
-	assert.Equal(t, 7, len(output))
+	assert.Equal(t, 10, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
+p4_cmd_running{serverid="myserverid"} 1
+p4_cmd_system_cpu_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_user_counter{serverid="myserverid",user="robert"} 2
+p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.022
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
 p4_prom_log_lines_read{serverid="myserverid"} 11`, -1)
-	assert.Equal(t, expected, output)
+	compareOutput(t, expected, output)
 
 }
