@@ -108,9 +108,9 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 		float64(cmd.ComputeLapse), float64(cmd.CompletedLapse),
 		string(cmd.User), string(cmd.Workspace), string(cmd.IP), string(cmd.App), string(cmd.Cmd), string(cmd.Args),
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
-		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RpcMsgsIn, cmd.RpcMsgsOut,
-		cmd.RpcSizeIn, cmd.RpcSizeOut, cmd.RpcHimarkFwd, cmd.RpcHimarkRev,
-		float64(cmd.RpcSnd), float64(cmd.RpcRcv), cmd.Running, cmd.CmdError)
+		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
+		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
+		float64(cmd.RPCSnd), float64(cmd.RPCRcv), cmd.Running, cmd.CmdError)
 	if err != nil {
 		logger.Errorf("Process insert: %v pid %d, lineNo %d, %s",
 			err, cmd.Pid, cmd.LineNo, string(cmd.Cmd))
@@ -141,9 +141,9 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		cmd.ComputeLapse, cmd.CompletedLapse,
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
-		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RpcMsgsIn, cmd.RpcMsgsOut,
-		cmd.RpcSizeIn, cmd.RpcSizeOut, cmd.RpcHimarkFwd, cmd.RpcHimarkRev,
-		cmd.RpcSnd, cmd.RpcRcv, cmd.Running, cmd.CmdError)
+		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
+		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
+		cmd.RPCSnd, cmd.RPCRcv, cmd.Running, cmd.CmdError)
 	for _, t := range cmd.Tables {
 		rows++
 		fmt.Fprintf(f, "INSERT INTO tableuse VALUES ("+

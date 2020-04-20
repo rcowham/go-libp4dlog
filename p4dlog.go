@@ -117,14 +117,14 @@ type Command struct {
 	IpcOut           int64     `json:"ipcOut"`
 	MaxRss           int64     `json:"maxRss"`
 	PageFaults       int64     `json:"pageFaults"`
-	RpcMsgsIn        int64     `json:"rpcMsgsIn"`
-	RpcMsgsOut       int64     `json:"rpcMsgsOut"`
-	RpcSizeIn        int64     `json:"rpcSizeIn"`
-	RpcSizeOut       int64     `json:"rpcSizeOut"`
-	RpcHimarkFwd     int64     `json:"rpcHimarkFwd"`
-	RpcHimarkRev     int64     `json:"rpcHimarkRev"`
-	RpcSnd           float32   `json:"rpcSnd"`
-	RpcRcv           float32   `json:"rpcRcv"`
+	RPCMsgsIn        int64     `json:"rpcMsgsIn"`
+	RPCMsgsOut       int64     `json:"rpcMsgsOut"`
+	RPCSizeIn        int64     `json:"rpcSizeIn"`
+	RPCSizeOut       int64     `json:"rpcSizeOut"`
+	RPCHimarkFwd     int64     `json:"rpcHimarkFwd"`
+	RPCHimarkRev     int64     `json:"rpcHimarkRev"`
+	RPCSnd           float32   `json:"rpcSnd"`
+	RPCRcv           float32   `json:"rpcRcv"`
 	CmdError         bool      `json:"cmderror"`
 	Tables           map[string]*Table
 	duplicateKey     bool
@@ -241,9 +241,9 @@ func (c *Command) setEndTime(t string) {
 	c.EndTime, _ = time.Parse(p4timeformat, t)
 }
 
-func (c *Command) setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
-	c.UCpu, _ = strconv.ParseInt(uCpu, 10, 64)
-	c.SCpu, _ = strconv.ParseInt(sCpu, 10, 64)
+func (c *Command) setUsage(uCPU, sCPU, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
+	c.UCpu, _ = strconv.ParseInt(uCPU, 10, 64)
+	c.SCpu, _ = strconv.ParseInt(sCPU, 10, 64)
 	c.DiskIn, _ = strconv.ParseInt(diskIn, 10, 64)
 	c.DiskOut, _ = strconv.ParseInt(diskOut, 10, 64)
 	c.IpcIn, _ = strconv.ParseInt(ipcIn, 10, 64)
@@ -253,19 +253,19 @@ func (c *Command) setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, p
 }
 
 func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev, rpcSnd, rpcRcv string) {
-	c.RpcMsgsIn, _ = strconv.ParseInt(rpcMsgsIn, 10, 64)
-	c.RpcMsgsOut, _ = strconv.ParseInt(rpcMsgsOut, 10, 64)
-	c.RpcSizeIn, _ = strconv.ParseInt(rpcSizeIn, 10, 64)
-	c.RpcSizeOut, _ = strconv.ParseInt(rpcSizeOut, 10, 64)
-	c.RpcHimarkFwd, _ = strconv.ParseInt(rpcHimarkFwd, 10, 64)
-	c.RpcHimarkRev, _ = strconv.ParseInt(rpcHimarkRev, 10, 64)
+	c.RPCMsgsIn, _ = strconv.ParseInt(rpcMsgsIn, 10, 64)
+	c.RPCMsgsOut, _ = strconv.ParseInt(rpcMsgsOut, 10, 64)
+	c.RPCSizeIn, _ = strconv.ParseInt(rpcSizeIn, 10, 64)
+	c.RPCSizeOut, _ = strconv.ParseInt(rpcSizeOut, 10, 64)
+	c.RPCHimarkFwd, _ = strconv.ParseInt(rpcHimarkFwd, 10, 64)
+	c.RPCHimarkRev, _ = strconv.ParseInt(rpcHimarkRev, 10, 64)
 	if rpcSnd != "" {
 		f, _ := strconv.ParseFloat(rpcSnd, 32)
-		c.RpcSnd = float32(f)
+		c.RPCSnd = float32(f)
 	}
 	if rpcRcv != "" {
 		f, _ := strconv.ParseFloat(rpcRcv, 32)
-		c.RpcRcv = float32(f)
+		c.RPCRcv = float32(f)
 	}
 }
 
@@ -319,14 +319,14 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		IpcOut         int64   `json:"ipcOut"`
 		MaxRss         int64   `json:"maxRss"`
 		PageFaults     int64   `json:"pageFaults"`
-		RpcMsgsIn      int64   `json:"rpcMsgsIn"`
-		RpcMsgsOut     int64   `json:"rpcMsgsOut"`
-		RpcSizeIn      int64   `json:"rpcSizeIn"`
-		RpcSizeOut     int64   `json:"rpcSizeOut"`
-		RpcHimarkFwd   int64   `json:"rpcHimarkFwd"`
-		RpcHimarkRev   int64   `json:"rpcHimarkRev"`
-		RpcSnd         float32 `json:"rpcSnd"`
-		RpcRcv         float32 `json:"rpcRcv"`
+		RPCMsgsIn      int64   `json:"rpcMsgsIn"`
+		RPCMsgsOut     int64   `json:"rpcMsgsOut"`
+		RPCSizeIn      int64   `json:"rpcSizeIn"`
+		RPCSizeOut     int64   `json:"rpcSizeOut"`
+		RPCHimarkFwd   int64   `json:"rpcHimarkFwd"`
+		RPCHimarkRev   int64   `json:"rpcHimarkRev"`
+		RPCSnd         float32 `json:"rpcSnd"`
+		RPCRcv         float32 `json:"rpcRcv"`
 		CmdError       bool    `json:"cmdError"`
 		Tables         []Table `json:"tables"`
 	}{
@@ -352,14 +352,14 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		IpcOut:         c.IpcOut,
 		MaxRss:         c.MaxRss,
 		PageFaults:     c.PageFaults,
-		RpcMsgsIn:      c.RpcMsgsIn,
-		RpcMsgsOut:     c.RpcMsgsOut,
-		RpcSizeIn:      c.RpcSizeIn,
-		RpcSizeOut:     c.RpcSizeOut,
-		RpcHimarkFwd:   c.RpcHimarkFwd,
-		RpcHimarkRev:   c.RpcHimarkRev,
-		RpcSnd:         c.RpcSnd,
-		RpcRcv:         c.RpcRcv,
+		RPCMsgsIn:      c.RPCMsgsIn,
+		RPCMsgsOut:     c.RPCMsgsOut,
+		RPCSizeIn:      c.RPCSizeIn,
+		RPCSizeOut:     c.RPCSizeOut,
+		RPCHimarkFwd:   c.RPCHimarkFwd,
+		RPCHimarkRev:   c.RPCHimarkRev,
+		RPCSnd:         c.RPCSnd,
+		RPCRcv:         c.RPCRcv,
 		CmdError:       c.CmdError,
 		Tables:         tables,
 	})
@@ -431,32 +431,32 @@ func (c *Command) updateFrom(other *Command) {
 	if other.IpcIn > 0 {
 		c.IpcIn = other.IpcIn
 	}
-	if other.RpcMsgsIn > 0 {
-		c.RpcMsgsIn = other.RpcMsgsIn
+	if other.RPCMsgsIn > 0 {
+		c.RPCMsgsIn = other.RPCMsgsIn
 	}
-	if other.RpcMsgsOut > 0 {
-		c.RpcMsgsOut = other.RpcMsgsOut
+	if other.RPCMsgsOut > 0 {
+		c.RPCMsgsOut = other.RPCMsgsOut
 	}
-	if other.RpcMsgsIn > 0 {
-		c.RpcMsgsIn = other.RpcMsgsIn
+	if other.RPCMsgsIn > 0 {
+		c.RPCMsgsIn = other.RPCMsgsIn
 	}
-	if other.RpcSizeIn > 0 {
-		c.RpcSizeIn = other.RpcSizeIn
+	if other.RPCSizeIn > 0 {
+		c.RPCSizeIn = other.RPCSizeIn
 	}
-	if other.RpcSizeOut > 0 {
-		c.RpcSizeOut = other.RpcSizeOut
+	if other.RPCSizeOut > 0 {
+		c.RPCSizeOut = other.RPCSizeOut
 	}
-	if other.RpcHimarkFwd > 0 {
-		c.RpcHimarkFwd = other.RpcHimarkFwd
+	if other.RPCHimarkFwd > 0 {
+		c.RPCHimarkFwd = other.RPCHimarkFwd
 	}
-	if other.RpcHimarkRev > 0 {
-		c.RpcHimarkRev = other.RpcHimarkRev
+	if other.RPCHimarkRev > 0 {
+		c.RPCHimarkRev = other.RPCHimarkRev
 	}
-	if other.RpcSnd > 0 {
-		c.RpcSnd = other.RpcSnd
+	if other.RPCSnd > 0 {
+		c.RPCSnd = other.RPCSnd
 	}
-	if other.RpcRcv > 0 {
-		c.RpcRcv = other.RpcRcv
+	if other.RPCRcv > 0 {
+		c.RPCRcv = other.RPCRcv
 	}
 	if len(other.Tables) > 0 {
 		for k, t := range other.Tables {
@@ -901,11 +901,11 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, lineNo int64, endTime s
 	}
 }
 
-func (fp *P4dFileParser) updateUsage(pid int64, uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
+func (fp *P4dFileParser) updateUsage(pid int64, uCPU, sCPU, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
-		cmd.setUsage(uCpu, sCpu, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults)
+		cmd.setUsage(uCPU, sCPU, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults)
 	}
 }
 
