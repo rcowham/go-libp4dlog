@@ -1,12 +1,19 @@
 version: '3.5'
+# Note that the following should be defined in .env in current dir:
+# VM_GRAPHITE_PORT=2003
+# GRAFANA_PORT=3000
+# Alternatively you may set them in your shell env, or define in another file and run:
+#   docker-compose --env-file=some.env up
+# 
 services:
   prometheus:
     container_name: prometheus
     image: prom/prometheus:v2.17.1
     depends_on:
       - "victoriametrics"
-    ports:
-      - 9090:9090
+    # ports:
+      # Uncomment the following if you want access to prometheus from your localhost
+      # - 9090:9090
     volumes:
       - promdata:/prometheus
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
@@ -20,15 +27,16 @@ services:
     container_name: victoriametrics
     image: victoriametrics/victoria-metrics
     ports:
-      - 8428:8428
-      - 2003:2003
-      - 4242:4242
+      # Uncomment the following if you want access to VictoriaMetrics from your localhost
+      # - 8428:8428
+      - ${VM_GRAPHITE_PORT}:2003
+      # - 4242:4242
     volumes:
       - vmdata:/storage
     command:
       - '--storageDataPath=/storage'
       - '--graphiteListenAddr=:2003'
-      - '--opentsdbListenAddr=:4242'
+      # - '--opentsdbListenAddr=:4242'
       - '--httpListenAddr=:8428'
       - '--retentionPeriod=24'
     networks:
@@ -47,7 +55,7 @@ services:
     depends_on:
       - "victoriametrics"
     ports:
-      - 3000:3000
+      - ${GRAFANA_PORT}:3000
     volumes:
       - grafanadata:/var/lib/grafana
       - ./provisioning/:/etc/grafana/provisioning/
