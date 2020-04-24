@@ -457,7 +457,6 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	wgCount := 0
 	var mp *metrics.P4DMetrics
 	var fp *p4dlog.P4dFileParser
 	var metricsChan chan string
@@ -467,7 +466,7 @@ func main() {
 	logger.Debugf("Metrics: %v, needCmdChan: %v", writeMetrics, needCmdChan)
 
 	if writeMetrics {
-		wgCount++
+		wg.Add(1)
 		logger.Debugf("Main: creating metrics")
 		mp = metrics.NewP4DMetricsLogParser(mconfig, logger, true)
 		cmdChan, metricsChan = mp.ProcessEvents(ctx, linesChan, needCmdChan)
@@ -487,7 +486,7 @@ func main() {
 	}
 
 	// Process all input files, sending lines into linesChan
-	wgCount++
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
@@ -576,8 +575,6 @@ func main() {
 		}
 	}
 
-	logger.Debugf("Waiting for %d threads", wgCount)
-	wg.Add(wgCount)
 	wg.Wait()
 	logger.Infof("Completed %s, elapsed %s", time.Now(), time.Since(startTime))
 }
