@@ -35,7 +35,7 @@ func parseLogLines(input string) []string {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cmdChan := fp.LogParser(ctx, inchan)
+	cmdChan := fp.LogParser(ctx, inchan, nil)
 
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	for scanner.Scan() {

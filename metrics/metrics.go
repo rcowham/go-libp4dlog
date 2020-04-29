@@ -40,6 +40,7 @@ type P4DMetrics struct {
 	latestStartCmdBuf   string
 	logger              *logrus.Logger
 	metricWriter        io.Writer
+	timeChan            chan time.Time
 	cmdRunning          int32
 	cmdCounter          map[string]int32
 	cmdErrorCounter     map[string]int32
@@ -370,6 +371,9 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line string) bool {
 		return false
 	}
 	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
+	if dt.Sub(p4m.timeLatestStartCmd) >= 3*time.Second {
+		p4m.timeChan <- dt
+	}
 	if dt.Sub(p4m.timeLatestStartCmd) >= p4m.config.UpdateInterval {
 		p4m.timeLatestStartCmd = dt
 		p4m.latestStartCmdBuf = line[:lenPrefix]
@@ -388,13 +392,14 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 		p4m.fp.SetDebugMode()
 	}
 	fpLinesChan := make(chan string, 10000)
+	p4m.timeChan = make(chan time.Time, 0)
 
 	metricsChan := make(chan string, 1000)
 	var cmdsOutChan chan p4dlog.Command
 	if needCmdChan {
 		cmdsOutChan = make(chan p4dlog.Command, 10000)
 	}
-	cmdsInChan := p4m.fp.LogParser(ctx, fpLinesChan)
+	cmdsInChan := p4m.fp.LogParser(ctx, fpLinesChan, p4m.timeChan)
 
 	go func() {
 		defer close(metricsChan)
@@ -414,7 +419,7 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				}
 			case cmd, ok := <-cmdsInChan:
 				if ok {
-					p4m.logger.Debugf("Publishing cmd: %s", cmd.String())
+					p4m.logger.Tracef("Publishing cmd: %s", cmd.String())
 					p4m.cmdsProcessed++
 					p4m.publishEvent(cmd)
 					if needCmdChan {

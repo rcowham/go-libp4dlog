@@ -475,6 +475,8 @@ type P4dFileParser struct {
 	cmds                 map[int64]*Command
 	CmdsProcessed        int
 	cmdChan              chan Command
+	timeChan             chan time.Time
+	currTime             time.Time
 	debug                bool
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
@@ -811,11 +813,10 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 	startCount := len(fp.cmds)
 	const timeWindow = 3 * time.Second
 	cmdHasBeenProcessed := false
-	currTime := time.Now()
 	for _, cmd := range fp.cmds {
 		completed := false
 		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= timeWindow ||
-			(fp.timeLastCmdProcessed != blankTime && currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow)) {
+			(fp.timeLastCmdProcessed != blankTime && fp.currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow)) {
 			completed = true
 		}
 		if !completed && (cmd.hasTrackInfo && cmd.EndTime != blankTime &&
@@ -841,7 +842,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 	}
 
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
-		fp.timeLastCmdProcessed = time.Now()
+		fp.timeLastCmdProcessed = fp.currTime
 	}
 	if fp.logger != nil {
 		endCount := len(fp.cmds)
@@ -1144,24 +1145,41 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string) chan Command {
+func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string, timeChan <-chan time.Time) chan Command {
 	fp.lineNo = 1
-	ticker := time.NewTicker(fp.outputDuration)
-	tickerDebug := time.NewTicker(fp.debugDuration)
 
 	fp.cmdChan = make(chan Command, 10000)
 
 	// Output commands on seperate thread
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				fp.outputCompletedCommands()
-			case <-tickerDebug.C:
-				fp.debugOutputCommands()
+	if timeChan == nil {
+		ticker := time.NewTicker(fp.outputDuration)
+		tickerDebug := time.NewTicker(fp.debugDuration)
+		go func() {
+			for {
+				select {
+				case t, _ := <-ticker.C:
+					fp.currTime = t
+					fp.outputCompletedCommands()
+				case <-tickerDebug.C:
+					fp.debugOutputCommands()
+				}
 			}
-		}
-	}()
+		}()
+	} else {
+		go func() {
+			for {
+				select {
+				case t, ok := <-timeChan:
+					if ok {
+						fp.currTime = t
+						fp.outputCompletedCommands()
+					} else {
+						return
+					}
+				}
+			}
+		}()
+	}
 
 	go func() {
 		defer close(fp.cmdChan)

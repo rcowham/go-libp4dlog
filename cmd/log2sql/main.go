@@ -482,7 +482,7 @@ func main() {
 
 	} else {
 		fp = p4dlog.NewP4dFileParser(logger)
-		cmdChan = fp.LogParser(ctx, linesChan)
+		cmdChan = fp.LogParser(ctx, linesChan, nil)
 	}
 
 	// Process all input files, sending lines into linesChan
