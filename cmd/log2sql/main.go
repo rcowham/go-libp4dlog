@@ -393,6 +393,7 @@ func main() {
 		logger.Level = logrus.DebugLevel
 	}
 	startTime := time.Now()
+	logger.Infof("%v", version.Print("log2sql"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 
 	linesChan := make(chan string, 10000)
