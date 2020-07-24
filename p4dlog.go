@@ -647,6 +647,7 @@ func getTable(cmd *Command, tableName string) *Table {
 }
 
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
+	fp.m.Lock()
 	hasTrackInfo := false
 	var tableName string
 	for _, line := range lines {
@@ -768,6 +769,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 
 	}
 	cmd.hasTrackInfo = hasTrackInfo
+	fp.m.Unlock()
 	fp.addCommand(cmd, hasTrackInfo)
 }
 
