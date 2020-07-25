@@ -485,6 +485,8 @@ type P4dFileParser struct {
 	block                *Block
 	runningPids          map[int64]int64 // Maps pids to line nos
 	hadServerThreadsMsg  bool
+	debugPID             int64 // Set if in debug mode for a conflict
+	debugCmd             string
 }
 
 // NewP4dFileParser - create and initialise properly
@@ -503,6 +505,16 @@ func NewP4dFileParser(logger *logrus.Logger) *P4dFileParser {
 // SetDebugMode - turn on debugging - very verbose!
 func (fp *P4dFileParser) SetDebugMode() {
 	fp.debug = true
+}
+
+// SetDebugPID - turn on debugging for a PID
+func (fp *P4dFileParser) SetDebugPID(pid int64, cmdName string) {
+	fp.debugPID = pid
+	fp.debugCmd = cmdName
+}
+
+func (fp *P4dFileParser) debugLog(cmd *Command) bool {
+	return cmd.Pid == fp.debugPID && cmd.Cmd == fp.debugCmd
 }
 
 // SetDurations - for debugging
@@ -552,13 +564,23 @@ func (fp *P4dFileParser) trackRunning(msg string, cmd *Command, delta int) {
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	fp.m.Lock()
 	defer fp.m.Unlock()
+	debugLog := fp.debugLog(newCmd)
+	if debugLog {
+		fp.logger.Infof("addCommand: hasTrack %v, pid %d lineNo %d cmd %s dup %v", hasTrackInfo, newCmd.Pid, newCmd.LineNo, newCmd.Cmd, newCmd.duplicateKey)
+	}
 	newCmd.Running = fp.running
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
 		fp.pidsSeenThisSecond = make(map[int64]bool)
 	}
 	if cmd, ok := fp.cmds[newCmd.Pid]; ok {
+		if debugLog {
+			fp.logger.Infof("addCommand found: pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
+		}
 		if cmd.ProcessKey != "" && cmd.ProcessKey != newCmd.ProcessKey {
+			if debugLog {
+				fp.logger.Infof("addCommand outputting old since process key different")
+			}
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 			if !cmdHasNoCompletionRecord(newCmd.Cmd) {
@@ -574,18 +596,37 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			}
 		} else {
 			if cmd.hasTrackInfo { // Typically track info only present when command has completed - especially for duplicates
-				fp.outputCmd(cmd)
-				fp.trackRunning("t02", newCmd, 1)
-				newCmd.duplicateKey = true
-				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+				if cmd.LineNo == newCmd.LineNo {
+					if debugLog {
+						fp.logger.Infof("addCommand updating duplicate")
+					}
+					cmd.updateFrom(newCmd)
+				} else {
+					if debugLog {
+						fp.logger.Infof("addCommand found duplicate - outputting old")
+					}
+					fp.outputCmd(cmd)
+					fp.trackRunning("t02", newCmd, 1)
+					newCmd.duplicateKey = true
+					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+				}
 			} else {
+				if debugLog {
+					fp.logger.Infof("addCommand updating")
+				}
 				cmd.updateFrom(newCmd)
 			}
 		}
 		if hasTrackInfo {
+			if debugLog {
+				fp.logger.Infof("addCommand setting hasTrackInfo")
+			}
 			cmd.hasTrackInfo = true
 		}
 	} else {
+		if debugLog {
+			fp.logger.Infof("addCommand remembering newCmd")
+		}
 		fp.cmds[newCmd.Pid] = newCmd
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
 			newCmd.duplicateKey = true
@@ -776,6 +817,9 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 // Output a single command to appropriate channel
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	fp.trackRunning("t04", cmd, -1)
+	if fp.debugLog(cmd) {
+		fp.logger.Infof("outputting: pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
+	}
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
 	cmdcopy := *cmd
 	if cmdHasNoCompletionRecord(cmd.Cmd) {
@@ -933,9 +977,17 @@ func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line 
 	}
 }
 
+const serverNetworkEstimates = "\tServer network estimates:"
+
 func (fp *P4dFileParser) processInfoBlock(block *Block) {
 
 	var cmd *Command
+
+	// Ignore these blocks for now - would be nice to match up with previous syncs but...
+	if len(block.lines) == 1 && strings.HasPrefix(block.lines[0], serverNetworkEstimates) {
+		return
+	}
+
 	i := 0
 	for _, line := range block.lines {
 		if cmd != nil && strings.HasPrefix(line, trackStart) {

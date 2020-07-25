@@ -80,6 +80,11 @@ func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bo
 	}
 }
 
+// SetDebugPID - for debug purposes
+func (p4m *P4DMetrics) SetDebugPID(pid int64, cmdName string) {
+	p4m.fp.SetDebugPID(pid, cmdName)
+}
+
 // defines metrics label
 type labelStruct struct {
 	name  string

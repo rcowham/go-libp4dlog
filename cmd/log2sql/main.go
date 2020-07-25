@@ -378,6 +378,14 @@ func main() {
 			"case.insensitive.server",
 			"Set if server is case insensitive and usernames may occur in either case.",
 		).Default("false").Bool()
+		debugPID = kingpin.Flag(
+			"debug.pid",
+			"Set for debug output for specified PID - requires debug.cmd to be also specified.",
+		).Int64()
+		debugCmd = kingpin.Flag(
+			"debug.cmd",
+			"Set for debug output for specified command - requires debug.pid to be also specified.",
+		).Default("").String()
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("log2sql")).Author("Robert Cowham")
 	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) into a Sqlite3 database and/or JSON or SQL format.\n" +
@@ -471,6 +479,9 @@ func main() {
 		logger.Debugf("Main: creating metrics")
 		mp = metrics.NewP4DMetricsLogParser(mconfig, logger, true)
 		cmdChan, metricsChan = mp.ProcessEvents(ctx, linesChan, needCmdChan)
+		if *debugPID != 0 && *debugCmd != "" {
+			mp.SetDebugPID(*debugPID, *debugCmd)
+		}
 
 		// Process all metrics - need to consume them even if we ignore them (overhead is minimal)
 		go func() {
@@ -484,6 +495,9 @@ func main() {
 	} else {
 		fp = p4dlog.NewP4dFileParser(logger)
 		cmdChan = fp.LogParser(ctx, linesChan, nil)
+		if *debugPID != 0 && *debugCmd != "" {
+			fp.SetDebugPID(*debugPID, *debugCmd)
+		}
 	}
 
 	// Process all input files, sending lines into linesChan
