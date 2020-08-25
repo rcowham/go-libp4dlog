@@ -83,7 +83,7 @@ func basicTest(t *testing.T, cfg *Config, input string, historical bool) []strin
 	defer cancel()
 
 	fp := p4dlog.NewP4dFileParser(logger)
-	fp.SetDebugMode()
+	fp.SetDebugMode(255)
 	// Shorten durations for testing
 	fp.SetDurations(10*time.Millisecond, 20*time.Millisecond)
 	linesChan := make(chan string, 100)

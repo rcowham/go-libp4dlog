@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bvinc/go-sqlite-lite/sqlite3"
+	"github.com/pkg/profile"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/machinebox/progress"
@@ -305,7 +306,8 @@ func openFile(outputName string) (*os.File, *bufio.Writer, error) {
 
 func main() {
 	// CPU profiling by default
-	// defer profile.Start().Stop()
+	defer profile.Start().Stop()
+	// Tracing code
 	// ft, err := os.Create("trace.out")
 	// if err != nil {
 	// 	panic(err)
@@ -324,8 +326,8 @@ func main() {
 			"Log files to process.").Strings()
 		debug = kingpin.Flag(
 			"debug",
-			"Enable debugging.",
-		).Bool()
+			"Enable debugging level.",
+		).Int()
 		jsonOutput = kingpin.Flag(
 			"json",
 			"Output JSON statements (to default or --json.output file).",
@@ -397,7 +399,7 @@ func main() {
 
 	logger := logrus.New()
 	logger.Level = logrus.InfoLevel
-	if *debug {
+	if *debug > 0 {
 		logger.Level = logrus.DebugLevel
 	}
 	startTime := time.Now()
@@ -478,10 +480,13 @@ func main() {
 		wg.Add(1)
 		logger.Debugf("Main: creating metrics")
 		mp = metrics.NewP4DMetricsLogParser(mconfig, logger, true)
-		cmdChan, metricsChan = mp.ProcessEvents(ctx, linesChan, needCmdChan)
+		if *debug != 0 {
+			mp.SetDebugMode(*debug)
+		}
 		if *debugPID != 0 && *debugCmd != "" {
 			mp.SetDebugPID(*debugPID, *debugCmd)
 		}
+		cmdChan, metricsChan = mp.ProcessEvents(ctx, linesChan, needCmdChan)
 
 		// Process all metrics - need to consume them even if we ignore them (overhead is minimal)
 		go func() {
@@ -494,10 +499,13 @@ func main() {
 
 	} else {
 		fp = p4dlog.NewP4dFileParser(logger)
-		cmdChan = fp.LogParser(ctx, linesChan, nil)
 		if *debugPID != 0 && *debugCmd != "" {
 			fp.SetDebugPID(*debugPID, *debugCmd)
 		}
+		if *debug > 0 {
+			fp.SetDebugMode(*debug)
+		}
+		cmdChan = fp.LogParser(ctx, linesChan, nil)
 	}
 
 	// Process all input files, sending lines into linesChan
@@ -544,19 +552,25 @@ func main() {
 
 		i := int64(1)
 		for cmd := range cmdChan {
-			if logger.Level >= logrus.DebugLevel {
+			if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
 				logger.Debugf("Main processing cmd: %v", cmd.String())
 			}
 			if *jsonOutput {
-				logger.Debugf("outputting JSON")
+				if p4dlog.FlagSet(*debug, p4dlog.DebugJSON) {
+					logger.Debugf("outputting JSON")
+				}
 				fmt.Fprintf(fJSON, "%s\n", cmd.String())
 			}
 			if *sqlOutput {
-				logger.Debugf("writing SQL")
+				if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
+					logger.Debugf("writing SQL")
+				}
 				i += writeSQL(fSQL, &cmd)
 			}
 			if writeDB {
-				logger.Debugf("writing to DB")
+				if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
+					logger.Debugf("writing to DB")
+				}
 				j := preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
 				if !*sqlOutput { // Avoid double counting
 					i += j

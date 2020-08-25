@@ -23,7 +23,7 @@ import (
 
 // Config for metrics
 type Config struct {
-	Debug               bool          `yaml:"debug"`
+	Debug               int           `yaml:"debug"`
 	ServerID            string        `yaml:"server.id"`
 	SDPInstance         string        `yaml:"sdp.instance"`
 	UpdateInterval      time.Duration `yaml:"update.interval"`
@@ -35,6 +35,7 @@ type Config struct {
 type P4DMetrics struct {
 	config              *Config
 	historical          bool
+	debug               int
 	fp                  *p4dlog.P4dFileParser
 	timeLatestStartCmd  time.Time
 	latestStartCmdBuf   string
@@ -83,6 +84,12 @@ func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bo
 // SetDebugPID - for debug purposes
 func (p4m *P4DMetrics) SetDebugPID(pid int64, cmdName string) {
 	p4m.fp.SetDebugPID(pid, cmdName)
+}
+
+// SetDebugMode - for debug purposes
+func (p4m *P4DMetrics) SetDebugMode(level int) {
+	p4m.debug = level
+	p4m.fp.SetDebugMode(level)
 }
 
 // defines metrics label
@@ -137,7 +144,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	fixedLabels := []labelStruct{{name: "serverid", value: p4m.config.ServerID},
 		{name: "sdpinst", value: p4m.config.SDPInstance}}
 	metrics := new(bytes.Buffer)
-	p4m.logger.Debugf("Writing stats")
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf("Writing stats")
+	}
 
 	var mname string
 	var buf string
@@ -146,28 +155,36 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.printMetricHeader(metrics, mname, "A count of log lines read", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.linesRead)
 	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	p4m.logger.Debugf(buf)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
 	fmt.Fprint(metrics, buf)
 
 	mname = "p4_prom_cmds_processed"
 	p4m.printMetricHeader(metrics, mname, "A count of all cmds processed", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.cmdsProcessed)
 	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	p4m.logger.Debugf(buf)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
 	fmt.Fprint(metrics, buf)
 
 	mname = "p4_prom_cmds_pending"
 	p4m.printMetricHeader(metrics, mname, "A count of all current cmds (not completed)", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.fp.CmdsPendingCount())
 	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	p4m.logger.Debugf(buf)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
 	fmt.Fprint(metrics, buf)
 
 	mname = "p4_cmd_running"
 	p4m.printMetricHeader(metrics, mname, "The number of running commands at any one time", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
 	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	p4m.logger.Debugf(buf)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
 	fmt.Fprint(metrics, buf)
 
 	mname = "p4_cmd_counter"
@@ -176,7 +193,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	mname = "p4_cmd_cumulative_seconds"
@@ -185,7 +204,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	mname = "p4_cmd_user_cpu_cumulative_seconds"
@@ -194,7 +215,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	mname = "p4_cmd_system_cpu_cumulative_seconds"
@@ -203,7 +226,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	mname = "p4_cmd_error_counter"
@@ -212,7 +237,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	// For large sites this might not be sensible - so they can turn it off
@@ -223,7 +250,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 			metricVal = fmt.Sprintf("%d", count)
 			labels := append(fixedLabels, labelStruct{"user", user})
 			buf = p4m.formatMetric(mname, labels, metricVal)
-			p4m.logger.Debugf(buf)
+			if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+				p4m.logger.Debugf(buf)
+			}
 			fmt.Fprint(metrics, buf)
 		}
 		mname = "p4_cmd_user_cumulative_seconds"
@@ -232,7 +261,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 			metricVal = fmt.Sprintf("%0.3f", lapse)
 			labels := append(fixedLabels, labelStruct{"user", user})
 			buf = p4m.formatMetric(mname, labels, metricVal)
-			p4m.logger.Debugf(buf)
+			if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+				p4m.logger.Debugf(buf)
+			}
 			fmt.Fprint(metrics, buf)
 		}
 	}
@@ -243,7 +274,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	mname = "p4_total_read_held_seconds"
@@ -253,7 +286,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	mname = "p4_total_write_wait_seconds"
@@ -263,7 +298,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	mname = "p4_total_write_held_seconds"
@@ -273,7 +310,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
 		buf = p4m.formatMetric(mname, labels, metricVal)
-		p4m.logger.Debugf(buf)
+		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+			p4m.logger.Debugf(buf)
+		}
 		fmt.Fprint(metrics, buf)
 	}
 	if len(p4m.totalTriggerLapse) > 0 {
@@ -284,7 +323,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 			metricVal = fmt.Sprintf("%0.3f", total)
 			labels := append(fixedLabels, labelStruct{"trigger", table})
 			buf = p4m.formatMetric(mname, labels, metricVal)
-			p4m.logger.Debugf(buf)
+			if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+				p4m.logger.Debugf(buf)
+			}
 			fmt.Fprint(metrics, buf)
 		}
 	}
@@ -292,7 +333,9 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 }
 
 func (p4m *P4DMetrics) getSeconds(tmap map[string]interface{}, fieldName string) float64 {
-	p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	if p4m.logger.Level > logrus.DebugLevel {
+		p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	}
 	if total, ok := tmap[fieldName].(float64); ok {
 		return (total)
 	}
@@ -300,7 +343,9 @@ func (p4m *P4DMetrics) getSeconds(tmap map[string]interface{}, fieldName string)
 }
 
 func (p4m *P4DMetrics) getMilliseconds(tmap map[string]interface{}, fieldName string) float64 {
-	p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	if p4m.logger.Level > logrus.DebugLevel {
+		p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
+	}
 	if total, ok := tmap[fieldName].(float64); ok {
 		return (total / 1000)
 	}
@@ -393,11 +438,11 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 	chan p4dlog.Command, chan string) {
 	ticker := time.NewTicker(p4m.config.UpdateInterval)
 
-	if p4m.config.Debug {
-		p4m.fp.SetDebugMode()
+	if p4m.config.Debug > 0 {
+		p4m.fp.SetDebugMode(p4m.config.Debug)
 	}
 	fpLinesChan := make(chan string, 10000)
-	p4m.timeChan = make(chan time.Time, 0)
+	p4m.timeChan = make(chan time.Time, 1000)
 
 	metricsChan := make(chan string, 1000)
 	var cmdsOutChan chan p4dlog.Command
@@ -418,13 +463,17 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				return
 			case <-ticker.C:
 				// Ticker only relevant for live log processing
-				p4m.logger.Debugf("publishCumulative")
+				if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+					p4m.logger.Debugf("publishCumulative")
+				}
 				if !p4m.historical {
 					metricsChan <- p4m.getCumulativeMetrics()
 				}
 			case cmd, ok := <-cmdsInChan:
 				if ok {
-					p4m.logger.Tracef("Publishing cmd: %s", cmd.String())
+					if p4m.logger.Level > logrus.DebugLevel {
+						p4m.logger.Tracef("Publishing cmd: %s", cmd.String())
+					}
 					p4m.cmdsProcessed++
 					p4m.publishEvent(cmd)
 					if needCmdChan {
@@ -437,7 +486,9 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				}
 			case line, ok := <-linesInChan:
 				if ok {
-					p4m.logger.Tracef("Line: %s", line)
+					if p4m.logger.Level > logrus.DebugLevel {
+						p4m.logger.Tracef("Line: %s", line)
+					}
 					p4m.linesRead++
 					fpLinesChan <- line
 					if p4m.historical && p4m.historicalUpdateRequired(line) {

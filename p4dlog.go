@@ -34,6 +34,28 @@ import (
 // GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
 const p4timeformat = "2006/01/02 15:04:05"
 
+// Global for logging - debug purposes
+const logPendingCounts = true
+
+// DebugLevel - for different levels of debugging
+type DebugLevel int
+
+const (
+	DebugBasic DebugLevel = 1 << iota
+	DebugDatabase
+	DebugJSON
+	DebugCommands
+	DebugTrackRunning
+	DebugUnrecognised
+	DebugPending
+	DebugMetricStats
+)
+
+// FlagSet - true if specified level set
+func FlagSet(flag int, level DebugLevel) bool {
+	return flag&int(level) > 0
+}
+
 var reCmd = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+) (.*)\'.*`)
 var reCmdNoarg = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+)\'.*`)
 var reCompute = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) compute end ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
@@ -476,8 +498,9 @@ type P4dFileParser struct {
 	CmdsProcessed        int
 	cmdChan              chan Command
 	timeChan             chan time.Time
+	linesChan            *<-chan string
 	currTime             time.Time
-	debug                bool
+	debug                int
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
@@ -487,6 +510,8 @@ type P4dFileParser struct {
 	hadServerThreadsMsg  bool
 	debugPID             int64 // Set if in debug mode for a conflict
 	debugCmd             string
+	outputCmdsContinued  int64
+	outputCmdsExited     int64
 }
 
 // NewP4dFileParser - create and initialise properly
@@ -498,13 +523,13 @@ func NewP4dFileParser(logger *logrus.Logger) *P4dFileParser {
 	fp.runningPids = make(map[int64]int64)
 	fp.logger = logger
 	fp.outputDuration = time.Second * 1
-	fp.debugDuration = time.Second * 60
+	fp.debugDuration = time.Second * 30
 	return &fp
 }
 
 // SetDebugMode - turn on debugging - very verbose!
-func (fp *P4dFileParser) SetDebugMode() {
-	fp.debug = true
+func (fp *P4dFileParser) SetDebugMode(level int) {
+	fp.debug = level
 }
 
 // SetDebugPID - turn on debugging for a PID
@@ -547,23 +572,27 @@ func (fp *P4dFileParser) trackRunning(msg string, cmd *Command, delta int) {
 		if line, ok := fp.runningPids[cmd.Pid]; !ok {
 			fp.runningPids[cmd.Pid] = cmd.LineNo
 		} else {
-			fp.logger.Debugf("running-warn: unexpected cmd found line1 %d delta %d %s cmd %s pid %d line %d",
-				line, delta, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+			if FlagSet(fp.debug, DebugTrackRunning) {
+				fp.logger.Debugf("running-warn: unexpected cmd found line1 %d delta %d %s cmd %s pid %d line %d",
+					line, delta, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+			}
 		}
 	} else if delta < 0 && recorded {
 		if _, ok := fp.runningPids[cmd.Pid]; ok {
 			delete(fp.runningPids, cmd.Pid)
 		} else {
-			fp.logger.Debugf("running-warn: unexpected cmd not found delta %d %s cmd %s pid %d line %d",
-				delta, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+			if FlagSet(fp.debug, DebugTrackRunning) {
+				fp.logger.Debugf("running-warn: unexpected cmd not found delta %d %s cmd %s pid %d line %d",
+					delta, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+			}
 		}
 	}
-	fp.logger.Debugf("running: %d delta %d recorded %v %s cmd %s pid %d line %d", fp.running, delta, recorded, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+	if FlagSet(fp.debug, DebugTrackRunning) {
+		fp.logger.Debugf("running: %d delta %d recorded %v %s cmd %s pid %d line %d", fp.running, delta, recorded, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+	}
 }
 
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
-	fp.m.Lock()
-	defer fp.m.Unlock()
 	debugLog := fp.debugLog(newCmd)
 	if debugLog {
 		fp.logger.Infof("addCommand: hasTrack %v, pid %d lineNo %d cmd %s dup %v", hasTrackInfo, newCmd.Pid, newCmd.LineNo, newCmd.Cmd, newCmd.duplicateKey)
@@ -636,6 +665,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			fp.trackRunning("t03", newCmd, 1)
 		}
 	}
+	fp.outputCompletedCommands()
 }
 
 // Special commands which only have start records not completion records
@@ -688,7 +718,6 @@ func getTable(cmd *Command, tableName string) *Table {
 }
 
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
-	fp.m.Lock()
 	hasTrackInfo := false
 	var tableName string
 	for _, line := range lines {
@@ -799,7 +828,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 				continue
 			}
 		}
-		if fp.debug {
+		if FlagSet(fp.debug, DebugUnrecognised) {
 			buf := fmt.Sprintf("Unrecognised track: %s\n", string(line))
 			if fp.logger != nil {
 				fp.logger.Tracef(buf)
@@ -810,7 +839,6 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 
 	}
 	cmd.hasTrackInfo = hasTrackInfo
-	fp.m.Unlock()
 	fp.addCommand(cmd, hasTrackInfo)
 }
 
@@ -837,25 +865,47 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 
 // Output pending commands on debug channel if set - for debug purposes
 func (fp *P4dFileParser) debugOutputCommands() {
-	if !fp.debug || fp.logger == nil {
+	if (!FlagSet(fp.debug, DebugPending) || fp.logger == nil) && !logPendingCounts {
 		return
 	}
 	fp.m.Lock()
 	defer fp.m.Unlock()
+	cmdCounter := make(map[string]int32)
+	allCmdsCount := 0
 	for _, cmd := range fp.cmds {
-		lines := []string{}
-		lines = append(lines, fmt.Sprintf("DEBUG: %v", cmd))
-		if len(lines) > 0 && len(lines[0]) > 0 {
-			fp.logger.Trace(strings.Join(lines, `\n`))
+		allCmdsCount++
+		cmdCounter[cmd.Cmd]++
+		if FlagSet(fp.debug, DebugCommands) {
+			lines := []string{}
+			lines = append(lines, fmt.Sprintf("DEBUG: pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd))
+			if len(lines) > 0 && len(lines[0]) > 0 {
+				fp.logger.Trace(strings.Join(lines, `\n`))
+			}
 		}
+	}
+	if logPendingCounts {
+		lenCmds := len(fp.cmdChan)
+		lenLines := len(*fp.linesChan)
+		lenTime := len(fp.timeChan)
+		fmt.Fprintf(os.Stderr, "Total pending: %d, channels lines %d, cmds %d, time %d\n", allCmdsCount,
+			lenLines, lenCmds, lenTime)
+		for cmd, count := range cmdCounter {
+			fmt.Fprintf(os.Stderr, "%s: %d\n", cmd, count)
+		}
+		fmt.Fprintf(os.Stderr, "======\n")
 	}
 }
 
 // Output all completed commands 3 or more seconds ago - we wait that time for possible delayed track info to come in
 func (fp *P4dFileParser) outputCompletedCommands() {
+	if fp.currTime.Sub(fp.timeLastCmdProcessed) < fp.outputDuration {
+		fp.outputCmdsExited++
+		return
+	}
 	fp.m.Lock()
 	defer fp.m.Unlock()
-	cmdsToOutput := make([]Command, 0)
+	fp.outputCmdsContinued++
+	cmdsToOutput := make([]*Command, 0)
 	startCount := len(fp.cmds)
 	const timeWindow = 3 * time.Second
 	cmdHasBeenProcessed := false
@@ -875,7 +925,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		}
 		if completed {
 			cmdHasBeenProcessed = true
-			cmdsToOutput = append(cmdsToOutput, *cmd)
+			cmdsToOutput = append(cmdsToOutput, cmd)
 			delete(fp.cmds, cmd.Pid)
 		}
 	}
@@ -884,29 +934,27 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		return cmdsToOutput[i].LineNo < cmdsToOutput[j].LineNo
 	})
 	for _, cmd := range cmdsToOutput {
-		fp.outputCmd(&cmd)
+		fp.outputCmd(cmd)
 	}
 
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
 		fp.timeLastCmdProcessed = fp.currTime
 	}
-	if fp.logger != nil {
+	if fp.logger != nil && fp.debug > 0 {
 		endCount := len(fp.cmds)
-		fp.logger.Debugf("outputCompletedCommands: start %d, end %d, count %d",
-			startCount, endCount, startCount-endCount)
+		fp.logger.Debugf("outputCompletedCommands: start %d, end %d, count %d, continued %d, exited %d",
+			startCount, endCount, startCount-endCount, fp.outputCmdsContinued, fp.outputCmdsExited)
 	}
 }
 
 // Processes all remaining commands whether completed or not - intended for use at end of processing
 func (fp *P4dFileParser) outputRemainingCommands() {
-	fp.m.Lock()
-	defer fp.m.Unlock()
 	startCount := len(fp.cmds)
 	for _, cmd := range fp.cmds {
 		fp.outputCmd(cmd)
 	}
 	fp.cmds = make(map[int64]*Command)
-	if fp.logger != nil {
+	if fp.logger != nil && fp.debug > 0 {
 		endCount := len(fp.cmds)
 		fp.logger.Debugf("outputRemainingCommands: start %d, end %d, count %d",
 			startCount, endCount, startCount-endCount)
@@ -914,8 +962,6 @@ func (fp *P4dFileParser) outputRemainingCommands() {
 }
 
 func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
-	fp.m.Lock()
-	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
 		// sum all compute values for same command
 		f, _ := strconv.ParseFloat(string(computeLapse), 32)
@@ -925,9 +971,7 @@ func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 }
 
 func (fp *P4dFileParser) updateCompletionTime(pid int64, lineNo int64, endTime string, completedLapse string) {
-	fp.m.Lock()
 	if cmd, ok := fp.cmds[pid]; ok {
-		defer fp.m.Unlock()
 		cmd.setEndTime(endTime)
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
 		cmd.CompletedLapse = float32(f)
@@ -943,14 +987,11 @@ func (fp *P4dFileParser) updateCompletionTime(pid int64, lineNo int64, endTime s
 		f, _ := strconv.ParseFloat(string(completedLapse), 32)
 		cmd.CompletedLapse = float32(f)
 		cmd.completed = true
-		fp.m.Unlock()
 		fp.addCommand(cmd, false)
 	}
 }
 
 func (fp *P4dFileParser) updateUsage(pid int64, uCPU, sCPU, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
-	fp.m.Lock()
-	defer fp.m.Unlock()
 	if cmd, ok := fp.cmds[pid]; ok {
 		cmd.setUsage(uCPU, sCPU, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults)
 	}
@@ -1072,7 +1113,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				fp.updateComputeTime(pid, computeLapse)
 			}
 		}
-		if !matched && fp.debug {
+		if !matched && FlagSet(fp.debug, DebugUnrecognised) {
 			if !strings.HasPrefix(line, "server to client") {
 				buf := fmt.Sprintf("Unrecognised: %s\n", string(line))
 				if fp.logger != nil {
@@ -1093,8 +1134,6 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 		if len(m) > 0 {
 			pid := toInt64(m[1])
 			ok := false
-			fp.m.Lock()
-			defer fp.m.Unlock()
 			if cmd, ok = fp.cmds[pid]; ok {
 				cmd.CmdError = true
 				cmd.completed = true
@@ -1203,8 +1242,10 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 	fp.lineNo = 1
 
 	fp.cmdChan = make(chan Command, 10000)
+	fp.linesChan = &linesChan
 
 	// Output commands on seperate thread
+	// timeChan is nil when there are no metrics to process.
 	if timeChan == nil {
 		ticker := time.NewTicker(fp.outputDuration)
 		tickerDebug := time.NewTicker(fp.debugDuration)
@@ -1212,8 +1253,10 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 			for {
 				select {
 				case t, _ := <-ticker.C:
+					fp.m.Lock()
 					fp.currTime = t
-					fp.outputCompletedCommands()
+					fp.m.Unlock()
+				// fp.outputCompletedCommands()
 				case <-tickerDebug.C:
 					fp.debugOutputCommands()
 				}
@@ -1221,15 +1264,20 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 		}()
 	} else {
 		go func() {
+			tickerDebug := time.NewTicker(fp.debugDuration)
 			for {
 				select {
 				case t, ok := <-timeChan:
 					if ok {
+						fp.m.Lock()
 						fp.currTime = t
-						fp.outputCompletedCommands()
+						fp.m.Unlock()
+						// fp.outputCompletedCommands()
 					} else {
 						return
 					}
+				case <-tickerDebug.C:
+					fp.debugOutputCommands()
 				}
 			}
 		}()
