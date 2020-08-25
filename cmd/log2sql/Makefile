@@ -12,11 +12,12 @@ REVISION=`git rev-parse --short HEAD`
 # Setup the -ldflags option for go build here, interpolate the variable values.
 # Note the Version module is in a different git repo.
 MODULE="github.com/perforce/p4prometheus"
+LOCAL_LDFLAGS=-ldflags="-X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/version.BuildDate=${BUILD_DATE} -X ${MODULE}/version.Branch=${BRANCH} -X ${MODULE}/version.Revision=${REVISION} -X ${MODULE}/version.BuildUser=${USER}"
 LDFLAGS=-ldflags="-w -s -X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/version.BuildDate=${BUILD_DATE} -X ${MODULE}/version.Branch=${BRANCH} -X ${MODULE}/version.Revision=${REVISION} -X ${MODULE}/version.BuildUser=${USER}"
 
 # Builds the project
 build:
-	go build ${LDFLAGS}
+	go build ${LOCAL_LDFLAGS}
 
 # Builds distribution - uses xgo and the docker container for cross platform builds with CGO (due to Sqlite bindings)
 # See: https://github.com/karalabe/xgo
