@@ -499,6 +499,7 @@ type P4dFileParser struct {
 	cmdChan              chan Command
 	timeChan             chan time.Time
 	linesChan            *<-chan string
+	blockChan            chan *Block
 	currTime             time.Time
 	debug                int
 	currStartTime        time.Time
@@ -887,8 +888,9 @@ func (fp *P4dFileParser) debugOutputCommands() {
 		lenCmds := len(fp.cmdChan)
 		lenLines := len(*fp.linesChan)
 		lenTime := len(fp.timeChan)
-		fmt.Fprintf(os.Stderr, "Total pending: %d, channels lines %d, cmds %d, time %d\n", allCmdsCount,
-			lenLines, lenCmds, lenTime)
+		lenBlocks := len(fp.blockChan)
+		fmt.Fprintf(os.Stderr, "Total pending: %d, channels lines %d, cmds %d, blocks %d, time %d\n", allCmdsCount,
+			lenLines, lenCmds, lenBlocks, lenTime)
 		for cmd, count := range cmdCounter {
 			fmt.Fprintf(os.Stderr, "%s: %d\n", cmd, count)
 		}
@@ -1163,12 +1165,12 @@ func (fp *P4dFileParser) processServerThreadsBlock(block *Block) {
 }
 
 func (fp *P4dFileParser) processBlock(block *Block) {
-	if fp.block.btype == infoType {
-		fp.processInfoBlock(fp.block)
-	} else if fp.block.btype == activeThreadsType {
-		fp.processServerThreadsBlock(fp.block)
-	} else if fp.block.btype == errorType {
-		fp.processErrorBlock(fp.block)
+	if block.btype == infoType {
+		fp.processInfoBlock(block)
+	} else if block.btype == activeThreadsType {
+		fp.processServerThreadsBlock(block)
+	} else if block.btype == errorType {
+		fp.processErrorBlock(block)
 	} //TODO: output unrecognised block if wanted
 }
 
@@ -1208,7 +1210,7 @@ func (fp *P4dFileParser) parseLine(line string) {
 	if blockEnd(line) {
 		if len(fp.block.lines) > 0 {
 			if !blankLine(fp.block.lines[0]) {
-				fp.processBlock(fp.block)
+				fp.blockChan <- fp.block
 			}
 		}
 		fp.block = new(Block)
@@ -1243,6 +1245,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 
 	fp.cmdChan = make(chan Command, 10000)
 	fp.linesChan = &linesChan
+	fp.blockChan = make(chan *Block, 100)
 
 	// Output commands on seperate thread
 	// timeChan is nil when there are no metrics to process.
@@ -1283,15 +1286,36 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 		}()
 	}
 
+	// This routine handles blocks in parallel to lines
 	go func() {
 		defer close(fp.cmdChan)
 		for {
 			select {
 			case <-ctx.Done():
 				if fp.logger != nil {
-					fp.logger.Debugf("got Done")
+					fp.logger.Debugf("lines got Done")
 				}
 				fp.parseFinish()
+				return
+			case b, ok := <-fp.blockChan:
+				if ok {
+					fp.processBlock(b)
+				} else {
+					fp.parseFinish()
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		defer close(fp.blockChan)
+		for {
+			select {
+			case <-ctx.Done():
+				if fp.logger != nil {
+					fp.logger.Debugf("lines got Done")
+				}
 				return
 			case line, ok := <-linesChan:
 				if ok {
@@ -1300,7 +1324,6 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 					if fp.logger != nil {
 						fp.logger.Debugf("LogParser lines channel closed")
 					}
-					fp.parseFinish()
 					return
 				}
 			}
