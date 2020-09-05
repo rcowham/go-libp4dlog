@@ -305,8 +305,6 @@ func openFile(outputName string) (*os.File, *bufio.Writer, error) {
 }
 
 func main() {
-	// CPU profiling by default
-	defer profile.Start().Stop()
 	// Tracing code
 	// ft, err := os.Create("trace.out")
 	// if err != nil {
@@ -397,6 +395,10 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
+	if *debug > 0 {
+		// CPU profiling by default
+		defer profile.Start().Stop()
+	}
 	logger := logrus.New()
 	logger.Level = logrus.InfoLevel
 	if *debug > 0 {

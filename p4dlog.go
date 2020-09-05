@@ -34,9 +34,6 @@ import (
 // GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
 const p4timeformat = "2006/01/02 15:04:05"
 
-// Global for logging - debug purposes
-const logPendingCounts = true
-
 // DebugLevel - for different levels of debugging
 type DebugLevel int
 
@@ -48,6 +45,7 @@ const (
 	DebugTrackRunning
 	DebugUnrecognised
 	DebugPending
+	DebugPendingCounts
 	DebugMetricStats
 )
 
@@ -506,7 +504,6 @@ type P4dFileParser struct {
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
 	running              int64
-	block                *Block
 	runningPids          map[int64]int64 // Maps pids to line nos
 	hadServerThreadsMsg  bool
 	debugPID             int64 // Set if in debug mode for a conflict
@@ -520,7 +517,6 @@ func NewP4dFileParser(logger *logrus.Logger) *P4dFileParser {
 	var fp P4dFileParser
 	fp.cmds = make(map[int64]*Command)
 	fp.pidsSeenThisSecond = make(map[int64]bool)
-	fp.block = new(Block)
 	fp.runningPids = make(map[int64]int64)
 	fp.logger = logger
 	fp.outputDuration = time.Second * 1
@@ -866,7 +862,7 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 
 // Output pending commands on debug channel if set - for debug purposes
 func (fp *P4dFileParser) debugOutputCommands() {
-	if (!FlagSet(fp.debug, DebugPending) || fp.logger == nil) && !logPendingCounts {
+	if !FlagSet(fp.debug, DebugPending) || !FlagSet(fp.debug, DebugPendingCounts) || fp.logger == nil {
 		return
 	}
 	fp.m.Lock()
@@ -884,7 +880,7 @@ func (fp *P4dFileParser) debugOutputCommands() {
 			}
 		}
 	}
-	if logPendingCounts {
+	if FlagSet(fp.debug, DebugPendingCounts) {
 		lenCmds := len(fp.cmdChan)
 		lenLines := len(*fp.linesChan)
 		lenTime := len(fp.timeChan)
@@ -1205,33 +1201,6 @@ func blockEnd(line string) bool {
 	return false
 }
 
-// parseLine - interface for incremental parsing
-func (fp *P4dFileParser) parseLine(line string) {
-	if blockEnd(line) {
-		if len(fp.block.lines) > 0 {
-			if !blankLine(fp.block.lines[0]) {
-				fp.blockChan <- fp.block
-			}
-		}
-		fp.block = new(Block)
-		fp.block.addLine(line, fp.lineNo)
-	} else {
-		fp.block.addLine(line, fp.lineNo)
-	}
-	fp.lineNo++
-}
-
-// P4LogParseFinish - interface for incremental parsing
-func (fp *P4dFileParser) parseFinish() {
-	if fp.logger != nil {
-		fp.logger.Debugf("parseFinish")
-	}
-	if len(fp.block.lines) > 0 && !blankLine(fp.block.lines[0]) {
-		fp.processBlock(fp.block)
-	}
-	fp.outputRemainingCommands()
-}
-
 // CmdsPendingCount - count of unmatched commands
 func (fp *P4dFileParser) CmdsPendingCount() int {
 	fp.m.Lock()
@@ -1245,7 +1214,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 
 	fp.cmdChan = make(chan Command, 10000)
 	fp.linesChan = &linesChan
-	fp.blockChan = make(chan *Block, 100)
+	fp.blockChan = make(chan *Block, 1000)
 
 	// Output commands on seperate thread
 	// timeChan is nil when there are no metrics to process.
@@ -1259,7 +1228,6 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 					fp.m.Lock()
 					fp.currTime = t
 					fp.m.Unlock()
-				// fp.outputCompletedCommands()
 				case <-tickerDebug.C:
 					fp.debugOutputCommands()
 				}
@@ -1275,7 +1243,6 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 						fp.m.Lock()
 						fp.currTime = t
 						fp.m.Unlock()
-						// fp.outputCompletedCommands()
 					} else {
 						return
 					}
@@ -1286,30 +1253,11 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 		}()
 	}
 
-	// This routine handles blocks in parallel to lines
-	go func() {
-		defer close(fp.cmdChan)
-		for {
-			select {
-			case <-ctx.Done():
-				if fp.logger != nil {
-					fp.logger.Debugf("lines got Done")
-				}
-				fp.parseFinish()
-				return
-			case b, ok := <-fp.blockChan:
-				if ok {
-					fp.processBlock(b)
-				} else {
-					fp.parseFinish()
-					return
-				}
-			}
-		}
-	}()
-
+	// Go routine to process all the lines being received
+	// sends blocks on the blockChannel
 	go func() {
 		defer close(fp.blockChan)
+		block := new(Block)
 		for {
 			select {
 			case <-ctx.Done():
@@ -1319,11 +1267,48 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 				return
 			case line, ok := <-linesChan:
 				if ok {
-					fp.parseLine(strings.TrimRight(line, "\r\n"))
+					line = strings.TrimRight(line, "\r\n")
+					if blockEnd(line) {
+						if len(block.lines) > 0 {
+							if !blankLine(block.lines[0]) {
+								fp.blockChan <- block
+							}
+						}
+						block = new(Block)
+						block.addLine(line, fp.lineNo)
+					} else {
+						block.addLine(line, fp.lineNo)
+					}
+					fp.lineNo++
 				} else {
 					if fp.logger != nil {
 						fp.logger.Debugf("LogParser lines channel closed")
 					}
+					if len(block.lines) > 0 && !blankLine(block.lines[0]) {
+						fp.blockChan <- block
+					}
+					return
+				}
+			}
+		}
+	}()
+
+	// This routine handles blocks in parallel to lines above
+	go func() {
+		defer close(fp.cmdChan)
+		for {
+			select {
+			case <-ctx.Done():
+				if fp.logger != nil {
+					fp.logger.Debugf("lines got Done")
+				}
+				fp.outputRemainingCommands()
+				return
+			case b, ok := <-fp.blockChan:
+				if ok {
+					fp.processBlock(b)
+				} else {
+					fp.outputRemainingCommands()
 					return
 				}
 			}
