@@ -407,6 +407,10 @@ func main() {
 	startTime := time.Now()
 	logger.Infof("%v", version.Print("log2sql"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
+	logger.Infof("Flags: debug %v, json/file %v/%v, sql/file %v/%v, dbName %s, noMetrics/file %v/%v",
+		*debug, *jsonOutput, *jsonOutputFile, *sqlOutput, *sqlOutputFile, *dbName, *noMetrics, *metricsOutputFile)
+	logger.Infof("       serverID %v, sdpInstance %v, updateInterval %v, noOutputCmdsByUser %v, caseInsensitve %v, debugPID/cmd %v/%s",
+		*serverID, *sdpInstance, *updateInterval, *noOutputCmdsByUser, *caseInsensitiveServer, *debugPID, *debugCmd)
 
 	linesChan := make(chan string, 10000)
 
