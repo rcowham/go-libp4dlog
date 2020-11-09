@@ -34,6 +34,12 @@ import (
 // GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
 const p4timeformat = "2006/01/02 15:04:05"
 
+// This defines the maximum number of pending commands we allow
+// Exceeding this values means either a bug in the parser or something
+// simple like server=1 logging only set (so no completion records)
+// In future we may allow this to be set by parameter if required.
+const maxPendingCount = 10000
+
 // DebugLevel - for different levels of debugging
 type DebugLevel int
 
@@ -259,6 +265,29 @@ func (c *Command) setStartTime(t string) {
 
 func (c *Command) setEndTime(t string) {
 	c.EndTime, _ = time.Parse(p4timeformat, t)
+}
+
+func (c *Command) computeEndTime() time.Time {
+	if c.EndTime != blankTime {
+		return c.EndTime
+	}
+	if c.CompletedLapse != 0.0 {
+		return c.StartTime.Add(time.Duration(c.CompletedLapse) * time.Second)
+	}
+	return blankTime
+}
+
+// Update start and end times if we need to and we have lapse time
+func (c *Command) updateStartEndTimes() {
+	if c.EndTime == blankTime {
+		if c.StartTime != blankTime && c.CompletedLapse != 0.0 {
+			c.EndTime = c.StartTime.Add(time.Duration(c.CompletedLapse) * time.Second)
+		}
+	} else if c.StartTime == blankTime {
+		if c.EndTime != blankTime && c.CompletedLapse != 0.0 {
+			c.StartTime = c.EndTime.Add(-time.Duration(c.CompletedLapse) * time.Second)
+		}
+	}
 }
 
 func (c *Command) setUsage(uCPU, sCPU, diskIn, diskOut, ipcIn, ipcOut, maxRss, pageFaults string) {
@@ -621,7 +650,8 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 			}
 		} else {
-			if cmd.hasTrackInfo { // Typically track info only present when command has completed - especially for duplicates
+			// Typically track info only present when command has completed - especially for duplicates
+			if cmd.hasTrackInfo {
 				if cmd.LineNo == newCmd.LineNo {
 					if debugLog {
 						fp.logger.Infof("addCommand updating duplicate")
@@ -871,6 +901,7 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	if fp.debugLog(cmd) {
 		fp.logger.Infof("outputting: pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
 	}
+	cmd.updateStartEndTimes() // Required in some cases with partiall records
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
 	cmdcopy := *cmd
 	if cmdHasNoCompletionRecord(cmd.Cmd) {
@@ -888,7 +919,7 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 
 // Output pending commands on debug channel if set - for debug purposes
 func (fp *P4dFileParser) debugOutputCommands() {
-	if !FlagSet(fp.debug, DebugPending) || !FlagSet(fp.debug, DebugPendingCounts) || fp.logger == nil {
+	if !(FlagSet(fp.debug, DebugPending) || FlagSet(fp.debug, DebugPendingCounts)) || fp.logger == nil {
 		return
 	}
 	fp.m.Lock()
@@ -939,8 +970,8 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 			(fp.timeLastCmdProcessed != blankTime && fp.currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow)) {
 			completed = true
 		}
-		if !completed && (cmd.hasTrackInfo && cmd.EndTime != blankTime &&
-			fp.currStartTime.Sub(cmd.EndTime) >= timeWindow) {
+		// We have observed logs with very few "completed" records.
+		if !completed && (cmd.hasTrackInfo && cmd.computeEndTime() != blankTime && fp.currStartTime.Sub(cmd.computeEndTime()) >= timeWindow) {
 			completed = true
 		}
 		// Handle the special commands which don't receive a completed time - we use StartTime
@@ -1333,6 +1364,10 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 			case b, ok := <-fp.blockChan:
 				if ok {
 					fp.processBlock(b)
+					if len(fp.cmds) > maxPendingCount {
+						panic(fmt.Sprintf("ERROR: max pending command limit (%d) exceeded. Does this server log have completion records configured (configurable server=3)?",
+							maxPendingCount))
+					}
 				} else {
 					fp.outputRemainingCommands()
 					return
