@@ -683,6 +683,7 @@ var trackClients = "--- clients"
 var trackChange = "--- change"
 var trackClientEntity = "--- clientEntity"
 var trackReplicaPull = "--- replica/pull"
+var trackStorage = "--- storageup/"
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
 var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
@@ -739,6 +740,31 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
 			hasTrackInfo = true
+			continue
+		}
+		if strings.HasPrefix(line, trackStorage) {
+			ext := ""
+			val := line[len(trackStorage):]
+			j := strings.Index(val, "(R)")
+			if j > 0 {
+				tableName = val[:j]
+				ext = "_R"
+			} else {
+				k := strings.Index(val, "(W)")
+				if k > 0 {
+					tableName = val[:k]
+					ext = "_W"
+				} else {
+					tableName = val
+				}
+			}
+			tableName = fmt.Sprintf("%s%s", tableName, ext)
+			t := newTable(tableName)
+			cmd.Tables[tableName] = t
+			// Normally if we find track info we note it but this is a sppecial case since storageup
+			// often output before end of command. If we note track info then we may not process end
+			// record properly with the rest of the track info.
+			hasTrackInfo = false
 			continue
 		}
 		if strings.HasPrefix(line, trackMeta) ||
