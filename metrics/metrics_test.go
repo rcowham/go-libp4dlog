@@ -142,13 +142,15 @@ Perforce server info:
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 compute end .031s
 Perforce server info:
+	Server network estimates: files added/updated/deleted=1/3/2, bytes added/updated=123/456
+Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .031s
 `
 	cmdTime, _ := time.Parse(p4timeformat, "2015/09/02 15:23:09")
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 10, len(output))
+	assert.Equal(t, 15, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
 p4_cmd_running{serverid="myserverid"} 1
@@ -158,13 +160,18 @@ p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.031
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 1
-p4_prom_log_lines_read{serverid="myserverid"} 8`, -1)
+p4_prom_log_lines_read{serverid="myserverid"} 10
+p4_sync_bytes_added{serverid="myserverid"} 123
+p4_sync_bytes_updated{serverid="myserverid"} 456
+p4_sync_files_added{serverid="myserverid"} 1
+p4_sync_files_deleted{serverid="myserverid"} 2
+p4_sync_files_updated{serverid="myserverid"} 3`, -1)
 	compareOutput(t, expected, output)
 
 	historical = true
 	output = basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 10, len(output))
+	assert.Equal(t, 15, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
 	expected = eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
@@ -176,7 +183,12 @@ p4_cmd_user_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 14412
 p4_cmd_user_cumulative_seconds;serverid=myserverid;user=robert 0.031 1441207389
 p4_prom_cmds_pending;serverid=myserverid 0 1441207389
 p4_prom_cmds_processed;serverid=myserverid 1 1441207389
-p4_prom_log_lines_read;serverid=myserverid 8 1441207389`, -1)
+p4_prom_log_lines_read;serverid=myserverid 10 1441207389
+p4_sync_bytes_added;serverid=myserverid 123 1441207389
+p4_sync_bytes_updated;serverid=myserverid 456 1441207389
+p4_sync_files_added;serverid=myserverid 1 1441207389
+p4_sync_files_deleted;serverid=myserverid 2 1441207389
+p4_sync_files_updated;serverid=myserverid 3 1441207389`, -1)
 	compareOutput(t, expected, output)
 
 }
@@ -200,7 +212,7 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 8, len(output))
+	assert.Equal(t, 13, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
 p4_cmd_running{serverid="myserverid"} 1
@@ -208,13 +220,18 @@ p4_cmd_system_cpu_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.00
 p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 1
-p4_prom_log_lines_read{serverid="myserverid"} 8`, -1)
+p4_prom_log_lines_read{serverid="myserverid"} 8
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0`, -1)
 	compareOutput(t, expected, output)
 
 	historical = true
 	output = basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 8, len(output))
+	assert.Equal(t, 13, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
 	expected = eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
@@ -224,7 +241,12 @@ p4_cmd_system_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 144
 p4_cmd_user_cpu_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_prom_cmds_pending;serverid=myserverid 0 1441207389
 p4_prom_cmds_processed;serverid=myserverid 1 1441207389
-p4_prom_log_lines_read;serverid=myserverid 8 1441207389`, -1)
+p4_prom_log_lines_read;serverid=myserverid 8 1441207389
+p4_sync_bytes_added;serverid=myserverid 0 1441207389
+p4_sync_bytes_updated;serverid=myserverid 0 1441207389
+p4_sync_files_added;serverid=myserverid 0 1441207389
+p4_sync_files_deleted;serverid=myserverid 0 1441207389
+p4_sync_files_updated;serverid=myserverid 0 1441207389`, -1)
 	compareOutput(t, expected, output)
 }
 
@@ -262,7 +284,7 @@ Perforce server info:
 	historical := true
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 16, len(output))
+	assert.Equal(t, 31, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
 	expected := eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 3 1441207511
@@ -280,7 +302,22 @@ p4_prom_cmds_processed;serverid=myserverid 0 1441207511
 p4_prom_cmds_processed;serverid=myserverid 3 1441207511
 p4_prom_log_lines_read;serverid=myserverid 10 1441207450
 p4_prom_log_lines_read;serverid=myserverid 17 1441207511
-p4_prom_log_lines_read;serverid=myserverid 22 1441207511`, -1)
+p4_prom_log_lines_read;serverid=myserverid 22 1441207511
+p4_sync_bytes_added;serverid=myserverid 0 1441207450
+p4_sync_bytes_added;serverid=myserverid 0 1441207511
+p4_sync_bytes_added;serverid=myserverid 0 1441207511
+p4_sync_bytes_updated;serverid=myserverid 0 1441207450
+p4_sync_bytes_updated;serverid=myserverid 0 1441207511
+p4_sync_bytes_updated;serverid=myserverid 0 1441207511
+p4_sync_files_added;serverid=myserverid 0 1441207450
+p4_sync_files_added;serverid=myserverid 0 1441207511
+p4_sync_files_added;serverid=myserverid 0 1441207511
+p4_sync_files_deleted;serverid=myserverid 0 1441207450
+p4_sync_files_deleted;serverid=myserverid 0 1441207511
+p4_sync_files_deleted;serverid=myserverid 0 1441207511
+p4_sync_files_updated;serverid=myserverid 0 1441207450
+p4_sync_files_updated;serverid=myserverid 0 1441207511
+p4_sync_files_updated;serverid=myserverid 0 1441207511`, -1)
 	compareOutput(t, expected, output)
 }
 
@@ -331,7 +368,7 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 27, len(output))
+	assert.Equal(t, 32, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="dm-CommitSubmit"} 1
 p4_cmd_counter{serverid="myserverid",cmd="user-change"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 1.380
@@ -346,6 +383,11 @@ p4_cmd_user_cumulative_seconds{serverid="myserverid",user="fred"} 1.793
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
 p4_prom_log_lines_read{serverid="myserverid"} 37
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0
 p4_total_read_held_seconds{serverid="myserverid",table="archmap"} 0.033
 p4_total_read_held_seconds{serverid="myserverid",table="counters"} 0.000
 p4_total_read_held_seconds{serverid="myserverid",table="integed"} 0.022
@@ -364,7 +406,7 @@ p4_total_write_wait_seconds{serverid="myserverid",table="integed"} 0.024`, -1)
 	historical = true
 	output = basicTest(t, cfg, input, historical)
 
-	assert.Equal(t, 35, len(output))
+	assert.Equal(t, 50, len(output))
 	// Cross check appropriate time is being produced for historical runs
 	// assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime1.Unix()))
 	assert.Contains(t, output[len(output)-1], fmt.Sprintf("%d", cmdTime2.Unix()))
@@ -390,6 +432,21 @@ p4_prom_cmds_processed;serverid=myserverid 2 1528673409
 p4_prom_log_lines_read;serverid=myserverid 17 1528673408
 p4_prom_log_lines_read;serverid=myserverid 30 1528673409
 p4_prom_log_lines_read;serverid=myserverid 37 1528673409
+p4_sync_bytes_added;serverid=myserverid 0 1528673408
+p4_sync_bytes_added;serverid=myserverid 0 1528673409
+p4_sync_bytes_added;serverid=myserverid 0 1528673409
+p4_sync_bytes_updated;serverid=myserverid 0 1528673408
+p4_sync_bytes_updated;serverid=myserverid 0 1528673409
+p4_sync_bytes_updated;serverid=myserverid 0 1528673409
+p4_sync_files_added;serverid=myserverid 0 1528673408
+p4_sync_files_added;serverid=myserverid 0 1528673409
+p4_sync_files_added;serverid=myserverid 0 1528673409
+p4_sync_files_deleted;serverid=myserverid 0 1528673408
+p4_sync_files_deleted;serverid=myserverid 0 1528673409
+p4_sync_files_deleted;serverid=myserverid 0 1528673409
+p4_sync_files_updated;serverid=myserverid 0 1528673408
+p4_sync_files_updated;serverid=myserverid 0 1528673409
+p4_sync_files_updated;serverid=myserverid 0 1528673409
 p4_total_read_held_seconds;serverid=myserverid;table=archmap 0.033 1528673409
 p4_total_read_held_seconds;serverid=myserverid;table=counters 0.000 1528673409
 p4_total_read_held_seconds;serverid=myserverid;table=integed 0.022 1528673409
@@ -427,7 +484,7 @@ func TestP4PromBasicMultiUserCaseSensitive(t *testing.T) {
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: true}
 	output := basicTest(t, cfg, multiUserIntput, false)
-	assert.Equal(t, 12, len(output))
+	assert.Equal(t, 17, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
 p4_cmd_running{serverid="myserverid"} 1
@@ -439,7 +496,12 @@ p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
-p4_prom_log_lines_read{serverid="myserverid"} 11`, -1)
+p4_prom_log_lines_read{serverid="myserverid"} 11
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0`, -1)
 	compareOutput(t, expected, output)
 
 }
@@ -452,7 +514,7 @@ func TestP4PromBasicMultiUserCaseInsensitive(t *testing.T) {
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: false}
 	output := basicTest(t, cfg, multiUserIntput, false)
-	assert.Equal(t, 10, len(output))
+	assert.Equal(t, 15, len(output))
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
 p4_cmd_running{serverid="myserverid"} 1
@@ -462,7 +524,12 @@ p4_cmd_user_cpu_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.022
 p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
-p4_prom_log_lines_read{serverid="myserverid"} 11`, -1)
+p4_prom_log_lines_read{serverid="myserverid"} 11
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0`, -1)
 	compareOutput(t, expected, output)
 
 }

@@ -151,6 +151,11 @@ type Command struct {
 	RPCHimarkRev     int64     `json:"rpcHimarkRev"`
 	RPCSnd           float32   `json:"rpcSnd"`
 	RPCRcv           float32   `json:"rpcRcv"`
+	NetFilesAdded    int64     `json:"netFilesAdded"` // Valid for syncs and network estimates records
+	NetFilesUpdated  int64     `json:"netFilesUpdated"`
+	NetFilesDeleted  int64     `json:"netFilesDeleted"`
+	NetBytesAdded    int64     `json:"netBytesAdded"`
+	NetBytesUpdated  int64     `json:"netBytesUpdated"`
 	CmdError         bool      `json:"cmderror"`
 	Tables           map[string]*Table
 	duplicateKey     bool
@@ -301,6 +306,14 @@ func (c *Command) setUsage(uCPU, sCPU, diskIn, diskOut, ipcIn, ipcOut, maxRss, p
 	c.PageFaults, _ = strconv.ParseInt(pageFaults, 10, 64)
 }
 
+func (c *Command) setNetworkEstimates(netFilesAdded, netFilesUpdated, netFilesDeleted, netBytesAdded, netBytesUpdated string) {
+	c.NetFilesAdded, _ = strconv.ParseInt(netFilesAdded, 10, 64)
+	c.NetFilesUpdated, _ = strconv.ParseInt(netFilesUpdated, 10, 64)
+	c.NetFilesDeleted, _ = strconv.ParseInt(netFilesDeleted, 10, 64)
+	c.NetBytesAdded, _ = strconv.ParseInt(netBytesAdded, 10, 64)
+	c.NetBytesUpdated, _ = strconv.ParseInt(netBytesUpdated, 10, 64)
+}
+
 func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev, rpcSnd, rpcRcv string) {
 	c.RPCMsgsIn, _ = strconv.ParseInt(rpcMsgsIn, 10, 64)
 	c.RPCMsgsOut, _ = strconv.ParseInt(rpcMsgsOut, 10, 64)
@@ -346,71 +359,81 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		return tables[i].TableName < tables[j].TableName
 	})
 	return json.Marshal(&struct {
-		ProcessKey     string  `json:"processKey"`
-		Cmd            string  `json:"cmd"`
-		Pid            int64   `json:"pid"`
-		LineNo         int64   `json:"lineNo"`
-		User           string  `json:"user"`
-		Workspace      string  `json:"workspace"`
-		ComputeLapse   float32 `json:"computeLapse"`
-		CompletedLapse float32 `json:"completedLapse"`
-		IP             string  `json:"ip"`
-		App            string  `json:"app"`
-		Args           string  `json:"args"`
-		StartTime      string  `json:"startTime"`
-		EndTime        string  `json:"endTime"`
-		Running        int64   `json:"running"`
-		UCpu           int64   `json:"uCpu"`
-		SCpu           int64   `json:"sCpu"`
-		DiskIn         int64   `json:"diskIn"`
-		DiskOut        int64   `json:"diskOut"`
-		IpcIn          int64   `json:"ipcIn"`
-		IpcOut         int64   `json:"ipcOut"`
-		MaxRss         int64   `json:"maxRss"`
-		PageFaults     int64   `json:"pageFaults"`
-		RPCMsgsIn      int64   `json:"rpcMsgsIn"`
-		RPCMsgsOut     int64   `json:"rpcMsgsOut"`
-		RPCSizeIn      int64   `json:"rpcSizeIn"`
-		RPCSizeOut     int64   `json:"rpcSizeOut"`
-		RPCHimarkFwd   int64   `json:"rpcHimarkFwd"`
-		RPCHimarkRev   int64   `json:"rpcHimarkRev"`
-		RPCSnd         float32 `json:"rpcSnd"`
-		RPCRcv         float32 `json:"rpcRcv"`
-		CmdError       bool    `json:"cmdError"`
-		Tables         []Table `json:"tables"`
+		ProcessKey      string  `json:"processKey"`
+		Cmd             string  `json:"cmd"`
+		Pid             int64   `json:"pid"`
+		LineNo          int64   `json:"lineNo"`
+		User            string  `json:"user"`
+		Workspace       string  `json:"workspace"`
+		ComputeLapse    float32 `json:"computeLapse"`
+		CompletedLapse  float32 `json:"completedLapse"`
+		IP              string  `json:"ip"`
+		App             string  `json:"app"`
+		Args            string  `json:"args"`
+		StartTime       string  `json:"startTime"`
+		EndTime         string  `json:"endTime"`
+		Running         int64   `json:"running"`
+		UCpu            int64   `json:"uCpu"`
+		SCpu            int64   `json:"sCpu"`
+		DiskIn          int64   `json:"diskIn"`
+		DiskOut         int64   `json:"diskOut"`
+		IpcIn           int64   `json:"ipcIn"`
+		IpcOut          int64   `json:"ipcOut"`
+		MaxRss          int64   `json:"maxRss"`
+		PageFaults      int64   `json:"pageFaults"`
+		RPCMsgsIn       int64   `json:"rpcMsgsIn"`
+		RPCMsgsOut      int64   `json:"rpcMsgsOut"`
+		RPCSizeIn       int64   `json:"rpcSizeIn"`
+		RPCSizeOut      int64   `json:"rpcSizeOut"`
+		RPCHimarkFwd    int64   `json:"rpcHimarkFwd"`
+		RPCHimarkRev    int64   `json:"rpcHimarkRev"`
+		RPCSnd          float32 `json:"rpcSnd"`
+		RPCRcv          float32 `json:"rpcRcv"`
+		NetFilesAdded   int64   `json:"netFilesAdded"` // Valid for syncs and network estimates records
+		NetFilesUpdated int64   `json:"netFilesUpdated"`
+		NetFilesDeleted int64   `json:"netFilesDeleted"`
+		NetBytesAdded   int64   `json:"netBytesAdded"`
+		NetBytesUpdated int64   `json:"netBytesUpdated"`
+		CmdError        bool    `json:"cmdError"`
+		Tables          []Table `json:"tables"`
 	}{
-		ProcessKey:     c.GetKey(),
-		Cmd:            c.Cmd,
-		Pid:            c.Pid,
-		LineNo:         c.LineNo,
-		User:           c.User,
-		Workspace:      c.Workspace,
-		ComputeLapse:   c.ComputeLapse,
-		CompletedLapse: c.CompletedLapse,
-		IP:             c.IP,
-		App:            c.App,
-		Args:           c.Args,
-		StartTime:      c.StartTime.Format(p4timeformat),
-		EndTime:        c.EndTime.Format(p4timeformat),
-		Running:        c.Running,
-		UCpu:           c.UCpu,
-		SCpu:           c.SCpu,
-		DiskIn:         c.DiskIn,
-		DiskOut:        c.DiskOut,
-		IpcIn:          c.IpcIn,
-		IpcOut:         c.IpcOut,
-		MaxRss:         c.MaxRss,
-		PageFaults:     c.PageFaults,
-		RPCMsgsIn:      c.RPCMsgsIn,
-		RPCMsgsOut:     c.RPCMsgsOut,
-		RPCSizeIn:      c.RPCSizeIn,
-		RPCSizeOut:     c.RPCSizeOut,
-		RPCHimarkFwd:   c.RPCHimarkFwd,
-		RPCHimarkRev:   c.RPCHimarkRev,
-		RPCSnd:         c.RPCSnd,
-		RPCRcv:         c.RPCRcv,
-		CmdError:       c.CmdError,
-		Tables:         tables,
+		ProcessKey:      c.GetKey(),
+		Cmd:             c.Cmd,
+		Pid:             c.Pid,
+		LineNo:          c.LineNo,
+		User:            c.User,
+		Workspace:       c.Workspace,
+		ComputeLapse:    c.ComputeLapse,
+		CompletedLapse:  c.CompletedLapse,
+		IP:              c.IP,
+		App:             c.App,
+		Args:            c.Args,
+		StartTime:       c.StartTime.Format(p4timeformat),
+		EndTime:         c.EndTime.Format(p4timeformat),
+		Running:         c.Running,
+		UCpu:            c.UCpu,
+		SCpu:            c.SCpu,
+		DiskIn:          c.DiskIn,
+		DiskOut:         c.DiskOut,
+		IpcIn:           c.IpcIn,
+		IpcOut:          c.IpcOut,
+		MaxRss:          c.MaxRss,
+		PageFaults:      c.PageFaults,
+		RPCMsgsIn:       c.RPCMsgsIn,
+		RPCMsgsOut:      c.RPCMsgsOut,
+		RPCSizeIn:       c.RPCSizeIn,
+		RPCSizeOut:      c.RPCSizeOut,
+		RPCHimarkFwd:    c.RPCHimarkFwd,
+		RPCHimarkRev:    c.RPCHimarkRev,
+		RPCSnd:          c.RPCSnd,
+		RPCRcv:          c.RPCRcv,
+		NetFilesAdded:   c.NetFilesAdded,
+		NetFilesUpdated: c.NetFilesUpdated,
+		NetFilesDeleted: c.NetFilesDeleted,
+		NetBytesAdded:   c.NetBytesAdded,
+		NetBytesUpdated: c.NetBytesUpdated,
+		CmdError:        c.CmdError,
+		Tables:          tables,
 	})
 }
 
@@ -507,6 +530,21 @@ func (c *Command) updateFrom(other *Command) {
 	if other.RPCRcv > 0 {
 		c.RPCRcv = other.RPCRcv
 	}
+	if other.NetFilesAdded > 0 {
+		c.NetFilesAdded = other.NetFilesAdded
+	}
+	if other.NetFilesDeleted > 0 {
+		c.NetFilesDeleted = other.NetFilesDeleted
+	}
+	if other.NetFilesUpdated > 0 {
+		c.NetFilesUpdated = other.NetFilesUpdated
+	}
+	if other.NetBytesAdded > 0 {
+		c.NetBytesAdded = other.NetBytesAdded
+	}
+	if other.NetBytesUpdated > 0 {
+		c.NetBytesUpdated = other.NetBytesUpdated
+	}
 	if len(other.Tables) > 0 {
 		for k, t := range other.Tables {
 			c.Tables[k] = t
@@ -539,6 +577,7 @@ type P4dFileParser struct {
 	debugCmd             string
 	outputCmdsContinued  int64
 	outputCmdsExited     int64
+	lastSyncPID          int64
 }
 
 // NewP4dFileParser - create and initialise properly
@@ -737,6 +776,8 @@ var prefixTrackMaxLock = "---   max lock wait+held read/write "
 var prefixTrackMaxLock2 = "---   locks wait+held read/write "
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var rePid = regexp.MustCompile(`\tPid (\d+)$`)
+var prefixNetworkEstimates = "\tServer network estimates:"
+var reNetworkEstimates = regexp.MustCompile(`\tServer network estimates: files added/updated/deleted=(\d+)/(\d+)/(\d+), bytes added/updated=(\d+)/(\d+)`)
 
 func getTable(cmd *Command, tableName string) *Table {
 	if _, ok := cmd.Tables[tableName]; !ok {
@@ -1021,6 +1062,9 @@ func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 		// sum all compute values for same command
 		f, _ := strconv.ParseFloat(string(computeLapse), 32)
 		cmd.ComputeLapse = cmd.ComputeLapse + float32(f)
+		if cmd.Cmd == "user-sync" {
+			fp.lastSyncPID = cmd.Pid
+		}
 	}
 
 }
@@ -1052,6 +1096,13 @@ func (fp *P4dFileParser) updateUsage(pid int64, uCPU, sCPU, diskIn, diskOut, ipc
 	}
 }
 
+func (fp *P4dFileParser) updateNetworkEstimates(pid int64, netFilesAdded, netFilesUpdated,
+	netFilesDeleted, netBytesAdded, netBytesUpdated string) {
+	if cmd, ok := fp.cmds[pid]; ok {
+		cmd.setNetworkEstimates(netFilesAdded, netFilesUpdated, netFilesDeleted, netBytesAdded, netBytesUpdated)
+	}
+}
+
 func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line string) {
 	// Expects a single line with a lapse statement on it
 	var triggerLapse float64
@@ -1073,14 +1124,16 @@ func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line 
 	}
 }
 
-const serverNetworkEstimates = "\tServer network estimates:"
-
 func (fp *P4dFileParser) processInfoBlock(block *Block) {
 
 	var cmd *Command
 
-	// Ignore these blocks for now - would be nice to match up with previous syncs but...
-	if len(block.lines) == 1 && strings.HasPrefix(block.lines[0], serverNetworkEstimates) {
+	// These blocks are matched with a previous sync block (usually compute entry)
+	if len(block.lines) == 1 && strings.HasPrefix(block.lines[0], prefixNetworkEstimates) {
+		m := reNetworkEstimates.FindStringSubmatch(block.lines[0])
+		if len(m) > 0 {
+			fp.updateNetworkEstimates(fp.lastSyncPID, m[1], m[2], m[3], m[4], m[5])
+		}
 		return
 	}
 

@@ -55,6 +55,11 @@ type P4DMetrics struct {
 	totalWriteWait      map[string]float64
 	totalWriteHeld      map[string]float64
 	totalTriggerLapse   map[string]float64
+	syncFilesAdded      int64
+	syncFilesUpdated    int64
+	syncFilesDeleted    int64
+	syncBytesAdded      int64
+	syncBytesUpdated    int64
 	cmdsProcessed       int64
 	linesRead           int64
 }
@@ -181,6 +186,50 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	mname = "p4_cmd_running"
 	p4m.printMetricHeader(metrics, mname, "The number of running commands at any one time", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
+	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
+	fmt.Fprint(metrics, buf)
+
+	mname = "p4_sync_files_added"
+	p4m.printMetricHeader(metrics, mname, "The number of files added to workspaces by syncs", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.syncFilesAdded)
+	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
+	fmt.Fprint(metrics, buf)
+
+	mname = "p4_sync_files_updated"
+	p4m.printMetricHeader(metrics, mname, "The number of files updated in workspaces by syncs", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.syncFilesUpdated)
+	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
+	fmt.Fprint(metrics, buf)
+
+	mname = "p4_sync_files_deleted"
+	p4m.printMetricHeader(metrics, mname, "The number of files deleted in workspaces by syncs", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.syncFilesDeleted)
+	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
+	fmt.Fprint(metrics, buf)
+
+	mname = "p4_sync_bytes_added"
+	p4m.printMetricHeader(metrics, mname, "The number of bytes added to workspaces by syncs", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.syncBytesAdded)
+	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
+	fmt.Fprint(metrics, buf)
+	mname = "p4_sync_bytes_updated"
+	p4m.printMetricHeader(metrics, mname, "The number of bytes updated in workspaces by syncs", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.syncBytesUpdated)
 	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
 	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
 		p4m.logger.Debugf(buf)
@@ -363,6 +412,11 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 		p4m.cmdErrorCounter[cmd.Cmd]++
 	}
 	p4m.cmdRunning = int32(cmd.Running)
+	p4m.syncFilesAdded += cmd.NetFilesAdded
+	p4m.syncFilesUpdated += cmd.NetFilesUpdated
+	p4m.syncFilesDeleted += cmd.NetFilesDeleted
+	p4m.syncBytesAdded += cmd.NetBytesAdded
+	p4m.syncBytesUpdated += cmd.NetBytesUpdated
 	user := cmd.User
 	if !p4m.config.CaseSensitiveServer {
 		user = strings.ToLower(user)
