@@ -34,11 +34,11 @@ import (
 // GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
 const p4timeformat = "2006/01/02 15:04:05"
 
-// This defines the maximum number of pending commands we allow
+// This defines the maximum number of running commands we allow
 // Exceeding this values means either a bug in the parser or something
 // simple like server=1 logging only set (so no completion records)
 // In future we may allow this to be set by parameter if required.
-const maxPendingCount = 10000
+const maxRunningCount = 10000
 
 // DebugLevel - for different levels of debugging
 type DebugLevel int
@@ -1417,9 +1417,9 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 			case b, ok := <-fp.blockChan:
 				if ok {
 					fp.processBlock(b)
-					if len(fp.cmds) > maxPendingCount {
-						panic(fmt.Sprintf("ERROR: max pending command limit (%d) exceeded. Does this server log have completion records configured (configurable server=3)?",
-							maxPendingCount))
+					if fp.running > maxRunningCount {
+						panic(fmt.Sprintf("ERROR: max running command limit (%d) exceeded. Does this server log have completion records configured (configurable server=3)?",
+							maxRunningCount))
 					}
 				} else {
 					fp.outputRemainingCommands()
