@@ -31,13 +31,15 @@ const statementsPerTransaction = 50 * 1000
 
 func writeHeader(f io.Writer) {
 	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS process
-	(processkey CHAR(50) NOT NULL, lineNumber INT NOT NULL, pid INT NOT NULL, 
+	(processkey CHAR(50) NOT NULL, lineNumber INT NOT NULL, pid INT NOT NULL,
 	startTime DATETIME NOT NULL,endTime DATETIME NULL, computedLapse FLOAT NULL,completedLapse FLOAT NULL,
 	user TEXT NOT NULL, workspace TEXT NOT NULL, ip TEXT NOT NULL, app TEXT NOT NULL, cmd TEXT NOT NULL,
 	args TEXT NULL, uCpu INT NULL, sCpu INT NULL, diskIn INT NULL, diskOut INT NULL, ipcIn INT NULL,
 	ipcOut INT NULL, maxRss INT NULL, pageFaults INT NULL, rpcMsgsIn INT NULL, rpcMsgsOut INT NULL,
 	rpcSizeIn INT NULL, rpcSizeOut INT NULL, rpcHimarkFwd INT NULL, rpcHimarkRev INT NULL,
 	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, running INT NULL,
+	netSyncFilesAdded INT NULL, netSyncFilesUpdated INT NULL, netSyncFilesDeleted INT NULL,
+	netSyncBytesAdded INT NULL, netSyncBytesUpdated INT NULL,
 	error TEXT NULL,
 	PRIMARY KEY (processkey, lineNumber));
 `)
@@ -78,19 +80,22 @@ func dateStr(t time.Time) string {
 }
 
 func getProcessStatement() string {
-	return `INSERT INTO process 
-		(processkey, lineNumber, pid, 
+	return `INSERT INTO process
+		(processkey, lineNumber, pid,
 		startTime ,endTime, computedLapse, completedLapse,
 		user, workspace, ip, app, cmd,
 		args, uCpu, sCpu, diskIn, diskOut, ipcIn,
 		ipcOut, maxRss, pageFaults, rpcMsgsIn, rpcMsgsOut,
 		rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev,
-		rpcSnd, rpcRcv, running, error)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		rpcSnd, rpcRcv, running,
+		netSyncFilesAdded, netSyncFilesUpdated, netSyncFilesDeleted,
+		netSyncBytesAdded, netSyncBytesAdded,
+		error)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
-	return `INSERT INTO tableuse 
+	return `INSERT INTO tableuse
 		(processkey, lineNumber, tableName, pagesIn, pagesOut, pagesCached,
 		pagesSplitInternal, pagesSplitLeaf,
 		readLocks, writeLocks, getRows, posRows, scanRows,
@@ -111,7 +116,10 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
 		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
-		float64(cmd.RPCSnd), float64(cmd.RPCRcv), cmd.Running, cmd.CmdError)
+		float64(cmd.RPCSnd), float64(cmd.RPCRcv), cmd.Running,
+		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
+		cmd.NetBytesAdded, cmd.NetBytesUpdated,
+		cmd.CmdError)
 	if err != nil {
 		logger.Errorf("Process insert: %v pid %d, lineNo %d, %s",
 			err, cmd.Pid, cmd.LineNo, string(cmd.Cmd))
@@ -137,14 +145,17 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 	rows := 1
 	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,`+
 		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
-		`%.3f,%.3f,%d,"%v");`+"\n",
+		`%.3f,%.3f,%d,%d,%d,%d,%d,%d,"%v");`+"\n",
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
 		cmd.ComputeLapse, cmd.CompletedLapse,
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
 		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
-		cmd.RPCSnd, cmd.RPCRcv, cmd.Running, cmd.CmdError)
+		cmd.RPCSnd, cmd.RPCRcv, cmd.Running,
+		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
+		cmd.NetBytesAdded, cmd.NetBytesUpdated,
+		cmd.CmdError)
 	for _, t := range cmd.Tables {
 		rows++
 		fmt.Fprintf(f, "INSERT INTO tableuse VALUES ("+
