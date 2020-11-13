@@ -28,61 +28,74 @@ type Config struct {
 	SDPInstance         string        `yaml:"sdp.instance"`
 	UpdateInterval      time.Duration `yaml:"update.interval"`
 	OutputCmdsByUser    bool          `yaml:"output.cmds.by.user"`
+	OutputCmdsByIP      bool          `yaml:"output.cmds.by.ip"`
 	CaseSensitiveServer bool          `yaml:"case.sensitive.server"`
 }
 
 // P4DMetrics structure
 type P4DMetrics struct {
-	config              *Config
-	historical          bool
-	debug               int
-	fp                  *p4dlog.P4dFileParser
-	timeLatestStartCmd  time.Time
-	latestStartCmdBuf   string
-	logger              *logrus.Logger
-	metricWriter        io.Writer
-	timeChan            chan time.Time
-	cmdRunning          int32
-	cmdCounter          map[string]int32
-	cmdErrorCounter     map[string]int32
-	cmdCumulative       map[string]float64
-	cmduCPUCumulative   map[string]float64
-	cmdsCPUCumulative   map[string]float64
-	cmdByUserCounter    map[string]int32
-	cmdByUserCumulative map[string]float64
-	totalReadWait       map[string]float64
-	totalReadHeld       map[string]float64
-	totalWriteWait      map[string]float64
-	totalWriteHeld      map[string]float64
-	totalTriggerLapse   map[string]float64
-	syncFilesAdded      int64
-	syncFilesUpdated    int64
-	syncFilesDeleted    int64
-	syncBytesAdded      int64
-	syncBytesUpdated    int64
-	cmdsProcessed       int64
-	linesRead           int64
+	config                 *Config
+	historical             bool
+	debug                  int
+	fp                     *p4dlog.P4dFileParser
+	timeLatestStartCmd     time.Time
+	latestStartCmdBuf      string
+	logger                 *logrus.Logger
+	metricWriter           io.Writer
+	timeChan               chan time.Time
+	cmdRunning             int64
+	cmdCounter             map[string]int64
+	cmdErrorCounter        map[string]int64
+	cmdCumulative          map[string]float64
+	cmduCPUCumulative      map[string]float64
+	cmdsCPUCumulative      map[string]float64
+	cmdByUserCounter       map[string]int64
+	cmdByUserCumulative    map[string]float64
+	cmdByIPCounter         map[string]int64
+	cmdByIPCumulative      map[string]float64
+	cmdByReplicaCounter    map[string]int64
+	cmdByReplicaCumulative map[string]float64
+	cmdByProgramCounter    map[string]int64
+	cmdByProgramCumulative map[string]float64
+	totalReadWait          map[string]float64
+	totalReadHeld          map[string]float64
+	totalWriteWait         map[string]float64
+	totalWriteHeld         map[string]float64
+	totalTriggerLapse      map[string]float64
+	syncFilesAdded         int64
+	syncFilesUpdated       int64
+	syncFilesDeleted       int64
+	syncBytesAdded         int64
+	syncBytesUpdated       int64
+	cmdsProcessed          int64
+	linesRead              int64
 }
 
 // NewP4DMetricsLogParser - wraps P4dFileParser
 func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bool) (p4m *P4DMetrics) {
 	return &P4DMetrics{
-		config:              config,
-		logger:              logger,
-		fp:                  p4dlog.NewP4dFileParser(logger),
-		historical:          historical,
-		cmdCounter:          make(map[string]int32),
-		cmdErrorCounter:     make(map[string]int32),
-		cmdCumulative:       make(map[string]float64),
-		cmduCPUCumulative:   make(map[string]float64),
-		cmdsCPUCumulative:   make(map[string]float64),
-		cmdByUserCounter:    make(map[string]int32),
-		cmdByUserCumulative: make(map[string]float64),
-		totalReadWait:       make(map[string]float64),
-		totalReadHeld:       make(map[string]float64),
-		totalWriteWait:      make(map[string]float64),
-		totalWriteHeld:      make(map[string]float64),
-		totalTriggerLapse:   make(map[string]float64),
+		config:                 config,
+		logger:                 logger,
+		fp:                     p4dlog.NewP4dFileParser(logger),
+		historical:             historical,
+		cmdCounter:             make(map[string]int64),
+		cmdErrorCounter:        make(map[string]int64),
+		cmdCumulative:          make(map[string]float64),
+		cmduCPUCumulative:      make(map[string]float64),
+		cmdsCPUCumulative:      make(map[string]float64),
+		cmdByUserCounter:       make(map[string]int64),
+		cmdByUserCumulative:    make(map[string]float64),
+		cmdByIPCounter:         make(map[string]int64),
+		cmdByIPCumulative:      make(map[string]float64),
+		cmdByReplicaCounter:    make(map[string]int64),
+		cmdByReplicaCumulative: make(map[string]float64),
+		cmdByProgramCounter:    make(map[string]int64),
+		cmdByProgramCumulative: make(map[string]float64),
+		totalReadWait:          make(map[string]float64),
+		totalReadHeld:          make(map[string]float64),
+		totalWriteWait:         make(map[string]float64),
+		totalWriteHeld:         make(map[string]float64),
+		totalTriggerLapse:      make(map[string]float64),
 	}
 }
 
@@ -144,6 +157,14 @@ func (p4m *P4DMetrics) formatMetric(mname string, labels []labelStruct, metricVa
 	return fmt.Sprintf("%s %s\n", p4m.formatLabels(mname, labels), metricVal)
 }
 
+func (p4m *P4DMetrics) printMetric(metrics *bytes.Buffer, mname string, labels []labelStruct, metricVal string) {
+	buf := p4m.formatMetric(mname, labels, metricVal)
+	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
+		p4m.logger.Debugf(buf)
+	}
+	fmt.Fprint(metrics, buf)
+}
+
 // Publish cumulative results - called on a ticker or in historical mode
 func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	fixedLabels := []labelStruct{{name: "serverid", value: p4m.config.ServerID},
@@ -154,142 +175,86 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	}
 
 	var mname string
-	var buf string
 	var metricVal string
 	mname = "p4_prom_log_lines_read"
 	p4m.printMetricHeader(metrics, mname, "A count of log lines read", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.linesRead)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_prom_cmds_processed"
 	p4m.printMetricHeader(metrics, mname, "A count of all cmds processed", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.cmdsProcessed)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_prom_cmds_pending"
 	p4m.printMetricHeader(metrics, mname, "A count of all current cmds (not completed)", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.fp.CmdsPendingCount())
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_cmd_running"
 	p4m.printMetricHeader(metrics, mname, "The number of running commands at any one time", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_sync_files_added"
 	p4m.printMetricHeader(metrics, mname, "The number of files added to workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncFilesAdded)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_sync_files_updated"
 	p4m.printMetricHeader(metrics, mname, "The number of files updated in workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncFilesUpdated)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_sync_files_deleted"
 	p4m.printMetricHeader(metrics, mname, "The number of files deleted in workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncFilesDeleted)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_sync_bytes_added"
 	p4m.printMetricHeader(metrics, mname, "The number of bytes added to workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncBytesAdded)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
 	mname = "p4_sync_bytes_updated"
 	p4m.printMetricHeader(metrics, mname, "The number of bytes updated in workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncBytesUpdated)
-	buf = p4m.formatMetric(mname, fixedLabels, metricVal)
-	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
-	}
-	fmt.Fprint(metrics, buf)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_cmd_counter"
 	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by cmd)", "counter")
 	for cmd, count := range p4m.cmdCounter {
 		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_cmd_cumulative_seconds"
 	p4m.printMetricHeader(metrics, mname, "The total in seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmdCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_cmd_user_cpu_cumulative_seconds"
 	p4m.printMetricHeader(metrics, mname, "The total in user CPU seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmduCPUCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_cmd_system_cpu_cumulative_seconds"
 	p4m.printMetricHeader(metrics, mname, "The total in system CPU seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmdsCPUCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_cmd_error_counter"
 	p4m.printMetricHeader(metrics, mname, "A count of cmd errors (by cmd)", "counter")
 	for cmd, count := range p4m.cmdErrorCounter {
 		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	// For large sites this might not be sensible - so they can turn it off
 	if p4m.config.OutputCmdsByUser {
@@ -298,23 +263,60 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		for user, count := range p4m.cmdByUserCounter {
 			metricVal = fmt.Sprintf("%d", count)
 			labels := append(fixedLabels, labelStruct{"user", user})
-			buf = p4m.formatMetric(mname, labels, metricVal)
-			if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-				p4m.logger.Debugf(buf)
-			}
-			fmt.Fprint(metrics, buf)
+			p4m.printMetric(metrics, mname, labels, metricVal)
 		}
 		mname = "p4_cmd_user_cumulative_seconds"
 		p4m.printMetricHeader(metrics, mname, "The total in seconds (by user)", "counter")
 		for user, lapse := range p4m.cmdByUserCumulative {
 			metricVal = fmt.Sprintf("%0.3f", lapse)
 			labels := append(fixedLabels, labelStruct{"user", user})
-			buf = p4m.formatMetric(mname, labels, metricVal)
-			if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-				p4m.logger.Debugf(buf)
-			}
-			fmt.Fprint(metrics, buf)
+			p4m.printMetric(metrics, mname, labels, metricVal)
 		}
+	}
+	// For large sites this might not be sensible - so they can turn it off
+	if p4m.config.OutputCmdsByIP {
+		mname = "p4_cmd_ip_counter"
+		p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by IP)", "counter")
+		for ip, count := range p4m.cmdByIPCounter {
+			metricVal = fmt.Sprintf("%d", count)
+			labels := append(fixedLabels, labelStruct{"ip", ip})
+			p4m.printMetric(metrics, mname, labels, metricVal)
+		}
+		mname = "p4_cmd_ip_cumulative_seconds"
+		p4m.printMetricHeader(metrics, mname, "The total in seconds (by IP)", "counter")
+		for ip, lapse := range p4m.cmdByIPCumulative {
+			metricVal = fmt.Sprintf("%0.3f", lapse)
+			labels := append(fixedLabels, labelStruct{"ip", ip})
+			p4m.printMetric(metrics, mname, labels, metricVal)
+		}
+	}
+	mname = "p4_cmd_replica_counter"
+	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by broker/replica/proxy)", "counter")
+	for replica, count := range p4m.cmdByReplicaCounter {
+		metricVal = fmt.Sprintf("%d", count)
+		labels := append(fixedLabels, labelStruct{"replica", replica})
+		p4m.printMetric(metrics, mname, labels, metricVal)
+	}
+	mname = "p4_cmd_replica_cumulative_seconds"
+	p4m.printMetricHeader(metrics, mname, "The total in seconds (by broker/replica/proxy)", "counter")
+	for replica, lapse := range p4m.cmdByReplicaCumulative {
+		metricVal = fmt.Sprintf("%0.3f", lapse)
+		labels := append(fixedLabels, labelStruct{"replica", replica})
+		p4m.printMetric(metrics, mname, labels, metricVal)
+	}
+	mname = "p4_cmd_program_counter"
+	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by program)", "counter")
+	for program, count := range p4m.cmdByProgramCounter {
+		metricVal = fmt.Sprintf("%d", count)
+		labels := append(fixedLabels, labelStruct{"program", program})
+		p4m.printMetric(metrics, mname, labels, metricVal)
+	}
+	mname = "p4_cmd_program_cumulative_seconds"
+	p4m.printMetricHeader(metrics, mname, "The total in seconds (by program)", "counter")
+	for program, lapse := range p4m.cmdByProgramCumulative {
+		metricVal = fmt.Sprintf("%0.3f", lapse)
+		labels := append(fixedLabels, labelStruct{"program", program})
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_total_read_wait_seconds"
 	p4m.printMetricHeader(metrics, mname,
@@ -322,11 +324,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	for table, total := range p4m.totalReadWait {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_total_read_held_seconds"
 	p4m.printMetricHeader(metrics, mname,
@@ -334,11 +332,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	for table, total := range p4m.totalReadHeld {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_total_write_wait_seconds"
 	p4m.printMetricHeader(metrics, mname,
@@ -346,11 +340,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	for table, total := range p4m.totalWriteWait {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	mname = "p4_total_write_held_seconds"
 	p4m.printMetricHeader(metrics, mname,
@@ -358,11 +348,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	for table, total := range p4m.totalWriteHeld {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
-		buf = p4m.formatMetric(mname, labels, metricVal)
-		if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-			p4m.logger.Debugf(buf)
-		}
-		fmt.Fprint(metrics, buf)
+		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	if len(p4m.totalTriggerLapse) > 0 {
 		mname = "p4_total_trigger_lapse_seconds"
@@ -371,11 +357,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		for table, total := range p4m.totalTriggerLapse {
 			metricVal = fmt.Sprintf("%0.3f", total)
 			labels := append(fixedLabels, labelStruct{"trigger", table})
-			buf = p4m.formatMetric(mname, labels, metricVal)
-			if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-				p4m.logger.Debugf(buf)
-			}
-			fmt.Fprint(metrics, buf)
+			p4m.printMetric(metrics, mname, labels, metricVal)
 		}
 	}
 	return metrics.String()
@@ -411,7 +393,7 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 	if cmd.CmdError {
 		p4m.cmdErrorCounter[cmd.Cmd]++
 	}
-	p4m.cmdRunning = int32(cmd.Running)
+	p4m.cmdRunning = cmd.Running
 	p4m.syncFilesAdded += cmd.NetFilesAdded
 	p4m.syncFilesUpdated += cmd.NetFilesUpdated
 	p4m.syncFilesDeleted += cmd.NetFilesDeleted
@@ -423,6 +405,28 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 	}
 	p4m.cmdByUserCounter[user]++
 	p4m.cmdByUserCumulative[user] += float64(cmd.CompletedLapse)
+	var ip, replica string
+	j := strings.Index(cmd.IP, "/")
+	if j > 0 {
+		replica = cmd.IP[:j]
+		ip = cmd.IP[j+1:]
+	} else {
+		ip = cmd.IP
+	}
+	p4m.cmdByIPCounter[ip]++
+	p4m.cmdByIPCumulative[ip] += float64(cmd.CompletedLapse)
+	if replica != "" {
+		p4m.cmdByReplicaCounter[replica]++
+		p4m.cmdByReplicaCumulative[replica] += float64(cmd.CompletedLapse)
+	}
+	// Various chars not allowed in label names
+	program := strings.ReplaceAll(cmd.App, ";", "_")
+	program = strings.ReplaceAll(program, "!", "_")
+	program = strings.ReplaceAll(program, "^", "_")
+	program = strings.ReplaceAll(program, "=", "_")
+	program = strings.ReplaceAll(program, " ", "_")
+	p4m.cmdByProgramCounter[program]++
+	p4m.cmdByProgramCumulative[program] += float64(cmd.CompletedLapse)
 	const triggerPrefix = "trigger_"
 
 	for _, t := range cmd.Tables {
