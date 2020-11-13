@@ -385,6 +385,10 @@ func main() {
 			"no.output.cmds.by.user",
 			"Turns off the output of cmds_by_user - can be useful for large sites with many thousands of users.",
 		).Default("false").Bool()
+		noOutputCmdsByIP = kingpin.Flag(
+			"no.output.cmds.by.IP",
+			"Turns off the output of cmds_by_IP - can be useful for large sites with many thousands of IP addresses in logs.",
+		).Default("false").Bool()
 		caseInsensitiveServer = kingpin.Flag(
 			"case.insensitive.server",
 			"Set if server is case insensitive and usernames may occur in either case.",
@@ -433,6 +437,7 @@ func main() {
 		SDPInstance:         *sdpInstance,
 		UpdateInterval:      *updateInterval,
 		OutputCmdsByUser:    !*noOutputCmdsByUser,
+		OutputCmdsByIP:      !*noOutputCmdsByIP,
 		CaseSensitiveServer: !*caseInsensitiveServer,
 	}
 

@@ -420,7 +420,8 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 		p4m.cmdByReplicaCumulative[replica] += float64(cmd.CompletedLapse)
 	}
 	// Various chars not allowed in label names
-	program := strings.ReplaceAll(cmd.App, ";", "_")
+	program := strings.ReplaceAll(cmd.App, " (brokered)", "")
+	program = strings.ReplaceAll(program, ";", "_")
 	program = strings.ReplaceAll(program, "!", "_")
 	program = strings.ReplaceAll(program, "^", "_")
 	program = strings.ReplaceAll(program, "=", "_")

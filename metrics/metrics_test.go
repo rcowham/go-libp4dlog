@@ -619,7 +619,7 @@ Perforce server info:
 	2015/09/02 15:23:09 pid 1616 completed .011s
 
 Perforce server info:
-	2015/09/02 15:23:10 pid 1616 ROBERT@robert-test 127.0.0.1/10.10.4.5 [p4/2016.2/LINUX26X86_64/1598668] 'user-fstat //some/file'
+	2015/09/02 15:23:10 pid 1616 ROBERT@robert-test 127.0.0.1/10.10.4.5 [p4/2016.2/LINUX26X86_64/1598668 (brokered)] 'user-fstat //some/file'
 Perforce server info:
 	2015/09/02 15:23:10 pid 1616 completed .011s
 `
