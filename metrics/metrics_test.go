@@ -612,6 +612,32 @@ p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.022`, -1)
 	compareOutput(t, expected, output)
 }
 
+func TestP4PromBasicMultiUserDetail(t *testing.T) {
+	// Case sensitive/insensitive user
+	cfg := &Config{
+		ServerID:              "myserverid",
+		UpdateInterval:        10 * time.Millisecond,
+		OutputCmdsByUser:      true,
+		CaseSensitiveServer:   true,
+		OutputCmdsByUserRegex: ".*",
+	}
+	output := basicTest(t, cfg, multiUserInput, false)
+	assert.Equal(t, 23, len(output))
+	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="ROBERT"} 1
+p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
+p4_cmd_user_detail_counter{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 1
+p4_cmd_user_detail_counter{serverid="myserverid",user="robert",cmd="user-fstat"} 1
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011
+p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 0.011
+p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="robert",cmd="user-fstat"} 0.011`, -1)
+	for _, l := range multiUserExpected {
+		expected = append(expected, l)
+	}
+	compareOutput(t, expected, output)
+
+}
+
 var multiIPInput = `
 Perforce server info:
 	2015/09/02 15:23:09 pid 1616 robert@robert-test 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'user-fstat //some/file'

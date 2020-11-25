@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -23,79 +24,85 @@ import (
 
 // Config for metrics
 type Config struct {
-	Debug               int           `yaml:"debug"`
-	ServerID            string        `yaml:"server.id"`
-	SDPInstance         string        `yaml:"sdp.instance"`
-	UpdateInterval      time.Duration `yaml:"update.interval"`
-	OutputCmdsByUser    bool          `yaml:"output.cmds.by.user"`
-	OutputCmdsByIP      bool          `yaml:"output.cmds.by.ip"`
-	CaseSensitiveServer bool          `yaml:"case.sensitive.server"`
+	Debug                 int           `yaml:"debug"`
+	ServerID              string        `yaml:"server_id"`
+	SDPInstance           string        `yaml:"sdp_instance"`
+	UpdateInterval        time.Duration `yaml:"update_interval"`
+	OutputCmdsByUser      bool          `yaml:"output_cmds_by_user"`
+	OutputCmdsByUserRegex string        `yaml:"output_cmds_by_user_regex"`
+	OutputCmdsByIP        bool          `yaml:"output_cmds_by_ip"`
+	CaseSensitiveServer   bool          `yaml:"case_sensitive_server"`
 }
 
 // P4DMetrics structure
 type P4DMetrics struct {
-	config                 *Config
-	historical             bool
-	debug                  int
-	fp                     *p4dlog.P4dFileParser
-	timeLatestStartCmd     time.Time
-	latestStartCmdBuf      string
-	logger                 *logrus.Logger
-	metricWriter           io.Writer
-	timeChan               chan time.Time
-	cmdRunning             int64
-	cmdCounter             map[string]int64
-	cmdErrorCounter        map[string]int64
-	cmdCumulative          map[string]float64
-	cmduCPUCumulative      map[string]float64
-	cmdsCPUCumulative      map[string]float64
-	cmdByUserCounter       map[string]int64
-	cmdByUserCumulative    map[string]float64
-	cmdByIPCounter         map[string]int64
-	cmdByIPCumulative      map[string]float64
-	cmdByReplicaCounter    map[string]int64
-	cmdByReplicaCumulative map[string]float64
-	cmdByProgramCounter    map[string]int64
-	cmdByProgramCumulative map[string]float64
-	totalReadWait          map[string]float64
-	totalReadHeld          map[string]float64
-	totalWriteWait         map[string]float64
-	totalWriteHeld         map[string]float64
-	totalTriggerLapse      map[string]float64
-	syncFilesAdded         int64
-	syncFilesUpdated       int64
-	syncFilesDeleted       int64
-	syncBytesAdded         int64
-	syncBytesUpdated       int64
-	cmdsProcessed          int64
-	linesRead              int64
+	config                    *Config
+	historical                bool
+	debug                     int
+	fp                        *p4dlog.P4dFileParser
+	timeLatestStartCmd        time.Time
+	latestStartCmdBuf         string
+	logger                    *logrus.Logger
+	metricWriter              io.Writer
+	timeChan                  chan time.Time
+	cmdRunning                int64
+	cmdCounter                map[string]int64
+	cmdErrorCounter           map[string]int64
+	cmdCumulative             map[string]float64
+	cmduCPUCumulative         map[string]float64
+	cmdsCPUCumulative         map[string]float64
+	cmdByUserCounter          map[string]int64
+	cmdByUserCumulative       map[string]float64
+	cmdByIPCounter            map[string]int64
+	cmdByIPCumulative         map[string]float64
+	cmdByReplicaCounter       map[string]int64
+	cmdByReplicaCumulative    map[string]float64
+	cmdByProgramCounter       map[string]int64
+	cmdByProgramCumulative    map[string]float64
+	cmdByUserDetailCounter    map[string]map[string]int64
+	cmdByUserDetailCumulative map[string]map[string]float64
+	totalReadWait             map[string]float64
+	totalReadHeld             map[string]float64
+	totalWriteWait            map[string]float64
+	totalWriteHeld            map[string]float64
+	totalTriggerLapse         map[string]float64
+	syncFilesAdded            int64
+	syncFilesUpdated          int64
+	syncFilesDeleted          int64
+	syncBytesAdded            int64
+	syncBytesUpdated          int64
+	cmdsProcessed             int64
+	linesRead                 int64
+	outputCmdsByUserRegex     *regexp.Regexp
 }
 
 // NewP4DMetricsLogParser - wraps P4dFileParser
 func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bool) (p4m *P4DMetrics) {
 	return &P4DMetrics{
-		config:                 config,
-		logger:                 logger,
-		fp:                     p4dlog.NewP4dFileParser(logger),
-		historical:             historical,
-		cmdCounter:             make(map[string]int64),
-		cmdErrorCounter:        make(map[string]int64),
-		cmdCumulative:          make(map[string]float64),
-		cmduCPUCumulative:      make(map[string]float64),
-		cmdsCPUCumulative:      make(map[string]float64),
-		cmdByUserCounter:       make(map[string]int64),
-		cmdByUserCumulative:    make(map[string]float64),
-		cmdByIPCounter:         make(map[string]int64),
-		cmdByIPCumulative:      make(map[string]float64),
-		cmdByReplicaCounter:    make(map[string]int64),
-		cmdByReplicaCumulative: make(map[string]float64),
-		cmdByProgramCounter:    make(map[string]int64),
-		cmdByProgramCumulative: make(map[string]float64),
-		totalReadWait:          make(map[string]float64),
-		totalReadHeld:          make(map[string]float64),
-		totalWriteWait:         make(map[string]float64),
-		totalWriteHeld:         make(map[string]float64),
-		totalTriggerLapse:      make(map[string]float64),
+		config:                    config,
+		logger:                    logger,
+		fp:                        p4dlog.NewP4dFileParser(logger),
+		historical:                historical,
+		cmdCounter:                make(map[string]int64),
+		cmdErrorCounter:           make(map[string]int64),
+		cmdCumulative:             make(map[string]float64),
+		cmduCPUCumulative:         make(map[string]float64),
+		cmdsCPUCumulative:         make(map[string]float64),
+		cmdByUserCounter:          make(map[string]int64),
+		cmdByUserCumulative:       make(map[string]float64),
+		cmdByIPCounter:            make(map[string]int64),
+		cmdByIPCumulative:         make(map[string]float64),
+		cmdByReplicaCounter:       make(map[string]int64),
+		cmdByReplicaCumulative:    make(map[string]float64),
+		cmdByProgramCounter:       make(map[string]int64),
+		cmdByProgramCumulative:    make(map[string]float64),
+		cmdByUserDetailCounter:    make(map[string]map[string]int64),
+		cmdByUserDetailCumulative: make(map[string]map[string]float64),
+		totalReadWait:             make(map[string]float64),
+		totalReadHeld:             make(map[string]float64),
+		totalWriteWait:            make(map[string]float64),
+		totalWriteHeld:            make(map[string]float64),
+		totalTriggerLapse:         make(map[string]float64),
 	}
 }
 
@@ -290,6 +297,29 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 			p4m.printMetric(metrics, mname, labels, metricVal)
 		}
 	}
+	// For large sites this might not be sensible - so they can turn it off
+	if p4m.config.OutputCmdsByUserRegex != "" {
+		mname = "p4_cmd_user_detail_counter"
+		p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by user and cmd)", "counter")
+		for user, userMap := range p4m.cmdByUserDetailCounter {
+			for cmd, count := range userMap {
+				metricVal = fmt.Sprintf("%d", count)
+				labels := append(fixedLabels, labelStruct{"user", user})
+				labels = append(labels, labelStruct{"cmd", cmd})
+				p4m.printMetric(metrics, mname, labels, metricVal)
+			}
+		}
+		mname = "p4_cmd_user_detail_cumulative_seconds"
+		p4m.printMetricHeader(metrics, mname, "The total in seconds (by user and cmd)", "counter")
+		for user, userMap := range p4m.cmdByUserDetailCumulative {
+			for cmd, lapse := range userMap {
+				metricVal = fmt.Sprintf("%0.3f", lapse)
+				labels := append(fixedLabels, labelStruct{"user", user})
+				labels = append(labels, labelStruct{"cmd", cmd})
+				p4m.printMetric(metrics, mname, labels, metricVal)
+			}
+		}
+	}
 	mname = "p4_cmd_replica_counter"
 	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by broker/replica/proxy)", "counter")
 	for replica, count := range p4m.cmdByReplicaCounter {
@@ -405,6 +435,21 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 	}
 	p4m.cmdByUserCounter[user]++
 	p4m.cmdByUserCumulative[user] += float64(cmd.CompletedLapse)
+	if p4m.config.OutputCmdsByUserRegex != "" {
+		if p4m.outputCmdsByUserRegex == nil {
+			regexStr := fmt.Sprintf("(%s)", p4m.config.OutputCmdsByUserRegex)
+			p4m.outputCmdsByUserRegex = regexp.MustCompile(regexStr)
+		}
+		m := p4m.outputCmdsByUserRegex.FindStringSubmatch(user)
+		if len(m) > 0 {
+			if _, ok := p4m.cmdByUserDetailCounter[m[1]]; !ok {
+				p4m.cmdByUserDetailCounter[m[1]] = make(map[string]int64)
+				p4m.cmdByUserDetailCumulative[m[1]] = make(map[string]float64)
+			}
+			p4m.cmdByUserDetailCounter[m[1]][cmd.Cmd]++
+			p4m.cmdByUserDetailCumulative[m[1]][cmd.Cmd] += float64(cmd.CompletedLapse)
+		}
+	}
 	var ip, replica string
 	j := strings.Index(cmd.IP, "/")
 	if j > 0 {
