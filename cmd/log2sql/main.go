@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -413,6 +414,12 @@ func main() {
 		"Where referred to in help <logfile-prefix> is the first logfile specified with any .gz or .log suffix removed."
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
+
+	// Validate regex
+	if _, err := regexp.Compile(*outputCmdsByUserRegex); err != nil {
+		fmt.Printf("ERROR: Failed to parse parameter '%s' as a valid Go regex\n", *outputCmdsByUserRegex)
+		os.Exit(1)
+	}
 
 	if *debug > 0 {
 		// CPU profiling by default
