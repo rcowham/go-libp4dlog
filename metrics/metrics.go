@@ -242,14 +242,14 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_user_cpu_cumulative_seconds"
+	mname = "p4_cmd_cpu_user_cumulative_seconds"
 	p4m.printMetricHeader(metrics, mname, "The total in user CPU seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmduCPUCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_system_cpu_cumulative_seconds"
+	mname = "p4_cmd_cpu_system_cumulative_seconds"
 	p4m.printMetricHeader(metrics, mname, "The total in system CPU seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmdsCPUCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
@@ -440,14 +440,13 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 			regexStr := fmt.Sprintf("(%s)", p4m.config.OutputCmdsByUserRegex)
 			p4m.outputCmdsByUserRegex = regexp.MustCompile(regexStr)
 		}
-		m := p4m.outputCmdsByUserRegex.FindStringSubmatch(user)
-		if len(m) > 0 {
-			if _, ok := p4m.cmdByUserDetailCounter[m[1]]; !ok {
-				p4m.cmdByUserDetailCounter[m[1]] = make(map[string]int64)
-				p4m.cmdByUserDetailCumulative[m[1]] = make(map[string]float64)
+		if p4m.outputCmdsByUserRegex.MatchString(user) {
+			if _, ok := p4m.cmdByUserDetailCounter[user]; !ok {
+				p4m.cmdByUserDetailCounter[user] = make(map[string]int64)
+				p4m.cmdByUserDetailCumulative[user] = make(map[string]float64)
 			}
-			p4m.cmdByUserDetailCounter[m[1]][cmd.Cmd]++
-			p4m.cmdByUserDetailCumulative[m[1]][cmd.Cmd] += float64(cmd.CompletedLapse)
+			p4m.cmdByUserDetailCounter[user][cmd.Cmd]++
+			p4m.cmdByUserDetailCumulative[user][cmd.Cmd] += float64(cmd.CompletedLapse)
 		}
 	}
 	var ip, replica string

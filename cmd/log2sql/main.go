@@ -385,6 +385,10 @@ func main() {
 			"no.output.cmds.by.user",
 			"Turns off the output of cmds_by_user - can be useful for large sites with many thousands of users.",
 		).Default("false").Bool()
+		outputCmdsByUserRegex = kingpin.Flag(
+			"output.cmds.by.user.regex",
+			"Specify a (golang) regex to match user ids in order to track cmds by user in one metric (e.g. '.*' or 'swarm|jenkins').",
+		).String()
 		noOutputCmdsByIP = kingpin.Flag(
 			"no.output.cmds.by.IP",
 			"Turns off the output of cmds_by_IP - can be useful for large sites with many thousands of IP addresses in logs.",
@@ -424,21 +428,22 @@ func main() {
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 	logger.Infof("Flags: debug %v, json/file %v/%v, sql/file %v/%v, dbName %s, noMetrics/file %v/%v",
 		*debug, *jsonOutput, *jsonOutputFile, *sqlOutput, *sqlOutputFile, *dbName, *noMetrics, *metricsOutputFile)
-	logger.Infof("       serverID %v, sdpInstance %v, updateInterval %v, noOutputCmdsByUser %v, caseInsensitve %v, debugPID/cmd %v/%s",
-		*serverID, *sdpInstance, *updateInterval, *noOutputCmdsByUser, *caseInsensitiveServer, *debugPID, *debugCmd)
+	logger.Infof("       serverID %v, sdpInstance %v, updateInterval %v, noOutputCmdsByUser %v, outputCmdsByUserRegex %s caseInsensitve %v, debugPID/cmd %v/%s",
+		*serverID, *sdpInstance, *updateInterval, *noOutputCmdsByUser, *outputCmdsByUserRegex, *caseInsensitiveServer, *debugPID, *debugCmd)
 
 	linesChan := make(chan string, 10000)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mconfig := &metrics.Config{
-		Debug:               *debug,
-		ServerID:            *serverID,
-		SDPInstance:         *sdpInstance,
-		UpdateInterval:      *updateInterval,
-		OutputCmdsByUser:    !*noOutputCmdsByUser,
-		OutputCmdsByIP:      !*noOutputCmdsByIP,
-		CaseSensitiveServer: !*caseInsensitiveServer,
+		Debug:                 *debug,
+		ServerID:              *serverID,
+		SDPInstance:           *sdpInstance,
+		UpdateInterval:        *updateInterval,
+		OutputCmdsByUser:      !*noOutputCmdsByUser,
+		OutputCmdsByUserRegex: *outputCmdsByUserRegex,
+		OutputCmdsByIP:        !*noOutputCmdsByIP,
+		CaseSensitiveServer:   !*caseInsensitiveServer,
 	}
 
 	var fJSON, fSQL, fMetrics *bufio.Writer
