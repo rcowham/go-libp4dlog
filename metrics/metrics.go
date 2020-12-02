@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	p4dlog "github.com/rcowham/go-libp4dlog"
@@ -77,7 +78,7 @@ type P4DMetrics struct {
 }
 
 // NewP4DMetricsLogParser - wraps P4dFileParser
-func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bool) (p4m *P4DMetrics) {
+func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bool) *P4DMetrics {
 	return &P4DMetrics{
 		config:                    config,
 		logger:                    logger,
@@ -202,6 +203,19 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.printMetricHeader(metrics, mname, "The number of running commands at any one time", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+	var r syscall.Rusage
+	if syscall.Getrusage(syscall.RUSAGE_SELF, &r) == nil {
+		mname = "p4_prom_cpu_user"
+		p4m.printMetricHeader(metrics, mname, "User CPU used by p4prometheus", "counter")
+		metricVal = fmt.Sprintf("%.6f", float64(r.Utime.Nano())/1e9)
+		p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+		mname = "p4_prom_cpu_system"
+		p4m.printMetricHeader(metrics, mname, "System CPU used by p4prometheus", "counter")
+		metricVal = fmt.Sprintf("%.6f", float64(r.Stime.Nano())/1e9)
+		p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+	}
 
 	mname = "p4_sync_files_added"
 	p4m.printMetricHeader(metrics, mname, "The number of files added to workspaces by syncs", "counter")
