@@ -15,6 +15,7 @@ import (
 	"io"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -204,17 +205,20 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	var r syscall.Rusage
-	if syscall.Getrusage(syscall.RUSAGE_SELF, &r) == nil {
-		mname = "p4_prom_cpu_user"
-		p4m.printMetricHeader(metrics, mname, "User CPU used by p4prometheus", "counter")
-		metricVal = fmt.Sprintf("%.6f", float64(r.Utime.Nano())/1e9)
-		p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+	// TODO - the equivalent call on Windows...
+	if runtime.GOOS != "windows" {
+		var r syscall.Rusage
+		if syscall.Getrusage(syscall.RUSAGE_SELF, &r) == nil {
+			mname = "p4_prom_cpu_user"
+			p4m.printMetricHeader(metrics, mname, "User CPU used by p4prometheus", "counter")
+			metricVal = fmt.Sprintf("%.6f", float64(r.Utime.Nano())/1e9)
+			p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-		mname = "p4_prom_cpu_system"
-		p4m.printMetricHeader(metrics, mname, "System CPU used by p4prometheus", "counter")
-		metricVal = fmt.Sprintf("%.6f", float64(r.Stime.Nano())/1e9)
-		p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+			mname = "p4_prom_cpu_system"
+			p4m.printMetricHeader(metrics, mname, "System CPU used by p4prometheus", "counter")
+			metricVal = fmt.Sprintf("%.6f", float64(r.Stime.Nano())/1e9)
+			p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+		}
 	}
 
 	mname = "p4_sync_files_added"
