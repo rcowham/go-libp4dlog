@@ -12,3 +12,11 @@
 *.out
 test/
 .vscode/
+
+
+.DS_Store
+*.gz
+*.log
+*.db
+*.metrics
+
