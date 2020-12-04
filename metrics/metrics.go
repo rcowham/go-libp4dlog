@@ -557,7 +557,10 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 		p4m.fp.SetDebugMode(p4m.config.Debug)
 	}
 	fpLinesChan := make(chan string, 10000)
-	p4m.timeChan = make(chan time.Time, 1000)
+	// Leave as unset
+	if p4m.historical {
+		p4m.timeChan = make(chan time.Time, 1000)
+	}
 
 	metricsChan := make(chan string, 1000)
 	var cmdsOutChan chan p4dlog.Command
