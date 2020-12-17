@@ -169,6 +169,7 @@ func (p4m *P4DMetrics) printMetric(metrics *bytes.Buffer, mname string, labels [
 	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
 		p4m.logger.Debugf(buf)
 	}
+	buf = strings.Replace(buf, `\`, "\\\\", -1)
 	fmt.Fprint(metrics, buf)
 }
 

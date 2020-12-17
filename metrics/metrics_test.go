@@ -345,6 +345,48 @@ p4_sync_files_updated;serverid=myserverid 0 1441207389`, -1)
 	compareOutput(t, expected, output)
 }
 
+func TestP4PromBackslashProgName(t *testing.T) {
+	cfg := &Config{
+		ServerID:         "myserverid",
+		UpdateInterval:   20 * time.Millisecond,
+		OutputCmdsByUser: false}
+
+	input := `
+Perforce server info:
+	2015/09/02 15:23:09 pid 1616 robert@robert-test 127.0.0.1 [c:\jenkins\workspacegen_stubs.py [PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88] 'user-sync //...'
+Perforce server info:
+	2015/09/02 15:23:09 pid 1616 compute end .031s
+Perforce server info:
+	2015/09/02 15:23:09 pid 1616 completed .031s
+`
+
+	cmdTime, _ := time.Parse(p4timeformat, "2015/09/02 15:23:09")
+	historical := true
+	output := basicTest(t, cfg, input, historical)
+
+	// Cross check appropriate time is being produced for historical runs
+	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
+	expected := eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
+p4_cmd_program_counter;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 1 1441207389
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 0.031 1441207389
+p4_cmd_running;serverid=myserverid 1 1441207389
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_prom_cmds_pending;serverid=myserverid 0 1441207389
+p4_prom_cmds_processed;serverid=myserverid 1 1441207389
+p4_prom_log_lines_read;serverid=myserverid 8 1441207389
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_bytes_added;serverid=myserverid 0 1441207389
+p4_sync_bytes_updated;serverid=myserverid 0 1441207389
+p4_sync_files_added;serverid=myserverid 0 1441207389
+p4_sync_files_deleted;serverid=myserverid 0 1441207389
+p4_sync_files_updated;serverid=myserverid 0 1441207389`, -1)
+	assert.Equal(t, len(expected), len(output))
+	compareOutput(t, expected, output)
+}
+
 func TestP4PromBasicHistorical(t *testing.T) {
 	// Test with multiple outputs
 	cfg := &Config{
