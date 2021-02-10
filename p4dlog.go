@@ -38,7 +38,7 @@ const p4timeformat = "2006/01/02 15:04:05"
 // Exceeding this values means either a bug in the parser or something
 // simple like server=1 logging only set (so no completion records)
 // In future we may allow this to be set by parameter if required.
-const maxRunningCount = 10000
+const maxRunningCount = 20000
 
 // DebugLevel - for different levels of debugging
 type DebugLevel int
