@@ -781,3 +781,32 @@ p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.10.4.5"} 0.011`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
+
+func TestP4PromLabelValues(t *testing.T) {
+	// Tests for regex search and replace
+
+	var values = []struct {
+		input, expected string
+	}{
+		{"fred", "fred"},
+		{`fred"`, "fred_"},
+		{`fred'`, "fred_"},
+		{`fred;`, "fred_"},
+		{`fred^`, "fred_"},
+		{`fred!`, "fred_"},
+		{`fred@`, "fred@"},
+		{`p4/1.20`, "p4/1.20"},
+		{`p4/(1.20)`, "p4/(1.20)"},
+		{`p4\(1.20)`, "p4\\(1.20)"},
+		{`p4[1.20]`, "p4[1.20]"},
+		{`c:\prog.exe`, "c:\\prog.exe"},
+		{`c:\\prog.exe`, "c:\\\\prog.exe"},
+		{`a+prog.exe`, "a+prog.exe"},
+	}
+
+	for _, v := range values {
+		actual := NotLabelValueRE.ReplaceAllLiteralString(v.input, "_")
+		assert.Equal(t, v.expected, actual)
+	}
+
+}

@@ -22,6 +22,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// NotLabelValueRE - any chars in label values not matching this will be converted to underscores.
+// We exclude chars such as: <space>;!="^'
+// Allowed values must be valid for node_exporter and also the graphite text protocol for labels/tags
+// https://graphite.readthedocs.io/en/latest/tags.html
+// In addition any backslashes must be double quoted for node_exporter.
+var NotLabelValueRE = regexp.MustCompile(`[^a-zA-Z0-9_/+:@{}&%<>*\\.,\(\)\[\]-]`)
+
 // Config for metrics
 type Config struct {
 	Debug                 int           `yaml:"debug"`
@@ -169,6 +176,7 @@ func (p4m *P4DMetrics) printMetric(metrics *bytes.Buffer, mname string, labels [
 	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
 		p4m.logger.Debugf(buf)
 	}
+	// node_exporter requires doubling of backslashes
 	buf = strings.Replace(buf, `\`, "\\\\", -1)
 	fmt.Fprint(metrics, buf)
 }
@@ -476,13 +484,9 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 		p4m.cmdByReplicaCounter[replica]++
 		p4m.cmdByReplicaCumulative[replica] += float64(cmd.CompletedLapse)
 	}
-	// Various chars not allowed in label names
+	// Various chars not allowed in label names - see comment for NotLabelValueRE
 	program := strings.ReplaceAll(cmd.App, " (brokered)", "")
-	program = strings.ReplaceAll(program, ";", "_")
-	program = strings.ReplaceAll(program, "!", "_")
-	program = strings.ReplaceAll(program, "^", "_")
-	program = strings.ReplaceAll(program, "=", "_")
-	program = strings.ReplaceAll(program, " ", "_")
+	program = NotLabelValueRE.ReplaceAllString(program, "_")
 	p4m.cmdByProgramCounter[program]++
 	p4m.cmdByProgramCumulative[program] += float64(cmd.CompletedLapse)
 	const triggerPrefix = "trigger_"
