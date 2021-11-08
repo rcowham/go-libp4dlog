@@ -2,7 +2,7 @@
 
 go-libp4dlog is a Go language library to parse Perforce p4d text logs, with a command line executable `log2sql` to process them.
 
-Check the [releases](releases) page for the latest binary releases.
+Check the [releases](../releases) page for the latest binary releases.
 
 - [go-libp4dlog](#go-libp4dlog)
   - [Running the log analyzer](#running-the-log-analyzer)
