@@ -72,8 +72,23 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 	return bReader, fileSize, nil
 }
 
+// GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
+const p4timeformat = "2006/01/02 15:04:05"
+
+// P4Pending structure
+type P4Pending struct {
+	debug              int
+	fp                 *p4dlog.P4dFileParser
+	timeLatestStartCmd time.Time
+	latestStartCmdBuf  string
+	logger             *logrus.Logger
+	timeChan           chan time.Time
+	linesChan          chan string
+	linesRead          int64
+}
+
 // Parse single log file - output is sent via linesChan channel
-func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
+func (p4p *P4Pending) parseLog(logfile string) {
 	var file *os.File
 	if logfile == "-" {
 		file = os.Stdin
@@ -81,7 +96,7 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 		var err error
 		file, err = os.Open(logfile)
 		if err != nil {
-			logger.Fatal(err)
+			p4p.logger.Fatal(err)
 		}
 	}
 	defer file.Close()
@@ -91,9 +106,9 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 	inbuf := make([]byte, maxCapacity)
 	reader, fileSize, err := readerFromFile(file)
 	if err != nil {
-		logger.Fatalf("Failed to open file: %v", err)
+		p4p.logger.Fatalf("Failed to open file: %v", err)
 	}
-	logger.Debugf("Opened %s, size %v", logfile, fileSize)
+	p4p.logger.Debugf("Opened %s, size %v", logfile, fileSize)
 	reader = bufio.NewReaderSize(reader, maxCapacity)
 	preader := progress.NewReader(reader)
 	scanner := bufio.NewScanner(preader)
@@ -111,7 +126,7 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 		if fileSize > 25*1000*1000*1000 {
 			d = 60 * time.Second
 		}
-		logger.Infof("Progress reporting frequency: %v", d)
+		p4p.logger.Infof("Progress reporting frequency: %v", d)
 		progressChan := progress.NewTicker(ctx, preader, fileSize, d)
 		for p := range progressChan {
 			fmt.Fprintf(os.Stderr, "%s: %s/%s %.0f%% estimated finish %s, %v remaining...\n",
@@ -122,9 +137,72 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 		fmt.Fprintln(os.Stderr, "processing completed")
 	}()
 
+	i := 1
 	for scanner.Scan() {
-		linesChan <- scanner.Text()
+		// Use time records in log to cause ticks for log parser
+		line := scanner.Text()
+		p4p.generateLogTimeEvents(line)
+		p4p.linesChan <- line
+		i += 1
+		if i%50000 == 0 {
+			p4p.logger.Debugf("Processed %d lines", i)
+		}
 	}
+
+}
+
+// Searches for log lines starting with a <tab>date - assumes increasing dates in log
+// TODO - refactor this into P4dFileParser
+func (p4p *P4Pending) generateLogTimeEvents(line string) {
+	// From Metrics
+	// if !p4p.historical {
+	// 	return false
+	// }
+	// This next section is more efficient than regex parsing - we return ASAP
+	const lenPrefix = len("\t2020/03/04 12:13:14")
+	if len(line) < lenPrefix {
+		return
+	}
+	// Check for expected chars at specific points
+	if line[0] != '\t' || line[5] != '/' || line[8] != '/' ||
+		line[11] != ' ' || line[14] != ':' || line[17] != ':' {
+		return
+	}
+	// Check for digits
+	for _, i := range []int{1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19} {
+		if line[i] < byte('0') || line[i] > byte('9') {
+			return
+		}
+	}
+	if len(p4p.latestStartCmdBuf) == 0 {
+		p4p.latestStartCmdBuf = line[:lenPrefix]
+		p4p.timeLatestStartCmd, _ = time.Parse(p4timeformat, line[1:lenPrefix])
+		return
+	}
+	if len(p4p.latestStartCmdBuf) > 0 && p4p.latestStartCmdBuf == line[:lenPrefix] {
+		return
+	}
+	// Update only if greater (due to log format we do see out of sequence dates with track records)
+	if strings.Compare(line[:lenPrefix], p4p.latestStartCmdBuf) <= 0 {
+		return
+	}
+	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
+	if dt.Sub(p4p.timeLatestStartCmd) >= 3*time.Second {
+		p4p.timeChan <- dt
+		p4p.timeLatestStartCmd = dt
+		p4p.logger.Debugf("Sending time %s", dt)
+		return
+	}
+}
+
+func (p4p *P4Pending) processEvents(logfiles []string) {
+
+	for _, f := range logfiles {
+		p4p.logger.Infof("Processing: %s", f)
+		p4p.parseLog(f)
+	}
+	p4p.logger.Infof("Finished all log files")
+	close(p4p.linesChan)
 
 }
 
@@ -234,22 +312,24 @@ func main() {
 	var cmdChan chan p4dlog.Command
 
 	fp = p4dlog.NewP4dFileParser(logger)
+	p4p := &P4Pending{
+		debug:     *debug,
+		logger:    logger,
+		fp:        fp,
+		linesChan: linesChan,
+		timeChan:  make(chan time.Time, 1000),
+	}
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
 	}
-	cmdChan = fp.LogParser(ctx, linesChan, nil)
+	cmdChan = fp.LogParser(ctx, linesChan, p4p.timeChan)
 
 	// Process all input files, sending lines into linesChan
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
-
-		for _, f := range *logfiles {
-			logger.Infof("Processing: %s", f)
-			parseLog(logger, f, linesChan)
-		}
-		logger.Infof("Finished all log files")
-		close(linesChan)
+		p4p.processEvents(*logfiles)
 	}()
 
 	// Process all commands, but discarding those with completion records
