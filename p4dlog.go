@@ -682,6 +682,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			}
 		} else if cmdHasNoCompletionRecord(newCmd.Cmd) {
 			if hasTrackInfo {
+				// TODO: if hasTrackInfo && !cmd.hasTrackInfo {
 				cmd.updateFrom(newCmd)
 			} else {
 				fp.outputCmd(cmd)
@@ -953,6 +954,10 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	for k, v := range cmd.Tables {
 		cmdcopy.Tables[k] = v
 		i++
+	}
+	if fp.debugLog(&cmdcopy) {
+		fp.logger.Infof("outputting: computelapse %v completelapse %v endTime %s", cmdcopy.ComputeLapse,
+			cmdcopy.CompletedLapse, cmdcopy.EndTime)
 	}
 	fp.cmdChan <- cmdcopy
 	fp.CmdsProcessed++
