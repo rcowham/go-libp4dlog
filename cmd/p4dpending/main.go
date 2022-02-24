@@ -72,9 +72,6 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 	return bReader, fileSize, nil
 }
 
-// GO standard reference value/format: Mon Jan 2 15:04:05 -0700 MST 2006
-const p4timeformat = "2006/01/02 15:04:05"
-
 // P4Pending structure
 type P4Pending struct {
 	debug              int
@@ -82,7 +79,6 @@ type P4Pending struct {
 	timeLatestStartCmd time.Time
 	latestStartCmdBuf  string
 	logger             *logrus.Logger
-	timeChan           chan time.Time
 	linesChan          chan string
 	totalCount         int
 	pendingCount       int
@@ -142,54 +138,9 @@ func (p4p *P4Pending) parseLog(logfile string) {
 	for scanner.Scan() {
 		// Use time records in log to cause ticks for log parser
 		line := scanner.Text()
-		// p4p.generateLogTimeEvents(line)
 		p4p.linesChan <- line
 	}
 
-}
-
-// Searches for log lines starting with a <tab>date - assumes increasing dates in log
-// TODO - refactor this into P4dFileParser
-func (p4p *P4Pending) generateLogTimeEvents(line string) {
-	// From Metrics
-	// if !p4p.historical {
-	// 	return false
-	// }
-	// This next section is more efficient than regex parsing - we return ASAP
-	const lenPrefix = len("\t2020/03/04 12:13:14")
-	if len(line) < lenPrefix {
-		return
-	}
-	// Check for expected chars at specific points
-	if line[0] != '\t' || line[5] != '/' || line[8] != '/' ||
-		line[11] != ' ' || line[14] != ':' || line[17] != ':' {
-		return
-	}
-	// Check for digits
-	for _, i := range []int{1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19} {
-		if line[i] < byte('0') || line[i] > byte('9') {
-			return
-		}
-	}
-	if len(p4p.latestStartCmdBuf) == 0 {
-		p4p.latestStartCmdBuf = line[:lenPrefix]
-		p4p.timeLatestStartCmd, _ = time.Parse(p4timeformat, line[1:lenPrefix])
-		return
-	}
-	if len(p4p.latestStartCmdBuf) > 0 && p4p.latestStartCmdBuf == line[:lenPrefix] {
-		return
-	}
-	// Update only if greater (due to log format we do see out of sequence dates with track records)
-	if strings.Compare(line[:lenPrefix], p4p.latestStartCmdBuf) <= 0 {
-		return
-	}
-	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
-	if dt.Sub(p4p.timeLatestStartCmd) >= 3*time.Second {
-		p4p.timeChan <- dt
-		p4p.timeLatestStartCmd = dt
-		p4p.logger.Debugf("Sending time %s", dt)
-		return
-	}
 }
 
 func (p4p *P4Pending) processEvents(logfiles []string) {
@@ -322,7 +273,6 @@ func main() {
 		logger:    logger,
 		fp:        fp,
 		linesChan: linesChan,
-		timeChan:  make(chan time.Time, 1000),
 	}
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
@@ -330,7 +280,7 @@ func main() {
 	if *debugPID != 0 && *debugCmd != "" {
 		fp.SetDebugPID(*debugPID, *debugCmd)
 	}
-	cmdChan = fp.LogParser(ctx, linesChan, p4p.timeChan)
+	cmdChan = fp.LogParser(ctx, linesChan, nil)
 
 	// Process all input files, sending lines into linesChan
 	wg.Add(1)
