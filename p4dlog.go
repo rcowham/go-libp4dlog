@@ -662,6 +662,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	if debugLog {
 		fp.logger.Infof("addCommand: hasTrack %v, pid %d lineNo %d cmd %s dup %v", hasTrackInfo, newCmd.Pid, newCmd.LineNo, newCmd.Cmd, newCmd.duplicateKey)
 	}
+	if fp.currTime.IsZero() || newCmd.StartTime.After(fp.currTime) {
+		fp.currTime = newCmd.StartTime
+	}
 	newCmd.Running = fp.running
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
@@ -1012,16 +1015,38 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 	cmdHasBeenProcessed := false
 	for _, cmd := range fp.cmds {
 		completed := false
-		if cmd.completed && (cmd.hasTrackInfo || fp.currStartTime.Sub(cmd.EndTime) >= timeWindow ||
-			(fp.timeLastCmdProcessed != blankTime && fp.currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow)) {
-			completed = true
+		debugLog := fp.debugLog(cmd)
+		if cmd.completed {
+			if cmd.hasTrackInfo {
+				if debugLog {
+					fp.logger.Infof("output: r1 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+				}
+				completed = true
+			} else if !cmd.EndTime.IsZero() && fp.currStartTime.Sub(cmd.EndTime) >= timeWindow {
+				if debugLog {
+					fp.logger.Infof("output: r2 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+				}
+				completed = true
+			} else if !fp.timeLastCmdProcessed.IsZero() && fp.currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow {
+				if debugLog {
+					fp.logger.Infof("output: r3 pid %d lineNo %d cmd %s currT %s tlcp %s", cmd.Pid, cmd.LineNo, cmd.Cmd, fp.currTime, fp.timeLastCmdProcessed)
+				}
+				completed = true
+			}
 		}
 		// We have observed logs with very few "completed" records.
-		if !completed && (cmd.hasTrackInfo && cmd.computeEndTime() != blankTime && fp.currStartTime.Sub(cmd.computeEndTime()) >= timeWindow) {
+		if !completed && (cmd.hasTrackInfo && cmd.computeEndTime() != blankTime &&
+			fp.currStartTime.Sub(cmd.computeEndTime()) >= timeWindow) {
+			if debugLog {
+				fp.logger.Infof("output: r4 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+			}
 			completed = true
 		}
 		// Handle the special commands which don't receive a completed time - we use StartTime
 		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && cmdHasNoCompletionRecord(cmd.Cmd) {
+			if debugLog {
+				fp.logger.Infof("output: r5 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+			}
 			completed = true
 		}
 		if completed {
@@ -1331,42 +1356,42 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 	fp.linesChan = &linesChan
 	fp.blockChan = make(chan *Block, 1000)
 
-	// Output commands on seperate thread
-	// timeChan is nil when there are no metrics to process.
-	if timeChan == nil {
-		ticker := time.NewTicker(fp.outputDuration)
-		tickerDebug := time.NewTicker(fp.debugDuration)
-		go func() {
-			for {
-				select {
-				case t, _ := <-ticker.C:
-					fp.m.Lock()
-					fp.currTime = t
-					fp.m.Unlock()
-				case <-tickerDebug.C:
-					fp.debugOutputCommands()
-				}
-			}
-		}()
-	} else {
-		go func() {
-			tickerDebug := time.NewTicker(fp.debugDuration)
-			for {
-				select {
-				case t, ok := <-timeChan:
-					if ok {
-						fp.m.Lock()
-						fp.currTime = t
-						fp.m.Unlock()
-					} else {
-						return
-					}
-				case <-tickerDebug.C:
-					fp.debugOutputCommands()
-				}
-			}
-		}()
-	}
+	// // Output commands on seperate thread
+	// // timeChan is nil when there are no metrics to process.
+	// if timeChan == nil {
+	// 	ticker := time.NewTicker(fp.outputDuration)
+	// 	tickerDebug := time.NewTicker(fp.debugDuration)
+	// 	go func() {
+	// 		for {
+	// 			select {
+	// 			case t, _ := <-ticker.C:
+	// 				fp.m.Lock()
+	// 				fp.currTime = t
+	// 				fp.m.Unlock()
+	// 			case <-tickerDebug.C:
+	// 				fp.debugOutputCommands()
+	// 			}
+	// 		}
+	// 	}()
+	// } else {
+	// 	go func() {
+	// 		tickerDebug := time.NewTicker(fp.debugDuration)
+	// 		for {
+	// 			select {
+	// 			case t, ok := <-timeChan:
+	// 				if ok {
+	// 					fp.m.Lock()
+	// 					fp.currTime = t
+	// 					fp.m.Unlock()
+	// 				} else {
+	// 					return
+	// 				}
+	// 			case <-tickerDebug.C:
+	// 				fp.debugOutputCommands()
+	// 			}
+	// 		}
+	// 	}()
+	// }
 
 	// Go routine to process all the lines being received
 	// sends blocks on the blockChannel

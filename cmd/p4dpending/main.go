@@ -84,7 +84,8 @@ type P4Pending struct {
 	logger             *logrus.Logger
 	timeChan           chan time.Time
 	linesChan          chan string
-	linesRead          int64
+	totalCount         int
+	pendingCount       int
 }
 
 // Parse single log file - output is sent via linesChan channel
@@ -129,24 +130,20 @@ func (p4p *P4Pending) parseLog(logfile string) {
 		p4p.logger.Infof("Progress reporting frequency: %v", d)
 		progressChan := progress.NewTicker(ctx, preader, fileSize, d)
 		for p := range progressChan {
-			fmt.Fprintf(os.Stderr, "%s: %s/%s %.0f%% estimated finish %s, %v remaining...\n",
+			fmt.Fprintf(os.Stderr, "%s: %s/%s %.0f%% estimated finish %s, %v remaining... cmds total %d, pending %d\n",
 				logfile, byteCountDecimal(p.N()), byteCountDecimal(fileSize),
 				p.Percent(), p.Estimated().Format("15:04:05"),
-				p.Remaining().Round(time.Second))
+				p.Remaining().Round(time.Second),
+				p4p.totalCount, p4p.pendingCount)
 		}
 		fmt.Fprintln(os.Stderr, "processing completed")
 	}()
 
-	i := 1
 	for scanner.Scan() {
 		// Use time records in log to cause ticks for log parser
 		line := scanner.Text()
-		p4p.generateLogTimeEvents(line)
+		// p4p.generateLogTimeEvents(line)
 		p4p.linesChan <- line
-		i += 1
-		if i%50000 == 0 {
-			p4p.logger.Debugf("Processed %d lines", i)
-		}
 	}
 
 }
@@ -235,7 +232,7 @@ func openFile(outputName string) (*os.File, *bufio.Writer, error) {
 	if outputName == "-" {
 		fd = os.Stdout
 	} else {
-		fd, err = os.OpenFile(outputName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		fd, err = os.OpenFile(outputName, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -269,6 +266,14 @@ func main() {
 			"json.output",
 			"Name of file to which to write JSON if that flag is set. Defaults to <logfile-prefix>.json",
 		).String()
+		debugPID = kingpin.Flag(
+			"debug.pid",
+			"Set for debug output for specified PID - requires debug.cmd to be also specified.",
+		).Int64()
+		debugCmd = kingpin.Flag(
+			"debug.cmd",
+			"Set for debug output for specified command - requires debug.pid to be also specified.",
+		).Default("").String()
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("p4dpending")).Author("Robert Cowham")
 	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and lists pending commands.\n" +
@@ -288,7 +293,7 @@ func main() {
 	startTime := time.Now()
 	logger.Infof("%v", version.Print("p4dpending"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
-	logger.Infof("Flags: debug %v, jsonfile %v", *debug, *jsonOutputFile)
+	logger.Infof("Flags: debug %v, jsonfile %v, debugPid/cmd %d/%s", *debug, *jsonOutputFile, *debugPID, *debugCmd)
 
 	linesChan := make(chan string, 10000)
 
@@ -322,6 +327,9 @@ func main() {
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
 	}
+	if *debugPID != 0 && *debugCmd != "" {
+		fp.SetDebugPID(*debugPID, *debugCmd)
+	}
 	cmdChan = fp.LogParser(ctx, linesChan, p4p.timeChan)
 
 	// Process all input files, sending lines into linesChan
@@ -335,11 +343,18 @@ func main() {
 	// Process all commands, but discarding those with completion records
 	// When we close the linesChan above, we will force the output of "pending" commands.
 	for cmd := range cmdChan {
+		p4p.totalCount += 1
 		if cmd.EndTime.IsZero() {
+			p4p.pendingCount += 1
 			fmt.Fprintf(fJSON, "%s\n", cmd.String())
+		} else {
+			if p4p.totalCount%100000 == 0 {
+				fJSON.Flush()
+			}
 		}
 	}
 
 	wg.Wait()
-	logger.Infof("Completed %s, elapsed %s", time.Now(), time.Since(startTime))
+	logger.Infof("Completed %s, elapsed %s, cmds total %d, pending %d",
+		time.Now(), time.Since(startTime), p4p.totalCount, p4p.pendingCount)
 }
