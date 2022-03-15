@@ -7,6 +7,7 @@ Check the [releases](https://github.com/rcowham/go-libp4dlog/releases) page for 
 - [go-libp4dlog](#go-libp4dlog)
   - [Running the log analyzer](#running-the-log-analyzer)
   - [Examples](#examples)
+  - [Some sample SQL queries](#some-sample-sql-queries)
   - [Viewing historical metrics via Grafana/Prometheus/VictoriaMetrics](#viewing-historical-metrics-via-grafanaprometheusvictoriametrics)
     - [Closing down and removing data](#closing-down-and-removing-data)
   - [P4D Log Analysis](#p4d-log-analysis)
@@ -99,6 +100,10 @@ To write SQL statements to a file without creating a Sqlite db:
 
 Please note it is multi-threaded, and thus will use 2-3 cores if available (placign load on your system). You may wish to consider 
 lowering its priority using the `nice` command.
+
+## Some sample SQL queries
+
+See [log2sql-examples.md](log2sql-examples.md)
 
 ## Viewing historical metrics via Grafana/Prometheus/VictoriaMetrics
 
