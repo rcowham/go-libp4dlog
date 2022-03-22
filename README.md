@@ -4,6 +4,11 @@ go-libp4dlog is a Go language library to parse Perforce p4d text logs, with a co
 
 Check the [releases](https://github.com/rcowham/go-libp4dlog/releases) page for the latest binary releases.
 
+* `p4dlog` - log analyzer (this page)
+* `p4locks` - lock analyzer - see [p4locks README](cmd/p4locks/README.md)
+
+Contents:
+
 - [go-libp4dlog](#go-libp4dlog)
   - [Running the log analyzer](#running-the-log-analyzer)
   - [Examples](#examples)
@@ -12,6 +17,7 @@ Check the [releases](https://github.com/rcowham/go-libp4dlog/releases) page for 
     - [Closing down and removing data](#closing-down-and-removing-data)
   - [P4D Log Analysis](#p4d-log-analysis)
   - [Output of this library](#output-of-this-library)
+- [p4locks - lock analyzer](#p4locks---lock-analyzer)
 - [Building the log2sql binary](#building-the-log2sql-binary)
 
 P4D log files are written to a file specified by $P4LOG, or via command line flag "p4d -L p4d.log". We would normally 
@@ -166,6 +172,10 @@ It is used by:
 
 * https://github.com/rcowham/p4dbeat - Custom Elastic Beat - consumes parsed log records and sends to Elastic stash
 * https://github.com/perforce/p4prometheus - consumes parsed log records and writes Prometheus metrics
+
+# p4locks - lock analyzer
+
+See [p4locks README](cmd/p4locks/README.md)
 
 # Building the log2sql binary
 
