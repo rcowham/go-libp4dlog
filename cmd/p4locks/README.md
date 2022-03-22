@@ -7,7 +7,9 @@ Check the [releases](https://github.com/rcowham/go-libp4dlog/releases) page for 
 
 ## Credits
 
-Thanks to Daniel Speed @ Zenimax Online Studios https://github.com/Redundancy for the idea and sample Javascript.
+Thanks to Daniel Speed @ Zenimax Online Studios https://github.com/Redundancy for the idea and the initial  Javascript implementation.
+
+__*Contents:*__
 
 - [p4locks - P4D Table Locking Analyser](#p4locks---p4d-table-locking-analyser)
   - [Credits](#credits)
