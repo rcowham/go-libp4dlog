@@ -107,7 +107,7 @@ func writeTrailer(f *bufio.Writer) error {
 
 ];
 
-    var projectName = "Perforce Table Locks";
+	var projectName = "Perforce Table Locks";
 	var readHeldColor = '#5DADE2';
 	var readWaitColor = '#8E44AD';
 	var writeHeldColor = '#C70039';
@@ -221,147 +221,139 @@ func writeTrailer(f *bufio.Writer) error {
 		"db.monitor",
 	];
 
-    function pad2(i) {
-      if(i < 10) {
-        return "0"+i;
-      }
-      return i;
-    }
+	function pad2(i) {
+		if (i < 10) {
+			return "0" + i;
+		}
+		return i;
+	}
 
-    function dateToGanttDate(d) {
-      return d.getFullYear() + "-" +  pad2(d.getMonth()) + "-" + pad2(d.getDate()) +
-      " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
-    }
+	function dateToGanttDate(d) {
+		return d.getFullYear() + "-" +  pad2(d.getMonth()) + "-" + pad2(d.getDate()) +
+			" " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+	}
 
-    function secondsToDuration(s) {
-      var minute = 60;
-      var hour = minute * 60;
+	function secondsToDuration(s) {
+		var minute = 60;
+		var hour = minute * 60;
 
-      var numHours = Math.floor(s/hour);
-      var hourRemainder = s % hour;
-      var numMinutes = Math.floor(hourRemainder/minute);
-      var minuteRemainder = hourRemainder % minute;
+		var numHours = Math.floor(s/hour);
+		var hourRemainder = s % hour;
+		var numMinutes = Math.floor(hourRemainder/minute);
+		var minuteRemainder = hourRemainder % minute;
 
-      var result = "";
-      if (numHours > 0) {
-        result += numHours + "h";
-      }
-      if (numMinutes > 0) {
-        result += numMinutes + "m";
-      }
-      if (minuteRemainder > 0) {
-        result += minuteRemainder + "s";
-      }
-      return result;
-    }
+		var result = "";
+		if (numHours > 0) {
+			result += numHours + "h";
+		}
+		if (numMinutes > 0) {
+			result += numMinutes + "m";
+		}
+		if (minuteRemainder > 0) {
+			result += minuteRemainder + "s";
+		}
+		return result;
+	}
 
-    function toMilliseconds(d) {
-        return d; // null function now - expects to be pass millis
-    }
+	function toMilliseconds(d) {
+		return d; // null function now - expects to be pass millis
+	}
 
-    function processLockEvents(input) {
-        var data = new google.visualization.DataTable();
-        data.addColumn({ type: 'string', id: 'Position' });
-        data.addColumn({ type: 'string', id: 'Name' });
+	function processLockEvents(input) {
+		var data = new google.visualization.DataTable();
+		data.addColumn({ type: 'string', id: 'Position' });
+		data.addColumn({ type: 'string', id: 'Name' });
 		data.addColumn({ type: 'string', id: 'style', role: 'style' });
-        data.addColumn({ type: 'string', role: 'tooltip' });
-        data.addColumn({ type: 'date', id: 'Start' });
-        data.addColumn({ type: 'date', id: 'End' });
+		data.addColumn({ type: 'string', role: 'tooltip' });
+		data.addColumn({ type: 'date', id: 'Start' });
+		data.addColumn({ type: 'date', id: 'End' });
 
-        var index = 1;
-        var tables = new Map();
+		var index = 1;
+		var tables = new Map();
 
-        for ( var i = 0; i < input.length; i++) {
-            var command = input[i];
-            var parentTable = tables.get(command.Table);
+		for ( var i = 0; i < input.length; i++) {
+			var command = input[i];
+			var parentTable = tables.get(command.Table);
 
-            var startTime = command.Start.slice(0,command.Start.length-1).replace("T", " ");
-            var start = new Date(startTime);
+			var startTime = command.Start.slice(0,command.Start.length-1).replace("T", " ");
+			var start = new Date(startTime);
 
-            var read_start = start;
-            var read_end = start;
-            var tooltip = command.Pid + ": (ln " + command.Line + ") " + command.User + " " + command.Command;
+			var read_start = start;
+			var read_end = start;
+			var tooltip = command.Pid + ": (ln " + command.Line + ") " + command.User + " " + command.Command;
 
-            if (command.Read) {
-                var rows = [];
+			if (command.Read) {
+				var rows = [];
 
-                if (command.Read.Wait > 0) {
-                    read_end = new Date(read_end.getTime() + toMilliseconds(command.Read.Wait));
-                    rows.push(
-                        [
-                            command.Table,
-                            "Read Wait" + " ("+command.Pid+")",
-                            readWaitColor,
-                            tooltip,
-                            read_start,
-                            read_end
-                        ]
-                    );
-                }
+				if (command.Read.Wait > 0) {
+					read_end = new Date(read_end.getTime() + toMilliseconds(command.Read.Wait));
+					rows.push([
+							command.Table,
+							"Read Wait" + " ("+command.Pid+")",
+							readWaitColor,
+							tooltip,
+							read_start,
+							read_end
+					]);
+				}
 
-                if (command.Read.Held > 0) {
-                    read_start = read_end;
-                    read_end = new Date(read_end.getTime() + toMilliseconds(command.Read.Held));
-                    rows.push(
-                        [
-                            command.Table,
-                            "Read Held" + " ("+command.Pid+")",
-                            readHeldColor,
-                            tooltip,
-                            read_start,
-                            read_end
-                        ]
-                    );
-                }
-                if (rows.length > 0){
-                    data.addRows(rows);
-                }
-            }
+				if (command.Read.Held > 0) {
+					read_start = read_end;
+					read_end = new Date(read_end.getTime() + toMilliseconds(command.Read.Held));
+					rows.push([
+							command.Table,
+							"Read Held" + " ("+command.Pid+")",
+							readHeldColor,
+							tooltip,
+							read_start,
+							read_end
+					]);
+				}
+				if (rows.length > 0){
+					data.addRows(rows);
+				}
+			}
 
-            var write_start = start;
-            var write_end = start
-            if (command.Write) {
-                var rows = [];
+			var write_start = start;
+			var write_end = start
+			if (command.Write) {
+				var rows = [];
 
-                if (command.Write.Wait > 0) {
-                    write_end = new Date(write_end.getTime() + toMilliseconds(command.Write.Wait));
-                    rows.push(
-                        [
-                            command.Table,
-                            "Write Wait" + " ("+command.Pid+")",
-                            writeWaitColor,
-                            tooltip,
-                            write_start,
-                            write_end
-                        ]
-                    );
-                }
+				if (command.Write.Wait > 0) {
+					write_end = new Date(write_end.getTime() + toMilliseconds(command.Write.Wait));
+					rows.push([
+							command.Table,
+							"Write Wait" + " ("+command.Pid+")",
+							writeWaitColor,
+							tooltip,
+							write_start,
+							write_end
+					]);
+				}
 
-                if (command.Write.Held > 0) {
-                    write_start = write_end;
-                    write_end = new Date(write_end.getTime() + toMilliseconds(command.Write.Held));
-                    rows.push(
-                        [
-                            command.Table,
-                            "Write Held" + " ("+command.Pid+")",
-                            writeHeldColor,
-                            tooltip,
-                            write_start,
-                            write_end
-                        ]
-                    );
-                }
-                if (rows.length > 0){
-                    data.addRows(rows);
-                }
-            }
-        }
+				if (command.Write.Held > 0) {
+					write_start = write_end;
+					write_end = new Date(write_end.getTime() + toMilliseconds(command.Write.Held));
+					rows.push([
+							command.Table,
+							"Write Held" + " ("+command.Pid+")",
+							writeHeldColor,
+							tooltip,
+							write_start,
+							write_end
+					]);
+				}
+				if (rows.length > 0){
+					data.addRows(rows);
+				}
+			}
+		}
 
-        return data;
-    }
+		return data;
+	}
 
-    function drawChart() {
-        var chart = new google.visualization.Timeline(document.getElementById('chart_div'));
+	function drawChart() {
+		var chart = new google.visualization.Timeline(document.getElementById('chart_div'));
 		data = data.filter(item => perforceTableLockOrder.indexOf(item.Table) != -1); 
 		data.sort(function(a, b){
 			var atable = perforceTableLockOrder.indexOf(a.Table);
@@ -369,14 +361,14 @@ func writeTrailer(f *bufio.Writer) error {
 			return atable - btable;
 		});
 		var options = {
-		  timeline: { 
+			timeline: { 
 			rowLabelStyle: {fontSize: 24, "vertical-align": "top" },
 		}};
-        chart.draw(processLockEvents(data), options);
-    }
+		chart.draw(processLockEvents(data), options);
+	}
 
-    google.charts.load("current", {packages:["timeline"]});
-    google.charts.setOnLoadCallback(drawChart);
+	google.charts.load("current", {packages:["timeline"]});
+	google.charts.setOnLoadCallback(drawChart);
 
 </script>
 
