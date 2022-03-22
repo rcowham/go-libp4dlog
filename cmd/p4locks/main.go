@@ -280,6 +280,7 @@ func writeTrailer(f *bufio.Writer) error {
 
             var read_start = start;
             var read_end = start;
+            var tooltip = command.Pid + ": (ln " + command.Line + ") " + command.User + " " + command.Command;
 
             if (command.Read) {
                 var rows = [];
@@ -290,8 +291,8 @@ func writeTrailer(f *bufio.Writer) error {
                         [
                             command.Table,
                             "Read Wait" + " ("+command.Pid+")",
-							readWaitColor,
-                            command.Pid + ": " + command.User + " " + command.Command,
+                            readWaitColor,
+                            tooltip,
                             read_start,
                             read_end
                         ]
@@ -305,8 +306,8 @@ func writeTrailer(f *bufio.Writer) error {
                         [
                             command.Table,
                             "Read Held" + " ("+command.Pid+")",
-							readHeldColor,
-                            command.Pid + ": " + command.User + " " + command.Command,
+                            readHeldColor,
+                            tooltip,
                             read_start,
                             read_end
                         ]
@@ -328,8 +329,8 @@ func writeTrailer(f *bufio.Writer) error {
                         [
                             command.Table,
                             "Write Wait" + " ("+command.Pid+")",
-							writeWaitColor,
-                            command.Pid + ": " + command.User + " " + command.Command,
+                            writeWaitColor,
+                            tooltip,
                             write_start,
                             write_end
                         ]
@@ -343,8 +344,8 @@ func writeTrailer(f *bufio.Writer) error {
                         [
                             command.Table,
                             "Write Held" + " ("+command.Pid+")",
-							writeHeldColor,
-                            command.Pid + ": " + command.User + " " + command.Command,
+                            writeHeldColor,
+                            tooltip,
                             write_start,
                             write_end
                         ]
@@ -396,6 +397,7 @@ type DataRec struct {
 	Table     string    `json:"Table"`
 	Pid       int64     `json:"Pid"`
 	CmdArgs   string    `json:"Command"`
+	LineNo    int64     `json:"Line"`
 	User      string    `json:"User"`
 	StartTime time.Time `json:"Start"`
 	// Workspace string    `json:"Workspace"`
@@ -439,6 +441,7 @@ func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 				Pid:       cmd.Pid,
 				Table:     fmt.Sprintf("db.%s", t.TableName),
 				User:      cmd.User,
+				LineNo:    cmd.LineNo,
 				StartTime: cmd.StartTime,
 			}
 			if t.TotalReadHeld > thresholdFilter || t.TotalReadWait > thresholdFilter {
