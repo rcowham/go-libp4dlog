@@ -615,9 +615,9 @@ func main() {
 			"Name of file to which to write HTML. Defaults to <logfile-prefix>.html",
 		).String()
 	)
-	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("p4dpending")).Author("Robert Cowham")
-	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and lists pending commands.\n" +
-		"Commands are produced in reverse chronological order."
+	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("p4locks")).Author("Robert Cowham")
+	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and outputs HTML Google Charts timeline with locks.\n" +
+		"Locks are listed by table and then pids with read/write wait/held."
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
@@ -630,8 +630,26 @@ func main() {
 	if *debug > 0 {
 		logger.Level = logrus.DebugLevel
 	}
+
+	if len(*logfiles) == 0 {
+		logger.Errorf("No log file specified!")
+		os.Exit(1)
+	}
+
+	missingLogs := make([]string, 0)
+	for _, f := range *logfiles {
+		_, err := os.Stat(f)
+		if os.IsNotExist(err) {
+			missingLogs = append(missingLogs, f)
+		}
+	}
+	if len(missingLogs) > 0 {
+		logger.Errorf("Specified log files not found: %s", missingLogs)
+		os.Exit(1)
+	}
+
 	startTime := time.Now()
-	logger.Infof("%v", version.Print("p4dpending"))
+	logger.Infof("%v", version.Print("p4locks"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 	logger.Infof("Flags: debug %v, htmlfile %v", *debug, *htmlOutputFile)
 
