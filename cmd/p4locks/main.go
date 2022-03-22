@@ -25,6 +25,9 @@ import (
 	p4dlog "github.com/rcowham/go-libp4dlog"
 )
 
+// Threshold in milliseconds below which we filter out commands - for at least one of read/write wait/held
+var thresholdFilter int64 = 1000
+
 func dateStr(t time.Time) string {
 	var blankTime time.Time
 	if t == blankTime {
@@ -253,7 +256,7 @@ func writeTrailer(f *bufio.Writer) error {
     }
 
     function toMilliseconds(d) {
-        return d/1000000;
+        return d; // null function now - expects to be pass millis
     }
 
     function processLockEvents(input) {
@@ -428,10 +431,9 @@ type P4DLocks struct {
 // 	}
 // }
 func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
-	const limit = 1000 // ms
 	for _, t := range cmd.Tables {
-		if t.TotalReadHeld > limit || t.TotalReadWait > limit ||
-			t.TotalWriteHeld > limit || t.TotalWriteWait > limit {
+		if t.TotalReadHeld > thresholdFilter || t.TotalReadWait > thresholdFilter ||
+			t.TotalWriteHeld > thresholdFilter || t.TotalWriteWait > thresholdFilter {
 			rec := DataRec{
 				CmdArgs:   fmt.Sprintf("%s %s", cmd.Cmd, cmd.Args),
 				Pid:       cmd.Pid,
@@ -439,10 +441,10 @@ func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 				User:      cmd.User,
 				StartTime: cmd.StartTime,
 			}
-			if t.TotalReadHeld > limit || t.TotalReadWait > limit {
+			if t.TotalReadHeld > thresholdFilter || t.TotalReadWait > thresholdFilter {
 				rec.ReadLock = &LockRec{
-					TotalWait: t.TotalReadWait * 1000000,
-					TotalHeld: t.TotalReadHeld * 1000000,
+					TotalWait: t.TotalReadWait,
+					TotalHeld: t.TotalReadHeld,
 				}
 				j, _ := json.Marshal(rec)
 				if pl.countOutput > 0 {
@@ -457,11 +459,11 @@ func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 				}
 				pl.countOutput += 1
 			}
-			if t.TotalWriteHeld > limit || t.TotalWriteWait > limit {
+			if t.TotalWriteHeld > thresholdFilter || t.TotalWriteWait > thresholdFilter {
 				rec.ReadLock = nil
 				rec.WriteLock = &LockRec{
-					TotalWait: t.TotalWriteWait * 1000000,
-					TotalHeld: t.TotalWriteHeld * 1000000,
+					TotalWait: t.TotalWriteWait,
+					TotalHeld: t.TotalWriteHeld,
 				}
 				j, _ := json.Marshal(rec)
 				if pl.countOutput > 0 {
@@ -610,10 +612,14 @@ func main() {
 			"debug",
 			"Enable debugging level.",
 		).Int()
+		threshold = kingpin.Flag(
+			"threshold",
+			"Threshold value below which commands are filtered out (in milliseconds). Default 1000",
+		).Short('t').Int()
 		htmlOutputFile = kingpin.Flag(
 			"html.output",
 			"Name of file to which to write HTML. Defaults to <logfile-prefix>.html",
-		).String()
+		).Short('o').String()
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("p4locks")).Author("Robert Cowham")
 	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and outputs HTML Google Charts timeline with locks.\n" +
@@ -648,6 +654,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	thresholdFilter = int64(*threshold)
 	startTime := time.Now()
 	logger.Infof("%v", version.Print("p4locks"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
