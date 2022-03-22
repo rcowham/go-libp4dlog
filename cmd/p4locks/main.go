@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +27,7 @@ import (
 )
 
 // Threshold in milliseconds below which we filter out commands - for at least one of read/write wait/held
-var thresholdFilter int64 = 1000
+var thresholdFilter int64 = 10000
 
 func dateStr(t time.Time) string {
 	var blankTime time.Time
@@ -403,14 +404,14 @@ type DataRec struct {
 
 // P4DLocks structure
 type P4DLocks struct {
-	debug              int
-	fp                 *p4dlog.P4dFileParser
-	timeLatestStartCmd time.Time
-	latestStartCmdBuf  string
-	logger             *logrus.Logger
-	linesChan          chan string
-	countTotal         int
-	countOutput        int
+	debug               int
+	fp                  *p4dlog.P4dFileParser
+	excludeTablesString string
+	excludeTablesRegex  *regexp.Regexp
+	logger              *logrus.Logger
+	linesChan           chan string
+	countTotal          int
+	countOutput         int
 }
 
 // {
@@ -426,6 +427,15 @@ type P4DLocks struct {
 // }
 func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 	for _, t := range cmd.Tables {
+		if pl.excludeTablesString != "" {
+			if pl.excludeTablesRegex == nil {
+				regexStr := fmt.Sprintf("(%s)", pl.excludeTablesString)
+				pl.excludeTablesRegex = regexp.MustCompile(regexStr)
+			}
+			if pl.excludeTablesRegex.MatchString(t.TableName) {
+				continue
+			}
+		}
 		if t.TotalReadHeld > thresholdFilter || t.TotalReadWait > thresholdFilter ||
 			t.TotalWriteHeld > thresholdFilter || t.TotalWriteWait > thresholdFilter {
 			rec := DataRec{
@@ -609,18 +619,33 @@ func main() {
 		).Int()
 		threshold = kingpin.Flag(
 			"threshold",
-			"Threshold value below which commands are filtered out (in milliseconds). Default 1000",
+			fmt.Sprintf("Threshold value below which commands are filtered out (in milliseconds). Default %d", thresholdFilter),
 		).Short('t').Int()
 		htmlOutputFile = kingpin.Flag(
 			"html.output",
 			"Name of file to which to write HTML. Defaults to <logfile-prefix>.html",
 		).Short('o').String()
+		excludeTablesRegexString = kingpin.Flag(
+			"exclude.tables",
+			"Specify a (golang) regex to match tables to exclude from results (e.g. 'user$' or '(user|nameval)$'). No default.",
+		).Short('x').String()
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("p4locks")).Author("Robert Cowham")
-	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and outputs HTML Google Charts timeline with locks.\n" +
-		"Locks are listed by table and then pids with read/write wait/held."
+	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and outputs an HTML file with a Google Charts timeline with information about locks.\n" +
+		"Locks are listed by table and then pids with read/write wait/held.\n" +
+		"The output file can be opened locally by any browser (although internet access required to download JS).\n\n" +
+		"Examples:\n" +
+		"p4locks -x user log"
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
+
+	// Validate regex
+	if len(*excludeTablesRegexString) > 0 {
+		if _, err := regexp.Compile(*excludeTablesRegexString); err != nil {
+			fmt.Printf("ERROR: Failed to parse parameter '%s' as a valid Go regex\n", *excludeTablesRegexString)
+			os.Exit(1)
+		}
+	}
 
 	if *debug > 0 {
 		// CPU profiling by default
@@ -678,10 +703,11 @@ func main() {
 
 	fp = p4dlog.NewP4dFileParser(logger)
 	pl := &P4DLocks{
-		debug:     *debug,
-		logger:    logger,
-		fp:        fp,
-		linesChan: linesChan,
+		debug:               *debug,
+		excludeTablesString: *excludeTablesRegexString,
+		logger:              logger,
+		fp:                  fp,
+		linesChan:           linesChan,
 	}
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
