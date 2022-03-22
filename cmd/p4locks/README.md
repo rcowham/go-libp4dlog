@@ -30,14 +30,20 @@ which can be viewed in a browser. This HTML file includes Google Charting librar
 $ ./p4locks -h
 usage: p4locks [<flags>] [<logfile>...]
 
-Parses one or more p4d text log files (which may be gzipped) and outputs HTML Google Charts timeline with locks. Locks are listed
-by table and then pids with read/write wait/held.
+Parses one or more p4d text log files (which may be gzipped) and outputs an HTML file with a Google Charts timeline with
+information about locks. Locks are listed by table and then pids with read/write wait/held. The output file can be opened locally
+by any browser (although internet access required to download JS).
+
+Examples: p4locks -x user log
 
 Flags:
   -h, --help                     Show context-sensitive help (also try --help-long and --help-man).
       --debug=DEBUG              Enable debugging level.
-  -t, --threshold=THRESHOLD      Threshold value below which commands are filtered out (in milliseconds). Default 1000
+  -t, --threshold=THRESHOLD      Threshold value below which commands are filtered out (in milliseconds). Default 10000
   -o, --html.output=HTML.OUTPUT  Name of file to which to write HTML. Defaults to <logfile-prefix>.html
+  -x, --exclude.tables=EXCLUDE.TABLES
+                                 Specify a (golang) regex to match tables to exclude from results (e.g. 'user$' or
+                                 '(user|nameval)$'). No default.
       --version                  Show application version.
 
 Args:
@@ -53,6 +59,10 @@ will produce a `log2020-02-01.html` (stripping off `.gz` and `.log` from name an
 Also possible to parse multiple log files in one go:
 
     p4locks -o logs.html log2020-02-*
+
+Excluding a table (db.user) and setting threshold to 20s for lock wait/held:
+
+    p4locks -t 20000 -x user log
 
 # Building the p4lock binary
 
