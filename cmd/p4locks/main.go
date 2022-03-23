@@ -94,9 +94,28 @@ func writeHeader(f *bufio.Writer) error {
 </style>
 <body>
 
+<div id="programmatic_dashboard_div" style="border: 1px solid #ccc">
+<table class="columns">
+  <tr>
+	<td>
+	  <div id="programmatic_control_div" style="padding-left: 2em; min-width: 250px"></div>
+	  <div>
+		<button style="margin: 1em 1em 1em 2em" onclick="drawChart();">Change Held/Wait Threshold (ms)</button>
+		<input type="text" name="txtThreshold" id="txtThreshold" value="20000">
+		<label type="text" name="txtSummary" id="txtSummary">Data Summary</label>
+	  </div>
+	</td>
+	<td>
+	  <div id="programmatic_chart_div"></div>
+	</td>
+  </tr>
+</table>
+</div>
+
 <div id="chart_div" style='width:100%; height:100%;'></div>
 <script type="text/javascript">
-	var data = [`
+	var base_data = [
+`
 
 	_, err := fmt.Fprint(f, header)
 	return err
@@ -105,7 +124,6 @@ func writeHeader(f *bufio.Writer) error {
 // chart trailer
 func writeTrailer(f *bufio.Writer) error {
 	trailer := `
-
 ];
 
 	var projectName = "Perforce Table Locks";
@@ -355,7 +373,10 @@ func writeTrailer(f *bufio.Writer) error {
 
 	function drawChart() {
 		var chart = new google.visualization.Timeline(document.getElementById('chart_div'));
-		data = data.filter(item => perforceTableLockOrder.indexOf(item.Table) != -1); 
+		var threshold = document.getElementById('txtThreshold').value;
+		data = base_data.filter(item => perforceTableLockOrder.indexOf(item.Table) != -1); 
+		data = data.filter(item => item.MaxLock > threshold); 
+		document.getElementById('txtSummary').innerHTML = 'Records - total: ' + base_data.length + ' filtered: ' + data.length;
 		data.sort(function(a, b){
 			var atable = perforceTableLockOrder.indexOf(a.Table);
 			var btable =  perforceTableLockOrder.indexOf(b.Table);			
@@ -393,6 +414,7 @@ type DataRec struct {
 	LineNo    int64     `json:"Line"`
 	User      string    `json:"User"`
 	StartTime time.Time `json:"Start"`
+	MaxLock   int64     `json:"MaxLock"` // Max of any read/write wait/held value - for filtering results
 	// Workspace string    `json:"Workspace"`
 	// EndTime          time.Time `json:"endTime"`
 	// ComputeLapse     float32   `json:"computeLapse"`
@@ -400,6 +422,23 @@ type DataRec struct {
 	// Args             string    `json:"args"`
 	ReadLock  *LockRec `json:"Read,omitempty"`
 	WriteLock *LockRec `json:"Write,omitempty"`
+}
+
+func (d *DataRec) setMaxLock() {
+	if d.ReadLock != nil {
+		if d.ReadLock.TotalHeld > d.ReadLock.TotalWait {
+			d.MaxLock = d.ReadLock.TotalHeld
+		} else {
+			d.MaxLock = d.ReadLock.TotalWait
+		}
+	}
+	if d.WriteLock != nil {
+		if d.WriteLock.TotalHeld > d.WriteLock.TotalWait {
+			d.MaxLock = d.WriteLock.TotalHeld
+		} else {
+			d.MaxLock = d.WriteLock.TotalWait
+		}
+	}
 }
 
 // P4DLocks structure
@@ -451,6 +490,7 @@ func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 					TotalWait: t.TotalReadWait,
 					TotalHeld: t.TotalReadHeld,
 				}
+				rec.setMaxLock()
 				j, _ := json.Marshal(rec)
 				if pl.countOutput > 0 {
 					_, err := fmt.Fprintf(f, ",\n")
@@ -470,6 +510,7 @@ func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 					TotalWait: t.TotalWriteWait,
 					TotalHeld: t.TotalWriteHeld,
 				}
+				rec.setMaxLock()
 				j, _ := json.Marshal(rec)
 				if pl.countOutput > 0 {
 					_, err := fmt.Fprintf(f, ",\n")
@@ -674,7 +715,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	thresholdFilter = int64(*threshold)
+	if *threshold > 0 {
+		thresholdFilter = int64(*threshold)
+	}
 	startTime := time.Now()
 	logger.Infof("%v", version.Print("p4locks"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
