@@ -15,6 +15,7 @@ __*Contents:*__
   - [Credits](#credits)
   - [Running the lock analyzer](#running-the-lock-analyzer)
   - [Examples](#examples)
+    - [Filtering uninteresting records](#filtering-uninteresting-records)
 - [Building the p4lock binary](#building-the-p4lock-binary)
 
 See [Project README](../../README.md) for instructions as to creating P4LOG files.
@@ -63,6 +64,35 @@ Also possible to parse multiple log files in one go:
 Excluding a table (db.user) and setting threshold to 20s for lock wait/held:
 
     p4locks -t 20000 -x user log
+
+### Filtering uninteresting records
+
+You may find rather large output files which take a long time to load in a browser and contain a lot of uninteresting data.
+The easiest way to filter this is to:
+
+* Increase the `threshold` value (filtering out locks wait/held for less time)
+* Filter out uninteresting tables
+
+The former is easy via `-t/--threshold`, e.g.
+
+    p4locks -t 30000 log
+
+will leave only commands with lock wait/held > 30s (30,000 ms).
+
+For uninteresting tables, consider counting them and then filtering them out. E.g.
+
+    p4locks -t 30000 log
+    grep Table log.html | cut -d',' -f1 | sort | uniq -c | sort -n -k 1,1
+
+You can count the data entries, e.g.
+
+    grep -c Table log.html
+
+Filter out unwanted tables, e.g.
+
+    p4locks -t 30000 -x "(trigger|monitor|group|protect|user|ticket|domain)" log
+
+This will result in a potentially much smaller `log.html` file.
 
 # Building the p4lock binary
 
