@@ -225,7 +225,7 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 	}
 	defer file.Close()
 
-	const maxCapacity = 1024 * 1024
+	const maxCapacity = 5 * 1024 * 1024
 	ctx := context.Background()
 	inbuf := make([]byte, maxCapacity)
 	reader, fileSize, err := readerFromFile(file)
@@ -261,8 +261,20 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 		fmt.Fprintln(os.Stderr, "processing completed")
 	}()
 
+	const maxLine = 10000
+	i := 0
 	for scanner.Scan() {
-		linesChan <- scanner.Text()
+		if len(scanner.Text()) > maxLine {
+			line := fmt.Sprintf("%s...'", scanner.Text()[0:maxLine])
+			linesChan <- line
+		} else {
+			linesChan <- scanner.Text()
+		}
+		i += 1
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read input file on line: %d, %v\n", i, err)
 	}
 
 }
