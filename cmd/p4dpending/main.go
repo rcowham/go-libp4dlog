@@ -98,7 +98,7 @@ func (p4p *P4Pending) parseLog(logfile string) {
 	}
 	defer file.Close()
 
-	const maxCapacity = 1024 * 1024
+	const maxCapacity = 5 * 1024 * 1024
 	ctx := context.Background()
 	inbuf := make([]byte, maxCapacity)
 	reader, fileSize, err := readerFromFile(file)
@@ -135,10 +135,21 @@ func (p4p *P4Pending) parseLog(logfile string) {
 		fmt.Fprintln(os.Stderr, "processing completed")
 	}()
 
+	const maxLine = 10000
+	i := 0
 	for scanner.Scan() {
 		// Use time records in log to cause ticks for log parser
-		line := scanner.Text()
-		p4p.linesChan <- line
+		if len(scanner.Text()) > maxLine {
+			line := fmt.Sprintf("%s...'", scanner.Text()[0:maxLine])
+			p4p.linesChan <- line
+		} else {
+			p4p.linesChan <- scanner.Text()
+		}
+		i += 1
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read input file on line: %d, %v\n", i, err)
 	}
 
 }

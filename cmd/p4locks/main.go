@@ -278,12 +278,43 @@ func writeTrailer(f *bufio.Writer) error {
 		return d; // null function now - expects to be pass millis
 	}
 
+
+	function humanize (milliseconds) {
+		var seconds = Math.floor(milliseconds / 1000);
+		var levels = [
+			[Math.floor(seconds / 31536000), 'years'],
+			[Math.floor((seconds % 31536000) / 86400), 'days'],
+			[Math.floor(((seconds % 31536000) % 86400) / 3600), 'hours'],
+			[Math.floor((((seconds % 31536000) % 86400) % 3600) / 60), 'mins'],
+			[(((seconds % 31536000) % 86400) % 3600) % 60, 'secs'],
+		];
+		var returntext = '';
+
+		for (var i = 0, max = levels.length; i < max; i++) {
+			if ( levels[i][0] === 0 ) continue;
+			returntext += ' ' + levels[i][0] + ' ' + (levels[i][0] === 1 ? levels[i][1].substr(0, levels[i][1].length-1): levels[i][1]);
+		};
+		if (returntext == '') { returntext = milliseconds + 'ms'}
+		return returntext.trim();
+	}
+
+	function getTooltip(command, duration) {
+		var cmdText = command.Command;
+		if (cmdText.length > 100) { 
+			cmdText = cmdText.substring(0, 100) + "..."
+		};
+		return "Pid:" + command.Pid + " line:" + command.Line + " User:" + command.User + " Running: " + command.Running + "</br>" +
+			"Dur: " + duration + " (" + humanize(duration) + ") Start:" + command.Start + " End:" + command.EndTime + "</br>" +
+			"Completed: " + command.CompletedLapse + " (" + humanize(command.CompletedLapse) + ")" + " Compute: " + command.ComputeLapse + " (" + humanize(command.ComputeLapse) + ")" + "</br>" +
+			" " + cmdText;
+	}
+
 	function processLockEvents(input) {
 		var data = new google.visualization.DataTable();
 		data.addColumn({ type: 'string', id: 'Position' });
 		data.addColumn({ type: 'string', id: 'Name' });
 		data.addColumn({ type: 'string', id: 'style', role: 'style' });
-		data.addColumn({ type: 'string', role: 'tooltip' });
+		data.addColumn({ type: 'string', role: 'tooltip', 'p': {'html': true} });
 		data.addColumn({ type: 'date', id: 'Start' });
 		data.addColumn({ type: 'date', id: 'End' });
 
@@ -299,7 +330,6 @@ func writeTrailer(f *bufio.Writer) error {
 
 			var read_start = start;
 			var read_end = start;
-			var tooltip = command.Pid + ": (ln " + command.Line + ") " + command.User + " " + command.Command;
 
 			if (command.Read) {
 				var rows = [];
@@ -310,7 +340,7 @@ func writeTrailer(f *bufio.Writer) error {
 							command.Table,
 							"Read Wait" + " ("+command.Pid+")",
 							readWaitColor,
-							tooltip,
+							getTooltip(command, command.Read.Wait),
 							read_start,
 							read_end
 					]);
@@ -323,7 +353,7 @@ func writeTrailer(f *bufio.Writer) error {
 							command.Table,
 							"Read Held" + " ("+command.Pid+")",
 							readHeldColor,
-							tooltip,
+							getTooltip(command, command.Read.Held),
 							read_start,
 							read_end
 					]);
@@ -344,7 +374,7 @@ func writeTrailer(f *bufio.Writer) error {
 							command.Table,
 							"Write Wait" + " ("+command.Pid+")",
 							writeWaitColor,
-							tooltip,
+							getTooltip(command, command.Write.Wait),
 							write_start,
 							write_end
 					]);
@@ -357,7 +387,7 @@ func writeTrailer(f *bufio.Writer) error {
 							command.Table,
 							"Write Held" + " ("+command.Pid+")",
 							writeHeldColor,
-							tooltip,
+							getTooltip(command, command.Write.Held),
 							write_start,
 							write_end
 					]);
@@ -385,6 +415,7 @@ func writeTrailer(f *bufio.Writer) error {
 		var options = {
 			timeline: { 
 			rowLabelStyle: {fontSize: 24, "vertical-align": "top" },
+			tooltip: { isHtml: true }
 		}};
 		chart.draw(processLockEvents(data), options);
 	}
@@ -408,20 +439,23 @@ type LockRec struct {
 
 // DataRec is a command found in the block
 type DataRec struct {
-	Table     string    `json:"Table"`
-	Pid       int64     `json:"Pid"`
-	CmdArgs   string    `json:"Command"`
-	LineNo    int64     `json:"Line"`
-	User      string    `json:"User"`
-	StartTime time.Time `json:"Start"`
-	MaxLock   int64     `json:"MaxLock"` // Max of any read/write wait/held value - for filtering results
-	// Workspace string    `json:"Workspace"`
-	// EndTime          time.Time `json:"endTime"`
-	// ComputeLapse     float32   `json:"computeLapse"`
-	// CompletedLapse   float32   `json:"completedLapse"`
-	// Args             string    `json:"args"`
-	ReadLock  *LockRec `json:"Read,omitempty"`
-	WriteLock *LockRec `json:"Write,omitempty"`
+	Table          string    `json:"Table"`
+	Pid            int64     `json:"Pid"`
+	CmdArgs        string    `json:"Command"`
+	LineNo         int64     `json:"Line"`
+	User           string    `json:"User"`
+	StartTime      time.Time `json:"Start"`
+	EndTime        time.Time `json:"EndTime"`
+	Workspace      string    `json:"Workspace"`
+	ComputeLapse   int64     `json:"ComputeLapse"`
+	CompletedLapse int64     `json:"CompletedLapse"`
+	App            string    `json:"App"`
+	Running        int64     `json:"Running"`
+	UCpu           int64     `json:"UCpu"`
+	SCpu           int64     `json:"SCpu"`
+	MaxLock        int64     `json:"MaxLock"` // Max of any read/write wait/held value - for filtering results
+	ReadLock       *LockRec  `json:"Read,omitempty"`
+	WriteLock      *LockRec  `json:"Write,omitempty"`
 }
 
 func (d *DataRec) setMaxLock() {
@@ -478,12 +512,20 @@ func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 		if t.TotalReadHeld > thresholdFilter || t.TotalReadWait > thresholdFilter ||
 			t.TotalWriteHeld > thresholdFilter || t.TotalWriteWait > thresholdFilter {
 			rec := DataRec{
-				CmdArgs:   fmt.Sprintf("%s %s", cmd.Cmd, cmd.Args),
-				Pid:       cmd.Pid,
-				Table:     fmt.Sprintf("db.%s", t.TableName),
-				User:      cmd.User,
-				LineNo:    cmd.LineNo,
-				StartTime: cmd.StartTime,
+				CmdArgs:        fmt.Sprintf("%s %s", cmd.Cmd, cmd.Args),
+				Pid:            cmd.Pid,
+				Table:          fmt.Sprintf("db.%s", t.TableName),
+				User:           cmd.User,
+				LineNo:         cmd.LineNo,
+				StartTime:      cmd.StartTime,
+				EndTime:        cmd.EndTime,
+				Workspace:      cmd.Workspace,
+				ComputeLapse:   int64(cmd.ComputeLapse * 1000),
+				CompletedLapse: int64(cmd.CompletedLapse * 1000),
+				App:            cmd.App,
+				Running:        cmd.Running,
+				UCpu:           int64(cmd.UCpu * 1000),
+				SCpu:           int64(cmd.SCpu * 1000),
 			}
 			if t.TotalReadHeld > thresholdFilter || t.TotalReadWait > thresholdFilter {
 				rec.ReadLock = &LockRec{
@@ -543,7 +585,7 @@ func (pl *P4DLocks) parseLog(logfile string) {
 	}
 	defer file.Close()
 
-	const maxCapacity = 1024 * 1024
+	const maxCapacity = 5 * 1024 * 1024
 	ctx := context.Background()
 	inbuf := make([]byte, maxCapacity)
 	reader, fileSize, err := readerFromFile(file)
@@ -580,10 +622,21 @@ func (pl *P4DLocks) parseLog(logfile string) {
 		fmt.Fprintln(os.Stderr, "processing completed")
 	}()
 
+	const maxLine = 10000
+	i := 0
 	for scanner.Scan() {
 		// Use time records in log to cause ticks for log parser
-		line := scanner.Text()
-		pl.linesChan <- line
+		if len(scanner.Text()) > maxLine {
+			line := fmt.Sprintf("%s...'", scanner.Text()[0:maxLine])
+			pl.linesChan <- line
+		} else {
+			pl.linesChan <- scanner.Text()
+		}
+		i += 1
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read input file on line: %d, %v\n", i, err)
 	}
 
 }
