@@ -45,13 +45,13 @@ Optionally you can get it to produce SQL insert statements which can be used wit
 $ ./log2sql -h
 usage: log2sql [<flags>] [<logfile>...]
 
-Parses one or more p4d text log files (which may be gzipped) into a Sqlite3 database and/or JSON or SQL format. The output of historical Prometheus compatible
-metrics is also by default. These can be viewed using VictoriaMetrics which is a Prometheus compatible data store, and viewed in Grafana. Where referred to in
-help <logfile-prefix> is the first logfile specified with any .gz or .log suffix removed.
+Parses one or more p4d text log files (which may be gzipped) into a Sqlite3 database and/or JSON or SQL format. The output of historical Prometheus compatible metrics is also by
+default.These can be viewed using VictoriaMetrics which is a Prometheus compatible data store, and viewed in Grafana. Where referred to in help <logfile-prefix> is the first
+logfile specified with any .gz or .log suffix removed.
 
 Flags:
   -h, --help                     Show context-sensitive help (also try --help-long and --help-man).
-      --debug                    Enable debugging.
+      --debug=DEBUG              Enable debugging level. Bitmask 1/2/4/.../128
       --json                     Output JSON statements (to default or --json.output file).
       --sql                      Output SQL statements (to default or --sql.output file).
       --json.output=JSON.OUTPUT  Name of file to which to write JSON if that flag is set. Defaults to <logfile-prefix>.json
@@ -59,18 +59,24 @@ Flags:
   -d, --dbname=DBNAME            Create database with this name. Defaults to <logfile-prefix>.db
   -n, --no.sql                   Don't create database.
       --no.metrics               Disable historical metrics output in VictoriaMetrics format (via Graphite interface).
-  -m, --metrics.output=METRICS.OUTPUT  
+  -m, --metrics.output=METRICS.OUTPUT
                                  File to write historical metrics to in Graphite format for use with VictoriaMetrics. Default is <logfile-prefix>.metrics
   -s, --server.id=SERVER.ID      server id for historical metrics - useful to identify site.
-      --sdp.instance=SDP.INSTANCE  
+      --sdp.instance=SDP.INSTANCE
                                  SDP instance if required in historical metrics. (Not usually required)
       --update.interval=10s      Update interval for historical metrics - time is assumed to advance as per time in log entries.
       --no.output.cmds.by.user   Turns off the output of cmds_by_user - can be useful for large sites with many thousands of users.
+      --output.cmds.by.user.regex=OUTPUT.CMDS.BY.USER.REGEX
+                                 Specify a (golang) regex to match user ids in order to track cmds by user in one metric (e.g. '.*' or 'swarm|jenkins').
+      --no.output.cmds.by.IP     Turns off the output of cmds_by_IP - can be useful for large sites with many thousands of IP addresses in logs.
       --case.insensitive.server  Set if server is case insensitive and usernames may occur in either case.
+      --debug.pid=DEBUG.PID      Set for debug output for specified PID - requires debug.cmd to be also specified.
+      --debug.cmd=""             Set for debug output for specified command - requires debug.pid to be also specified.
       --version                  Show application version.
 
 Args:
   [<logfile>]  Log files to process.
+
 ```
 
 ## Examples
