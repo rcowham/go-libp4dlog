@@ -878,6 +878,19 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 		if len(tableName) == 0 {
 			continue
 		}
+		// At this point entries should be: "---  rpc" or similar. If not then this is an unknown table so ignore
+		if len(line) > 4 && strings.HasPrefix(line, "--- ") && line[5] != ' ' {
+			tableName = ""
+			if FlagSet(fp.debug, DebugUnrecognised) {
+				buf := fmt.Sprintf("Unrecognised track table: %s\n", line)
+				if fp.logger != nil {
+					fp.logger.Tracef(buf)
+				} else {
+					fmt.Fprint(os.Stderr, buf)
+				}
+			}
+			continue
+		}
 		if strings.HasPrefix(line, prefixTrackPages) {
 			m = reTrackPages.FindStringSubmatch(line)
 			if len(m) > 0 {

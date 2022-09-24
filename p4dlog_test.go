@@ -137,6 +137,34 @@ Perforce server info:
 		output[0])
 }
 
+func TestLabelRecords(t *testing.T) {
+	// We don't necessarily parse the label records but don't want them being counted against previous tables.
+	// So in this example the db.monitor totalWriteHeld should be 0 not 158304
+	testInput := `
+Perforce server info:
+	2020/10/16 06:00:01 pid 8748 build@commander-controller 10.5.20.152 [p4/2018.1/LINUX26X86_64/1957529] 'user-label -i'
+
+Perforce server info:
+	2020/10/16 06:00:01 pid 8748 completed .011s 4+4us 8+72io 0+0net 9984k 0pf 
+Perforce server info:
+	2020/10/16 06:00:01 pid 8748 build@commander-controller 10.5.20.152 [p4/2018.1/LINUX26X86_64/1957529] 'user-label -i'
+--- lapse .012s
+--- usage 4+4us 8+80io 0+0net 9984k 0pf 
+--- rpc msgs/size in+out 3+5/0mb+0mb himarks 795800/318788 snd/rcv .000s/.004s
+--- db.monitor
+---   pages in+out+cached 2+4+4096
+---   locks read/write 0/2 rows get+pos+scan put+del 0+0+0 2+0
+--- label/MPSS%2EDE%2E2%2E0-00348-WAIPIO_GENMD_TEST-1(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+158304ms
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.JSONEq(t, `{"processKey":"7e3d11dfb4701f7818a630d0b2c2c1ba","cmd":"user-label","pid":8748,"lineNo":2,"user":"build","workspace":"commander-controller","computeLapse":0,"completedLapse":0.012,"ip":"10.5.20.152","app":"p4/2018.1/LINUX26X86_64/1957529","args":"-i","startTime":"2020/10/16 06:00:01","endTime":"2020/10/16 06:00:01","running":1,"uCpu":4,"sCpu":4,"diskIn":8,"diskOut":80,"ipcIn":0,"ipcOut":0,"maxRss":9984,"pageFaults":0,"rpcMsgsIn":3,"rpcMsgsOut":5,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":795800,"rpcHimarkRev":318788,"rpcSnd":0,"rpcRcv":0.004,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"cmdError":false,"tables":[{"tableName":"monitor","pagesIn":2,"pagesOut":4,"pagesCached":4096,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":2,"getRows":0,"posRows":0,"scanRows":0,"putRows":2,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+		output[0])
+	// assert.Equal(t, ``,
+	// 	output[0])
+}
+
 func TestLogParseSwarm(t *testing.T) {
 	testInput := `
 Perforce server info:
