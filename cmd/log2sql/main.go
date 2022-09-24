@@ -261,11 +261,11 @@ func parseLog(logger *logrus.Logger, logfile string, linesChan chan string) {
 		fmt.Fprintln(os.Stderr, "processing completed")
 	}()
 
-	const maxLine = 10000
+	const maxLineLen = 5000
 	i := 0
 	for scanner.Scan() {
-		if len(scanner.Text()) > maxLine {
-			line := fmt.Sprintf("%s...'", scanner.Text()[0:maxLine])
+		if len(scanner.Text()) > maxLineLen {
+			line := fmt.Sprintf("%s...'", scanner.Text()[:maxLineLen])
 			linesChan <- line
 		} else {
 			linesChan <- scanner.Text()
