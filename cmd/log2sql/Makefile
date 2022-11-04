@@ -14,6 +14,7 @@ REVISION=`git rev-parse --short HEAD`
 MODULE="github.com/perforce/p4prometheus"
 LOCAL_LDFLAGS=-ldflags="-X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/version.BuildDate=${BUILD_DATE} -X ${MODULE}/version.Branch=${BRANCH} -X ${MODULE}/version.Revision=${REVISION} -X ${MODULE}/version.BuildUser=${USER}"
 LDFLAGS=-ldflags="-w -s -X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/version.BuildDate=${BUILD_DATE} -X ${MODULE}/version.Branch=${BRANCH} -X ${MODULE}/version.Revision=${REVISION} -X ${MODULE}/version.BuildUser=${USER}"
+LINUX_LDFLAGS=-ldflags="-extldflags -static -w -s -X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/version.BuildDate=${BUILD_DATE} -X ${MODULE}/version.Branch=${BRANCH} -X ${MODULE}/version.Revision=${REVISION} -X ${MODULE}/version.BuildUser=${USER}"
 
 # Builds the project
 build:
@@ -26,7 +27,8 @@ build:
 # Note that this will download and build the latest version of package from github - it won't build the local go
 # repo. So you need to have published everything (and ensure tags are as desired) before doing this.
 dist:
-	~/go/bin/xgo -go latest --targets=linux/amd64,windows/amd64,darwin/amd64 ${LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
+	~/go/bin/xgo -go latest --targets=windows/amd64,darwin/amd64 ${LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
+	~/go/bin/xgo -go latest --targets=linux/amd64 ${LINUX_LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
 	rm -f log2sql*amd64*.gz
 	-chmod +x log2sql*amd64*
 	gzip log2sql*amd64*
