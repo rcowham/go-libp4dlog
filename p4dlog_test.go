@@ -3,8 +3,6 @@ package p4dlog
 import (
 	"bufio"
 	"context"
-	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -13,17 +11,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var (
-	eol = regexp.MustCompile("\r\n|\n")
-)
-
-func getResult(output chan string) []string {
-	lines := []string{}
-	for line := range output {
-		lines = append(lines, line)
-	}
-	return lines
-}
+// func getResult(output chan string) []string {
+// 	lines := []string{}
+// 	for line := range output {
+// 		lines = append(lines, line)
+// 	}
+// 	return lines
+// }
 
 func parseLogLines(input string) []string {
 
@@ -45,7 +39,7 @@ func parseLogLines(input string) []string {
 
 	output := []string{}
 	for cmd := range cmdChan {
-		output = append(output, fmt.Sprintf("%s", cmd.String()))
+		output = append(output, cmd.String())
 	}
 	sort.Strings(output)
 	return output
@@ -405,6 +399,57 @@ Perforce server info:
 		output[2])
 	// assert.Equal(t, `asdf`,
 	// 	output[3])
+}
+
+func TestPopulateMultilineDesc(t *testing.T) {
+	// p4 submit and populate can take a -d flag and end up with multiline descriptions - annoying!
+	testInput := `
+Perforce server info:
+	2022/12/21 18:10:48 pid 36276 fred@fred-dvcs-1671638968 unknown [p4/2021.1/MACOSX1015X86_64/2156517] 'user-populate -d    First line
+	Second line
+	 //stream/main/... //stream/dev/...'
+Perforce server info:
+	2022/12/21 18:10:48 pid 36276 fred@fred-dvcs-1671638968 unknown [p4/2021.1/MACOSX1015X86_64/2156517] 'user-populate -d    First line
+	Second line
+	 //stream/main/... //stream/dev/...'
+--- meta/commit(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+14ms
+
+Perforce server info:
+	2022/12/21 18:10:48 pid 36276 fred@fred-dvcs-1671638968 unknown [p4/2021.1/MACOSX1015X86_64/2156517] 'user-populate -d    First line
+	Second line
+	 //stream/main/... //stream/dev/...'
+--- storageup/storagemasterup(R)
+---   total lock wait+held read/write 0ms+15ms/0ms+0ms
+
+Perforce server info:
+	2022/12/21 18:10:48 pid 36276 completed .019s 0+3us 0+0io 0+0net 8564736k 9pf
+Perforce server info:
+	2022/12/21 18:10:48 pid 36276 fred@fred-dvcs-1671638968 unknown [p4/2021.1/MACOSX1015X86_64/2156517] 'user-populate -d    First line
+	Second line
+	 //stream/main/... //stream/dev/...'
+--- lapse .020s
+--- usage 0+3us 0+0io 0+0net 8577024k 9pf
+--- rpc msgs/size in+out 0+1/0mb+0mb himarks 2000/2000 snd/rcv .000s/.000s
+--- db.counters
+---   pages in+out+cached 14+6+2
+---   locks read/write 4/4 rows get+pos+scan put+del 7+0+0 2+0
+---   total lock wait+held read/write 0ms+0ms/0ms+4ms
+---   max lock wait+held read/write 0ms+0ms/0ms+4ms
+--- db.logger
+---   pages in+out+cached 3+0+1
+---   locks read/write 0/1 rows get+pos+scan put+del 0+0+0 0+0
+--- db.stream
+---   pages in+out+cached 8+3+2
+---   locks read/write 4/1 rows get+pos+scan put+del 3+6+6 1+0
+
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.JSONEq(t, `{"processKey":"c3ddb95f03f30b508e0e96dd8754b419","cmd":"user-populate","pid":36276,"lineNo":2,"user":"fred","workspace":"fred-dvcs-1671638968","computeLapse":0,"completedLapse":0.02,"ip":"unknown","app":"p4/2021.1/MACOSX1015X86_64/2156517","args":" -d    First line","startTime":"2022/12/21 18:10:48","endTime":"2022/12/21 18:10:48","running":1,"uCpu":0,"sCpu":3,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":8577024,"pageFaults":9,"rpcMsgsIn":0,"rpcMsgsOut":1,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":2000,"rpcHimarkRev":2000,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"cmdError":false,"tables":[{"tableName":"counters","pagesIn":14,"pagesOut":6,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":4,"writeLocks":4,"getRows":7,"posRows":0,"scanRows":0,"putRows":2,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":4,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":4,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"logger","pagesIn":3,"pagesOut":0,"pagesCached":1,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":1,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"storagemasterup_R","pagesIn":0,"pagesOut":0,"pagesCached":0,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":0,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":15,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"stream","pagesIn":8,"pagesOut":3,"pagesCached":2,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":4,"writeLocks":1,"getRows":3,"posRows":6,"scanRows":6,"putRows":1,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+		output[0])
+	// assert.Equal(t, `asdf`,
+	// 	output[0])
 }
 
 func TestLogDuplicatePids(t *testing.T) {

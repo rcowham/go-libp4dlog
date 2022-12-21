@@ -67,19 +67,12 @@ var reCompleted = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid
 var reJSONCmdargs = regexp.MustCompile(`^(.*) \{.*\}$`)
 
 var infoBlock = "Perforce server info:"
-var errorBlock = "Perforce server error:"
 
 func toInt64(buf string) (n int64) {
 	for _, v := range buf {
 		n = n*10 + int64(v-'0')
 	}
 	return
-}
-
-// P4dParseOptions - Options for parsing - mainly for command line usage
-type P4dParseOptions struct {
-	File      string
-	testInput string // For testing only
 }
 
 type blockType int
@@ -328,22 +321,6 @@ func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimark
 	if rpcRcv != "" {
 		f, _ := strconv.ParseFloat(rpcRcv, 32)
 		c.RPCRcv = float32(f)
-	}
-}
-
-// Validate table names - looking for corruptions - crept in when we were using []byte channels
-func (c *Command) checkTables(msg string) {
-	found := false
-	var s string
-	for _, t := range c.Tables {
-		if strings.ContainsAny(t.TableName, " \n") {
-			found = true
-			s = t.TableName
-			break
-		}
-	}
-	if found {
-		fmt.Fprintf(os.Stderr, "Corrupt: %s %s %d %d %s\n", msg, c.Cmd, c.Pid, c.LineNo, s)
 	}
 }
 
@@ -1181,7 +1158,6 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 	}
 
 	i := 0
-	inMultiLineDesc := false
 	for _, line := range block.lines {
 		if cmd != nil && strings.HasPrefix(line, trackStart) {
 			fp.processTrackRecords(cmd, block.lines[i:])
@@ -1195,10 +1171,8 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			m = reCmdNoarg.FindStringSubmatch(line)
 		}
 		if len(m) == 0 {
+			// Note multiline descriptions will not be appended to the cmd.Args value - just the first line
 			m = reCmdMultiLineDesc.FindStringSubmatch(line)
-			if len(m) > 0 {
-				inMultiLineDesc = true
-			}
 		}
 		if len(m) > 0 {
 			matched = true
@@ -1219,16 +1193,6 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				sm := reJSONCmdargs.FindStringSubmatch(cmd.Args)
 				if len(sm) > 0 {
 					cmd.Args = string(sm[1])
-				}
-			}
-			// Detect multine descriptions - check if trailing quote found
-			if inMultiLineDesc {
-				if i := strings.Index(block.lines[len(block.lines)-1], "'"); i < 0 {
-					buf := fmt.Sprintf("Unrecognised multiline description: %s\n%s\n", string(line),
-						block.lines[len(block.lines)-1])
-					if fp.logger != nil {
-						fp.logger.Warn(buf)
-					}
 				}
 			}
 			// Detect trigger entries
@@ -1395,7 +1359,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 		go func() {
 			for {
 				select {
-				case t, _ := <-ticker.C:
+				case t := <-ticker.C:
 					fp.m.Lock()
 					fp.currTime = t
 					fp.m.Unlock()
