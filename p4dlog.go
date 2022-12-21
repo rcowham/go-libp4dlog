@@ -10,7 +10,6 @@ You may also have decided to set track=1 to get more detailed usage of
 access to different tables.
 
 See p4dlog_test.go for examples of log entries.
-
 */
 package p4dlog
 
@@ -62,6 +61,7 @@ func FlagSet(flag int, level DebugLevel) bool {
 
 var reCmd = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+) (.*)\'.*`)
 var reCmdNoarg = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+)\'.*`)
+var reCmdMultiLineDesc = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+)([^\']*)`)
 var reCompute = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) compute end ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reCompleted = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) completed ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reJSONCmdargs = regexp.MustCompile(`^(.*) \{.*\}$`)
@@ -1181,6 +1181,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 	}
 
 	i := 0
+	inMultiLineDesc := false
 	for _, line := range block.lines {
 		if cmd != nil && strings.HasPrefix(line, trackStart) {
 			fp.processTrackRecords(cmd, block.lines[i:])
@@ -1192,6 +1193,12 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 		m := reCmd.FindStringSubmatch(line)
 		if len(m) == 0 {
 			m = reCmdNoarg.FindStringSubmatch(line)
+		}
+		if len(m) == 0 {
+			m = reCmdMultiLineDesc.FindStringSubmatch(line)
+			if len(m) > 0 {
+				inMultiLineDesc = true
+			}
 		}
 		if len(m) > 0 {
 			matched = true
@@ -1212,6 +1219,16 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				sm := reJSONCmdargs.FindStringSubmatch(cmd.Args)
 				if len(sm) > 0 {
 					cmd.Args = string(sm[1])
+				}
+			}
+			// Detect multine descriptions - check if trailing quote found
+			if inMultiLineDesc {
+				if i := strings.Index(block.lines[len(block.lines)-1], "'"); i < 0 {
+					buf := fmt.Sprintf("Unrecognised multiline description: %s\n%s\n", string(line),
+						block.lines[len(block.lines)-1])
+					if fp.logger != nil {
+						fp.logger.Warn(buf)
+					}
 				}
 			}
 			// Detect trigger entries

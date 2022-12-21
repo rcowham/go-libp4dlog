@@ -353,6 +353,60 @@ Perforce server info:
 	// 	output[3])
 }
 
+func TestLogParseSubmitMultilineDesc(t *testing.T) {
+	// p4 submit and populate can take a -d flag and end up with multiline descriptions - annoying!
+	testInput := `
+Perforce server info:
+	2018/06/10 23:30:06 pid 25568 fred@lon_ws 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'user-submit -d First line
+Second line
+Third line
+'
+
+Perforce server info:
+	2018/06/10 23:30:07 pid 25568 completed .178s 96+17us 0+208io 0+0net 15668k 0pf
+Perforce server info:
+	2018/06/10 23:30:07 pid 25568 fred@lon_ws 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'dm-SubmitChange'
+
+Perforce server info:
+	2018/06/10 23:30:07 pid 25568 compute end .252s 35+6us 0+8io 0+0net 49596k 0pf
+
+Perforce server info:
+	2018/06/10 23:30:08 pid 25568 completed 1.38s 490+165us 0+178824io 0+0net 127728k 0pf
+Perforce server info:
+	2018/06/10 23:30:08 pid 25568 fred@lon_ws 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'dm-CommitSubmit'
+
+Perforce server info:
+	2018/06/10 23:30:08 pid 25568 fred@lon_ws 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'dm-CommitSubmit'
+--- meta/commit(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+795ms
+
+Perforce server info:
+	2018/06/10 23:30:08 pid 25568 fred@lon_ws 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'dm-CommitSubmit'
+--- clients/MCM_client_184%2E51%2E33%2E29_prod_prefix1(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+1367ms
+
+Perforce server info:
+	2018/06/10 23:30:09 pid 25568 completed 1.38s 34+61us 59680+59904io 0+0net 127728k 1pf
+Perforce server info:
+	2018/06/10 23:30:08 pid 25568 fred@lon_ws 10.1.2.3 [p4/2016.2/LINUX26X86_64/1598668] 'dm-CommitSubmit'
+--- db.integed
+---   total lock wait+held read/write 0ms+0ms/0ms+795ms
+--- db.archmap
+---   total lock wait+held read/write 0ms+0ms/0ms+780ms
+
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 3, len(output))
+	assert.JSONEq(t, `{"processKey":"128e10d7fe570c2d2f5f7f03e1186827","cmd":"dm-CommitSubmit","pid":25568,"lineNo":18,"user":"fred","workspace":"lon_ws","computeLapse":0,"completedLapse":1.38,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:08","endTime":"2018/06/10 23:30:09","running":1,"uCpu":34,"sCpu":61,"diskIn":59680,"diskOut":59904,"ipcIn":0,"ipcOut":0,"maxRss":127728,"pageFaults":1,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[{"tableName":"archmap","pagesIn":0,"pagesOut":0,"pagesCached":0,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":0,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":780,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"integed","pagesIn":0,"pagesOut":0,"pagesCached":0,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":0,"getRows":0,"posRows":0,"scanRows":0,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":795,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+		output[0])
+	assert.JSONEq(t, `{"processKey":"78dbd54644e624a9c6f5c338a0864d2a","cmd":"dm-SubmitChange","pid":25568,"lineNo":10,"user":"fred","workspace":"lon_ws","computeLapse":0.252,"completedLapse":1.38,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":"","startTime":"2018/06/10 23:30:07","endTime":"2018/06/10 23:30:08","running":1,"uCpu":490,"sCpu":165,"diskIn":0,"diskOut":178824,"ipcIn":0,"ipcOut":0,"maxRss":127728,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[]}`,
+		output[1])
+	assert.JSONEq(t, `{"processKey":"954a5899d56e015d5080e4f8ef7f9e39","cmd":"user-submit","pid":25568,"lineNo":2,"user":"fred","workspace":"lon_ws","computeLapse":0,"completedLapse":0.178,"ip":"10.1.2.3","app":"p4/2016.2/LINUX26X86_64/1598668","args":" -d First line","startTime":"2018/06/10 23:30:06","endTime":"2018/06/10 23:30:07","running":1,"uCpu":96,"sCpu":17,"diskIn":0,"diskOut":208,"ipcIn":0,"ipcOut":0,"maxRss":15668,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[]}`,
+		output[2])
+	// assert.Equal(t, `asdf`,
+	// 	output[3])
+}
+
 func TestLogDuplicatePids(t *testing.T) {
 	testInput := `
 Perforce server info:
