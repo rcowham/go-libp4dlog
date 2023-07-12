@@ -1,6 +1,6 @@
 name: Run Go Tests
 
-on: [push]
+on: [push,pull_request]
 
 jobs:
   build:
@@ -14,6 +14,7 @@ jobs:
         with:
           go-version: '1.19'
 
+      # Don't necessarily build until we sort out Sqllite bindings
       # - name: Build
       #   run: go build -v ./...
 
