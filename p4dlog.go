@@ -52,6 +52,7 @@ const (
 	DebugPending
 	DebugPendingCounts
 	DebugMetricStats
+	DebugLines
 )
 
 // FlagSet - true if specified level set
@@ -859,7 +860,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 		if len(line) > 4 && strings.HasPrefix(line, "--- ") && line[5] != ' ' {
 			tableName = ""
 			if FlagSet(fp.debug, DebugUnrecognised) {
-				buf := fmt.Sprintf("Unrecognised track table: %s\n", line)
+				buf := fmt.Sprintf("Unrecognised track table: %d %s\n", cmd.LineNo, line)
 				if fp.logger != nil {
 					fp.logger.Tracef(buf)
 				} else {
@@ -917,7 +918,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			}
 		}
 		if FlagSet(fp.debug, DebugUnrecognised) {
-			buf := fmt.Sprintf("Unrecognised track: %s\n", string(line))
+			buf := fmt.Sprintf("Unrecognised track: %d %s\n", cmd.LineNo, string(line))
 			if fp.logger != nil {
 				fp.logger.Tracef(buf)
 			} else {
@@ -1247,7 +1248,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 		}
 		if !matched && FlagSet(fp.debug, DebugUnrecognised) {
 			if !strings.HasPrefix(line, "server to client") {
-				buf := fmt.Sprintf("Unrecognised: %s\n", string(line))
+				buf := fmt.Sprintf("Unrecognised: %d %s\n", block.lineNo, line)
 				if fp.logger != nil {
 					fp.logger.Trace(buf)
 				} else {

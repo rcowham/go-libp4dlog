@@ -13,7 +13,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -414,26 +413,6 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	return metrics.String()
 }
 
-func (p4m *P4DMetrics) getSeconds(tmap map[string]interface{}, fieldName string) float64 {
-	if p4m.logger.Level > logrus.DebugLevel {
-		p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
-	}
-	if total, ok := tmap[fieldName].(float64); ok {
-		return (total)
-	}
-	return 0
-}
-
-func (p4m *P4DMetrics) getMilliseconds(tmap map[string]interface{}, fieldName string) float64 {
-	if p4m.logger.Level > logrus.DebugLevel {
-		p4m.logger.Tracef("field %s %v, %v\n", fieldName, reflect.TypeOf(tmap[fieldName]), tmap[fieldName])
-	}
-	if total, ok := tmap[fieldName].(float64); ok {
-		return (total / 1000)
-	}
-	return 0
-}
-
 func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 	// p4m.logger.Debugf("publish cmd: %s\n", cmd.String())
 
@@ -594,7 +573,7 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				}
 			case cmd, ok := <-cmdsInChan:
 				if ok {
-					if p4m.logger.Level > logrus.DebugLevel {
+					if p4m.logger.Level > logrus.DebugLevel && p4dlog.FlagSet(p4m.debug, p4dlog.DebugCommands) {
 						p4m.logger.Tracef("Publishing cmd: %s", cmd.String())
 					}
 					p4m.cmdsProcessed++
@@ -609,7 +588,7 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				}
 			case line, ok := <-linesInChan:
 				if ok {
-					if p4m.logger.Level > logrus.DebugLevel {
+					if p4m.logger.Level > logrus.DebugLevel && p4dlog.FlagSet(p4m.debug, p4dlog.DebugLines) {
 						p4m.logger.Tracef("Line: %s", line)
 					}
 					p4m.linesRead++

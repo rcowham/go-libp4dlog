@@ -442,6 +442,9 @@ func main() {
 	if *debug > 0 {
 		logger.Level = logrus.DebugLevel
 	}
+	if *debug >= int(p4dlog.DebugCommands) {
+		logger.Level = logrus.TraceLevel
+	}
 	startTime := time.Now()
 	logger.Infof("%v", version.Print("log2sql"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
