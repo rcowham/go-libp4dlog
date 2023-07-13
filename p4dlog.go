@@ -737,7 +737,8 @@ var trackReplicaPull = "--- replica/pull"
 var trackStorage = "--- storageup/"
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
-var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
+var reTriggerLapse2 = regexp.MustCompile(`lapse \.(\d+)s`)
+var reTriggerLapse3 = regexp.MustCompile(`lapse [0-9]\.(\d+)s`)
 var prefixTrackRPC = "--- rpc msgs/size in+out "
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
@@ -1135,6 +1136,10 @@ func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line 
 		if len(m) > 0 {
 			s := fmt.Sprintf("0.%s", string(m[1]))
 			triggerLapse, _ = strconv.ParseFloat(s, 32)
+		} else {
+			m = reTriggerLapse3.FindStringSubmatch(line)
+			triggerLapse, _ = strconv.ParseFloat(string(m[1]), 32)
+
 		}
 	}
 	if triggerLapse > 0 {
