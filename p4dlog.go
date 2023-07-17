@@ -736,8 +736,7 @@ var trackClientEntity = "--- clientEntity"
 var trackReplicaPull = "--- replica/pull"
 var trackStorage = "--- storageup/"
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
-var reTriggerLapse = regexp.MustCompile(`^lapse (\d+)s`)
-var reTriggerLapse2 = regexp.MustCompile(`^lapse \.(\d+)s`)
+var reTriggerLapse = regexp.MustCompile(`^lapse (\d+\.\d+)s|^lapse (\.\d+)s|^lapse (\d+)s`)
 var prefixTrackRPC = "--- rpc msgs/size in+out "
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
@@ -1129,13 +1128,14 @@ func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line 
 	var triggerLapse float64
 	m := reTriggerLapse.FindStringSubmatch(line)
 	if len(m) > 0 {
-		triggerLapse, _ = strconv.ParseFloat(string(m[1]), 32)
-	} else {
-		m = reTriggerLapse2.FindStringSubmatch(line)
-		if len(m) > 0 {
-			s := fmt.Sprintf("0.%s", string(m[1]))
-			triggerLapse, _ = strconv.ParseFloat(s, 32)
+		for a := 0; a < len(m)-1; a++ {
+			if string(m[a+1]) != "" {
+				s := fmt.Sprintf("0%s", string(m[a+1]))
+				triggerLapse, _ = strconv.ParseFloat(s, 32)
+				break
+			}
 		}
+
 	}
 	if triggerLapse > 0 {
 		tableName := fmt.Sprintf("trigger_%s", trigger)
