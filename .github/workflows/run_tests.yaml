@@ -14,9 +14,8 @@ jobs:
         with:
           go-version: '1.19'
 
-      # Don't necessarily build until we sort out Sqllite bindings
-      # - name: Build
-      #   run: go build -v ./...
+      - name: Build
+        run: go build -v ./...
 
       - name: Test
         run: go test -v ./...
