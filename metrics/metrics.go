@@ -191,17 +191,17 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 
 	var mname string
 	var metricVal string
-	mname = "p4_prom_log_lines_read"
+	mname = "p4_prom_log_lines_read_bucket"
 	p4m.printMetricHeader(metrics, mname, "A count of log lines read", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.linesRead)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_prom_cmds_processed"
+	mname = "p4_prom_cmds_processed_bucket"
 	p4m.printMetricHeader(metrics, mname, "A count of all cmds processed", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.cmdsProcessed)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_prom_cmds_pending"
+	mname = "p4_prom_cmds_pending_bucket"
 	p4m.printMetricHeader(metrics, mname, "A count of all current cmds (not completed)", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.fp.CmdsPendingCount())
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
@@ -213,70 +213,70 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 
 	// Cross platform call - eventually when Windows implemented
 	userCPU, systemCPU := getCPUStats()
-	mname = "p4_prom_cpu_user"
+	mname = "p4_prom_cpu_user_bucket"
 	p4m.printMetricHeader(metrics, mname, "User CPU used by p4prometheus", "counter")
 	metricVal = fmt.Sprintf("%.6f", userCPU)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_prom_cpu_system"
+	mname = "p4_prom_cpu_system_bucket"
 	p4m.printMetricHeader(metrics, mname, "System CPU used by p4prometheus", "counter")
 	metricVal = fmt.Sprintf("%.6f", systemCPU)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_files_added"
+	mname = "p4_sync_files_added_bucket"
 	p4m.printMetricHeader(metrics, mname, "The number of files added to workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncFilesAdded)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_files_updated"
+	mname = "p4_sync_files_updated_bucket"
 	p4m.printMetricHeader(metrics, mname, "The number of files updated in workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncFilesUpdated)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_files_deleted"
+	mname = "p4_sync_files_deleted_bucket"
 	p4m.printMetricHeader(metrics, mname, "The number of files deleted in workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncFilesDeleted)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_bytes_added"
+	mname = "p4_sync_bytes_added_bucket"
 	p4m.printMetricHeader(metrics, mname, "The number of bytes added to workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncBytesAdded)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_bytes_updated"
+	mname = "p4_sync_bytes_updated_bucket"
 	p4m.printMetricHeader(metrics, mname, "The number of bytes updated in workspaces by syncs", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.syncBytesUpdated)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_cmd_counter"
+	mname = "p4_cmd_counter_bucket"
 	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by cmd)", "counter")
 	for cmd, count := range p4m.cmdCounter {
 		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_cumulative_seconds"
+	mname = "p4_cmd_cumulative_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname, "The total in seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmdCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_cpu_user_cumulative_seconds"
+	mname = "p4_cmd_cpu_user_cumulative_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname, "The total in user CPU seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmduCPUCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_cpu_system_cumulative_seconds"
+	mname = "p4_cmd_cpu_system_cumulative_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname, "The total in system CPU seconds (by cmd)", "counter")
 	for cmd, lapse := range p4m.cmdsCPUCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_error_counter"
+	mname = "p4_cmd_error_counter_bucket"
 	p4m.printMetricHeader(metrics, mname, "A count of cmd errors (by cmd)", "counter")
 	for cmd, count := range p4m.cmdErrorCounter {
 		metricVal = fmt.Sprintf("%d", count)
@@ -285,14 +285,14 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	}
 	// For large sites this might not be sensible - so they can turn it off
 	if p4m.config.OutputCmdsByUser {
-		mname = "p4_cmd_user_counter"
+		mname = "p4_cmd_user_counter_bucket"
 		p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by user)", "counter")
 		for user, count := range p4m.cmdByUserCounter {
 			metricVal = fmt.Sprintf("%d", count)
 			labels := append(fixedLabels, labelStruct{"user", user})
 			p4m.printMetric(metrics, mname, labels, metricVal)
 		}
-		mname = "p4_cmd_user_cumulative_seconds"
+		mname = "p4_cmd_user_cumulative_seconds_bucket"
 		p4m.printMetricHeader(metrics, mname, "The total in seconds (by user)", "counter")
 		for user, lapse := range p4m.cmdByUserCumulative {
 			metricVal = fmt.Sprintf("%0.3f", lapse)
@@ -302,14 +302,14 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	}
 	// For large sites this might not be sensible - so they can turn it off
 	if p4m.config.OutputCmdsByIP {
-		mname = "p4_cmd_ip_counter"
+		mname = "p4_cmd_ip_counter_bucket"
 		p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by IP)", "counter")
 		for ip, count := range p4m.cmdByIPCounter {
 			metricVal = fmt.Sprintf("%d", count)
 			labels := append(fixedLabels, labelStruct{"ip", ip})
 			p4m.printMetric(metrics, mname, labels, metricVal)
 		}
-		mname = "p4_cmd_ip_cumulative_seconds"
+		mname = "p4_cmd_ip_cumulative_seconds_bucket"
 		p4m.printMetricHeader(metrics, mname, "The total in seconds (by IP)", "counter")
 		for ip, lapse := range p4m.cmdByIPCumulative {
 			metricVal = fmt.Sprintf("%0.3f", lapse)
@@ -319,7 +319,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	}
 	// For large sites this might not be sensible - so they can turn it off
 	if p4m.config.OutputCmdsByUserRegex != "" {
-		mname = "p4_cmd_user_detail_counter"
+		mname = "p4_cmd_user_detail_counter_bucket"
 		p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by user and cmd)", "counter")
 		for user, userMap := range p4m.cmdByUserDetailCounter {
 			for cmd, count := range userMap {
@@ -329,7 +329,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 				p4m.printMetric(metrics, mname, labels, metricVal)
 			}
 		}
-		mname = "p4_cmd_user_detail_cumulative_seconds"
+		mname = "p4_cmd_user_detail_cumulative_seconds_bucket"
 		p4m.printMetricHeader(metrics, mname, "The total in seconds (by user and cmd)", "counter")
 		for user, userMap := range p4m.cmdByUserDetailCumulative {
 			for cmd, lapse := range userMap {
@@ -340,35 +340,35 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 			}
 		}
 	}
-	mname = "p4_cmd_replica_counter"
+	mname = "p4_cmd_replica_counter_bucket"
 	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by broker/replica/proxy)", "counter")
 	for replica, count := range p4m.cmdByReplicaCounter {
 		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"replica", replica})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_replica_cumulative_seconds"
+	mname = "p4_cmd_replica_cumulative_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname, "The total in seconds (by broker/replica/proxy)", "counter")
 	for replica, lapse := range p4m.cmdByReplicaCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"replica", replica})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_program_counter"
+	mname = "p4_cmd_program_counter_bucket"
 	p4m.printMetricHeader(metrics, mname, "A count of completed p4 cmds (by program)", "counter")
 	for program, count := range p4m.cmdByProgramCounter {
 		metricVal = fmt.Sprintf("%d", count)
 		labels := append(fixedLabels, labelStruct{"program", program})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_cmd_program_cumulative_seconds"
+	mname = "p4_cmd_program_cumulative_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname, "The total in seconds (by program)", "counter")
 	for program, lapse := range p4m.cmdByProgramCumulative {
 		metricVal = fmt.Sprintf("%0.3f", lapse)
 		labels := append(fixedLabels, labelStruct{"program", program})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_total_read_wait_seconds"
+	mname = "p4_total_read_wait_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname,
 		"The total waiting for read locks in seconds (by table)", "counter")
 	for table, total := range p4m.totalReadWait {
@@ -376,7 +376,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		labels := append(fixedLabels, labelStruct{"table", table})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_total_read_held_seconds"
+	mname = "p4_total_read_held_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname,
 		"The total read locks held in seconds (by table)", "counter")
 	for table, total := range p4m.totalReadHeld {
@@ -384,7 +384,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		labels := append(fixedLabels, labelStruct{"table", table})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_total_write_wait_seconds"
+	mname = "p4_total_write_wait_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname,
 		"The total waiting for write locks in seconds (by table)", "counter")
 	for table, total := range p4m.totalWriteWait {
@@ -392,7 +392,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		labels := append(fixedLabels, labelStruct{"table", table})
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
-	mname = "p4_total_write_held_seconds"
+	mname = "p4_total_write_held_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname,
 		"The total write locks held in seconds (by table)", "counter")
 	for table, total := range p4m.totalWriteHeld {
@@ -401,7 +401,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		p4m.printMetric(metrics, mname, labels, metricVal)
 	}
 	if len(p4m.totalTriggerLapse) > 0 {
-		mname = "p4_total_trigger_lapse_seconds"
+		mname = "p4_total_trigger_lapse_seconds_bucket"
 		p4m.printMetricHeader(metrics, mname,
 			"The total lapse time for triggers in seconds (by trigger)", "counter")
 		for table, total := range p4m.totalTriggerLapse {
