@@ -1000,109 +1000,40 @@ Perforce server info:
 		output[0])
 }
 
-func TestServerActiveThreadsRcs(t *testing.T) {
+func TestForLbrAndTable(t *testing.T) {
 	testInput := `
+	Perforce server info:
+	2023/07/01 02:00:02 pid 1871637 build@cmdr-tools-change-155476395 127.0.0.1/10.5.64.108 [p4/2018.1/LINUX26X86_64/1957529 (brokered)] 'user-transmit -t1871630 -b8 -s524288 -p'
+
 Perforce server info:
-	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
+	2023/07/01 02:00:02 pid 1871637 completed .011s 5+4us 0+0io 0+0net 10364k 0pf
+
 Perforce server info:
-	2020/01/11 02:00:02 pid 25396 completed .008s 0+0us 0+8io 0+0net 7632k 0pf 
-2020/01/11 02:00:05 731966731 pid 24961: Server is now using 148 active threads.
-Perforce server info:
-	2020/01/11 02:00:06 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
---- db.view
----   pages in+out+cached 2+3+96
----   locks read/write 4/5 rows get+pos+scan put+del 6+7+8 9+10
-Perforce server info:
-	2017/12/07 15:00:21 pid 148469 fred@LONWS 10.40.16.14 [3DSMax/1.0.0.0] 'user-files //depot/....3ds'
-Perforce server info:
-	2017/12/07 15:00:23 pid 148469 completed 2.01s 7+4us 0+584io 0+0net 4580k 0pf
-Perforce server info:
-	2017/12/07 15:00:21 pid 148469 fred@LONWS 10.40.16.14 [3DSMax/1.0.0.0] 'user-files //depot/....3ds'
---- lapse 2.02s
---- usage 10+11us 12+13io 14+15net 4088k 22pf
+	2023/07/01 02:00:02 pid 1871637 build@cmdr-tools-change-155476395 127.0.0.1/10.5.64.108 [p4/2018.1/LINUX26X86_64/1957529 (brokered)] 'user-transmit -t1871630 -b8 -s524288 -p'
+--- lapse .011s
+--- usage 5+4us 0+8io 0+0net 10364k 0pf
+--- memory cmd/proc 27mb/27mb
+--- rpc msgs/size in+out 2+74/0mb+0mb himarks 97604/318788 snd/rcv .000s/.001s
+--- db.topology
+---   pages in+out+cached 5+0+4
+---   locks read/write 1/0 rows get+pos+scan put+del 0+1+1 0+0
+--- db.monitor
+---   pages in+out+cached 2+4+4096
+---   locks read/write 0/2 rows get+pos+scan put+del 0+0+0 2+0
+---   total lock wait+held read/write 0ms+0ms/1ms+0ms
+---   max lock wait+held read/write 0ms+0ms/1ms+0ms
 --- lbr Rcs
----   opens+closes+checkins+exists 8+3+5+7
----   reads+readbytes+writes+writebytes 6+12.1K+0+3.3
-`
-	output := parseLogLines(testInput)
-	assert.Equal(t, 3, len(output))
-	assert.JSONEq(t, `{"processKey":"33ac9675a65f8c437998987e55c11f9f","cmd":"pull","pid":6170,"lineNo":7,"user":"svc_wok","workspace":"unknown","computeLapse":0,"completedLapse":0,"ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2020/01/11 02:00:06","endTime":"2020/01/11 02:00:06","running":148,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":4,"writeLocks":5,"getRows":6,"posRows":7,"scanRows":8,"putRows":9,"delRows":10,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
-		output[0])
-	assert.JSONEq(t, `{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","computeLapse":0,"completedLapse":0.008,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":8,"ipcIn":0,"ipcOut":0,"maxRss":7632,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[]}`,
-		output[1])
-	assert.JSONEq(t, `{"processKey":"f00da0667f738b28e706360f6997741e","cmd":"user-files","pid":148469,"lineNo":12,"user":"fred","workspace":"LONWS","computeLapse":0,"completedLapse":2.02,"ip":"10.40.16.14","app":"3DSMax/1.0.0.0","args":"//depot/....3ds","startTime":"2017/12/07 15:00:21","endTime":"2017/12/07 15:00:23","running":149,"uCpu":10,"sCpu":11,"diskIn":12,"diskOut":13,"ipcIn":14,"ipcOut":15,"maxRss":4088,"pageFaults":22,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":8,"lbrRcsCloses":3,"lbrRcsCheckins":5,"lbrRcsExists":7,"lbrRcsReads":6,"lbrRcsReadBytes":12390,"lbrRcsWrites":0,"lbrRcsWriteBytes":3,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"cmdError":false,"tables":[]}`,
-		output[2])
-	//assert.Equal(t, "", output[2])
-}
-
-func TestServerActiveThreadsCompress(t *testing.T) {
-	testInput := `
-Perforce server info:
-	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
-Perforce server info:
-	2020/01/11 02:00:02 pid 25396 completed .008s 0+0us 0+8io 0+0net 7632k 0pf 
-2020/01/11 02:00:05 731966731 pid 24961: Server is now using 148 active threads.
-Perforce server info:
-	2020/01/11 02:00:06 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
---- db.view
----   pages in+out+cached 2+3+96
----   locks read/write 4/5 rows get+pos+scan put+del 6+7+8 9+10
-Perforce server info:
-	2017/12/07 15:00:21 pid 148469 fred@LONWS 10.40.16.14 [3DSMax/1.0.0.0] 'user-files //depot/....3ds'
-Perforce server info:
-	2017/12/07 15:00:23 pid 148469 completed 2.01s 7+4us 0+584io 0+0net 4580k 0pf
-Perforce server info:
-	2017/12/07 15:00:21 pid 148469 fred@LONWS 10.40.16.14 [3DSMax/1.0.0.0] 'user-files //depot/....3ds'
---- lapse 2.02s
---- usage 10+11us 12+13io 14+15net 4088k 22pf
+---   opens+closes+checkins+exists 8+8+0+0
+---   reads+readbytes+writes+writebytes 16+197.8K+0+0
 --- lbr Compress
----   opens+closes+checkins+exists 8+3+2+1
----   reads+readbytes+writes+writebytes 3+12.1P+0+0
+---   opens+closes+checkins+exists 16+16+0+0
+---   reads+readbytes+writes+writebytes 32+138.7K+0+0
 `
 	output := parseLogLines(testInput)
-	assert.Equal(t, 3, len(output))
-	assert.JSONEq(t, `{"processKey":"33ac9675a65f8c437998987e55c11f9f","cmd":"pull","pid":6170,"lineNo":7,"user":"svc_wok","workspace":"unknown","computeLapse":0,"completedLapse":0,"ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2020/01/11 02:00:06","endTime":"2020/01/11 02:00:06","running":148,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":4,"writeLocks":5,"getRows":6,"posRows":7,"scanRows":8,"putRows":9,"delRows":10,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
+	assert.Equal(t, 1, len(output))
+	//assert.Equal(t, "", output[0])
+	assert.JSONEq(t, `{"processKey":"c64b38c5e71582bd477ffcaab5b3514d","cmd":"user-transmit","pid":1871637,"lineNo":5,"user":"build","workspace":"cmdr-tools-change-155476395","computeLapse":0,"completedLapse":0.011,"ip":"127.0.0.1/10.5.64.108","app":"p4/2018.1/LINUX26X86_64/1957529 (brokered)","args":"-t1871630 -b8 -s524288 -p","startTime":"2023/07/01 02:00:02","endTime":"2023/07/01 02:00:02","running":0,"uCpu":5,"sCpu":4,"diskIn":0,"diskOut":8,"ipcIn":0,"ipcOut":0,"maxRss":10364,"pageFaults":0,"rpcMsgsIn":2,"rpcMsgsOut":74,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":97604,"rpcHimarkRev":318788,"rpcSnd":0,"rpcRcv":0.001,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":8,"lbrRcsCloses":8,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":16,"lbrRcsReadBytes":202547,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":16,"lbrCompressCloses":16,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":32,"lbrCompressReadBytes":142028,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"cmdError":false,"tables":[{"tableName":"monitor","pagesIn":2,"pagesOut":4,"pagesCached":4096,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":2,"getRows":0,"posRows":0,"scanRows":0,"putRows":2,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":1,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":1,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0},{"tableName":"topology","pagesIn":5,"pagesOut":0,"pagesCached":4,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":1,"writeLocks":0,"getRows":0,"posRows":1,"scanRows":1,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
 		output[0])
-	assert.JSONEq(t, `{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","computeLapse":0,"completedLapse":0.008,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":8,"ipcIn":0,"ipcOut":0,"maxRss":7632,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[]}`,
-		output[1])
-	assert.JSONEq(t, `{"processKey":"f00da0667f738b28e706360f6997741e","cmd":"user-files","pid":148469,"lineNo":12,"user":"fred","workspace":"LONWS","computeLapse":0,"completedLapse":2.02,"ip":"10.40.16.14","app":"3DSMax/1.0.0.0","args":"//depot/....3ds","startTime":"2017/12/07 15:00:21","endTime":"2017/12/07 15:00:23","running":149,"uCpu":10,"sCpu":11,"diskIn":12,"diskOut":13,"ipcIn":14,"ipcOut":15,"maxRss":4088,"pageFaults":22,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":8,"lbrCompressCloses":3,"lbrCompressCheckins":2,"lbrCompressExists":1,"lbrCompressReads":3,"lbrCompressReadBytes":13623389302292480,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"cmdError":false,"tables":[]}`,
-		output[2])
-	//assert.Equal(t, "", output[2])
-}
-
-func TestServerActiveThreadsUncompress(t *testing.T) {
-	testInput := `
-Perforce server info:
-	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
-Perforce server info:
-	2020/01/11 02:00:02 pid 25396 completed .008s 0+0us 0+8io 0+0net 7632k 0pf 
-2020/01/11 02:00:05 731966731 pid 24961: Server is now using 148 active threads.
-Perforce server info:
-	2020/01/11 02:00:06 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
---- db.view
----   pages in+out+cached 2+3+96
----   locks read/write 4/5 rows get+pos+scan put+del 6+7+8 9+10
-Perforce server info:
-	2017/12/07 15:00:21 pid 148469 fred@LONWS 10.40.16.14 [3DSMax/1.0.0.0] 'user-files //depot/....3ds'
-Perforce server info:
-	2017/12/07 15:00:23 pid 148469 completed 2.01s 7+4us 0+584io 0+0net 4580k 0pf
-Perforce server info:
-	2017/12/07 15:00:21 pid 148469 fred@LONWS 10.40.16.14 [3DSMax/1.0.0.0] 'user-files //depot/....3ds'
---- lapse 2.02s
---- usage 10+11us 12+13io 14+15net 4088k 22pf
---- lbr Compress
----   opens+closes+checkins+exists 5+6+7+8
----   reads+readbytes+writes+writebytes 3+12.1P+0+0
-`
-	output := parseLogLines(testInput)
-	assert.Equal(t, 3, len(output))
-	assert.JSONEq(t, `{"processKey":"33ac9675a65f8c437998987e55c11f9f","cmd":"pull","pid":6170,"lineNo":7,"user":"svc_wok","workspace":"unknown","computeLapse":0,"completedLapse":0,"ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2020/01/11 02:00:06","endTime":"2020/01/11 02:00:06","running":148,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":4,"writeLocks":5,"getRows":6,"posRows":7,"scanRows":8,"putRows":9,"delRows":10,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":0,"totalPeekWait":0,"totalPeekHeld":0,"maxPeekWait":0,"maxPeekHeld":0,"triggerLapse":0}]}`,
-		output[0])
-	assert.JSONEq(t, `{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","computeLapse":0,"completedLapse":0.008,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":8,"ipcIn":0,"ipcOut":0,"maxRss":7632,"pageFaults":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"netFilesAdded":0,"netFilesDeleted":0,"netFilesUpdated":0,"cmdError":false,"tables":[]}`,
-		output[1])
-	assert.JSONEq(t, `{"processKey":"f00da0667f738b28e706360f6997741e","cmd":"user-files","pid":148469,"lineNo":12,"user":"fred","workspace":"LONWS","computeLapse":0,"completedLapse":2.02,"ip":"10.40.16.14","app":"3DSMax/1.0.0.0","args":"//depot/....3ds","startTime":"2017/12/07 15:00:21","endTime":"2017/12/07 15:00:23","running":149,"uCpu":10,"sCpu":11,"diskIn":12,"diskOut":13,"ipcIn":14,"ipcOut":15,"maxRss":4088,"pageFaults":22,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrCompressOpens":5,"lbrCompressCloses":6,"lbrCompressCheckins":7,"lbrCompressExists":8,"lbrCompressReads":3,"lbrCompressReadBytes":13623389302292480,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"cmdError":false,"tables":[]}`,
-		output[2])
-	//assert.Equal(t, "", output[2])
 }
 
 func TestLbrRegex(t *testing.T) {
