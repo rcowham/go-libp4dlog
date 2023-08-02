@@ -72,7 +72,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(p4_cmd_counter[10m]))",
+          "expr": "sum(rate(p4_cmd_counter_bucket[10m]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -259,7 +259,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(p4_prom_log_lines_read[1m])",
+          "expr": "rate(p4_prom_log_lines_read_bucket[1m])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -354,7 +354,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "topk(20,p4_cmd_counter[10m])",
+          "expr": "topk(20,p4_cmd_counter_bucket[10m])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -448,7 +448,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "topk(20,p4_cmd_user_counter[10m])",
+          "expr": "topk(20,p4_cmd_user_counter_bucket[10m])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -556,7 +556,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance, job)(topk(10,rate(p4_cmd_counter[1m])))",
+          "expr": "sum without (instance, job)(topk(10,rate(p4_cmd_counter_bucket[1m])))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -651,7 +651,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "topk(10,rate(p4_cmd_cumulative_seconds[1m]))",
+          "expr": "topk(10,rate(p4_cmd_cumulative_seconds_bucket[1m]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -746,7 +746,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "topk(20,p4_cmd_cumulative_seconds/p4_cmd_counter)",
+          "expr": "topk(20,p4_cmd_cumulative_seconds_bucket/p4_cmd_counter_bucket)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -841,7 +841,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "topk(10,rate(p4_cmd_user_cumulative_seconds[1m]))",
+          "expr": "topk(10,rate(p4_cmd_user_cumulative_seconds_bucket[1m]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -935,7 +935,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance, job)(topk(10,rate(p4_cmd_user_counter[1m])))",
+          "expr": "sum without (instance, job)(topk(10,rate(p4_cmd_user_counter_bucket[1m])))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1043,7 +1043,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance, job)(topk(10,rate(p4_total_read_held_seconds[1m])))",
+          "expr": "sum without (instance, job)(topk(10,rate(p4_total_read_held_seconds_bucket[1m])))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1137,7 +1137,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance, job)(topk(10,rate(p4_total_read_wait_seconds[1m])))",
+          "expr": "sum without (instance, job)(topk(10,rate(p4_total_read_wait_seconds_bucket[1m])))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1231,7 +1231,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance, job)(topk(10,rate(p4_total_write_held_seconds[1m])))",
+          "expr": "sum without (instance, job)(topk(10,rate(p4_total_write_held_seconds_bucket[1m])))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1326,7 +1326,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance, job)(topk(10,rate(p4_total_write_wait_seconds[1m])))",
+          "expr": "sum without (instance, job)(topk(10,rate(p4_total_write_wait_seconds_bucket[1m])))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
