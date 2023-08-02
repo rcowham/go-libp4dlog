@@ -76,11 +76,6 @@ func toInt64(buf string) (n int64) {
 	return
 }
 
-type lbrRegex struct {
-	line   string
-	result bool
-}
-
 type blockType int
 
 const (
@@ -155,7 +150,7 @@ type Command struct {
 	NetFilesDeleted         int64     `json:"netFilesDeleted"`
 	NetBytesAdded           int64     `json:"netBytesAdded"`
 	NetBytesUpdated         int64     `json:"netBytesUpdated"`
-	LbrRcsOpens             int64     `json:"lbrRcsOpens"`
+	LbrRcsOpens             int64     `json:"lbrRcsOpens"` // Required for processing lbr records
 	LbrRcsCloses            int64     `json:"lbrRcsCloses"`
 	LbrRcsCheckins          int64     `json:"lbrRcsCheckins"`
 	LbrRcsExists            int64     `json:"lbrRcsExists"`
@@ -696,76 +691,76 @@ func (c *Command) updateFrom(other *Command) {
 			c.Tables[k] = t
 		}
 	}
-	if c.LbrRcsOpens == 0 {
+	if other.LbrRcsOpens > 0 {
 		c.LbrRcsOpens = other.LbrRcsOpens
 	}
-	if c.LbrRcsCloses == 0 {
+	if other.LbrRcsCloses > 0 {
 		c.LbrRcsCloses = other.LbrRcsCloses
 	}
-	if c.LbrRcsCheckins == 0 {
+	if other.LbrRcsCheckins > 0 {
 		c.LbrRcsCheckins = other.LbrRcsCheckins
 	}
-	if c.LbrRcsExists == 0 {
+	if other.LbrRcsExists > 0 {
 		c.LbrRcsExists = other.LbrRcsExists
 	}
-	if c.LbrRcsReads == 0 {
+	if other.LbrRcsReads > 0 {
 		c.LbrRcsReads = other.LbrRcsReads
 	}
-	if c.LbrRcsReadBytes == 0 {
+	if other.LbrRcsReadBytes > 0 {
 		c.LbrRcsReadBytes = other.LbrRcsReadBytes
 	}
-	if c.LbrRcsWrites == 0 {
+	if other.LbrRcsWrites > 0 {
 		c.LbrRcsWrites = other.LbrRcsWrites
 	}
-	if c.LbrRcsWriteBytes == 0 {
+	if other.LbrRcsWriteBytes > 0 {
 		c.LbrRcsWriteBytes = other.LbrRcsWriteBytes
 	}
-	if c.LbrCompressOpens == 0 {
+	if other.LbrCompressOpens > 0 {
 		c.LbrCompressOpens = other.LbrCompressOpens
 	}
-	if c.LbrCompressCloses == 0 {
+	if other.LbrCompressCloses > 0 {
 		c.LbrCompressCloses = other.LbrCompressCloses
 	}
-	if c.LbrCompressCheckins == 0 {
+	if other.LbrCompressCheckins > 0 {
 		c.LbrCompressCheckins = other.LbrCompressCheckins
 	}
-	if c.LbrCompressExists == 0 {
+	if other.LbrCompressExists > 0 {
 		c.LbrCompressExists = other.LbrCompressExists
 	}
-	if c.LbrCompressReads == 0 {
+	if other.LbrCompressReads > 0 {
 		c.LbrCompressReads = other.LbrCompressReads
 	}
-	if c.LbrCompressReadBytes == 0 {
+	if other.LbrCompressReadBytes > 0 {
 		c.LbrCompressReadBytes = other.LbrCompressReadBytes
 	}
-	if c.LbrCompressWrites == 0 {
+	if other.LbrCompressWrites > 0 {
 		c.LbrCompressWrites = other.LbrCompressWrites
 	}
-	if c.LbrCompressWriteBytes == 0 {
+	if other.LbrCompressWriteBytes > 0 {
 		c.LbrCompressWriteBytes = other.LbrCompressWriteBytes
 	}
-	if c.LbrUncompressOpens == 0 {
+	if other.LbrUncompressOpens > 0 {
 		c.LbrUncompressOpens = other.LbrUncompressOpens
 	}
-	if c.LbrUncompressCloses == 0 {
+	if other.LbrUncompressCloses > 0 {
 		c.LbrUncompressCloses = other.LbrUncompressCloses
 	}
-	if c.LbrUncompressCheckins == 0 {
+	if other.LbrUncompressCheckins > 0 {
 		c.LbrUncompressCheckins = other.LbrUncompressCheckins
 	}
-	if c.LbrUncompressExists == 0 {
+	if other.LbrUncompressExists > 0 {
 		c.LbrUncompressExists = other.LbrUncompressExists
 	}
-	if c.LbrUncompressReads == 0 {
+	if other.LbrUncompressReads > 0 {
 		c.LbrUncompressReads = other.LbrUncompressReads
 	}
-	if c.LbrUncompressReadBytes == 0 {
+	if other.LbrUncompressReadBytes > 0 {
 		c.LbrUncompressReadBytes = other.LbrUncompressReadBytes
 	}
-	if c.LbrUncompressWrites == 0 {
+	if other.LbrUncompressWrites > 0 {
 		c.LbrUncompressWrites = other.LbrUncompressWrites
 	}
-	if c.LbrUncompressWriteBytes == 0 {
+	if other.LbrUncompressWriteBytes > 0 {
 		c.LbrUncompressWriteBytes = other.LbrUncompressWriteBytes
 	}
 }
@@ -983,7 +978,7 @@ var reTriggerLapse = regexp.MustCompile(`^lapse (\d+\.\d+)s|^lapse (\.\d+)s|^lap
 var prefixTrackRPC = "--- rpc msgs/size in+out "
 var prefixTrackLbr = "---   opens+closes"
 var prefixTrackLbr2 = "---   reads+readbytes"
-var reTrackLbr = regexp.MustCompile(`^---\s*opens\+closes\+checkins\+exists\s+(\d+)\s*\+\s*(\d+)\s*\+\s*(\d+)\s*\+\s*(\d+)`)
+var reTrackLbr = regexp.MustCompile(`^---   opens\+closes\+checkins\+exists +(\d+)\+(\d+)\+(\d+)\+(\d+)`)
 var reTrackLbrReadWrite = regexp.MustCompile(`^---   reads\+readbytes\+writes\+writebytes (\d+)\+([\.0-9KMGTP]+)\+(\d+)\+([\.0-9KMGTP]+)`)
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
@@ -1121,21 +1116,15 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 				if strings.HasPrefix(line, prefixTrackLbr) {
 					cmd.setLbrRcsOpensCloses(m[1], m[2], m[3], m[4])
 					continue
-
 				}
-
 			}
 			m = reTrackLbrReadWrite.FindStringSubmatch(line)
 			if len(m) > 0 {
 				if strings.HasPrefix(line, prefixTrackLbr2) {
 					cmd.setLbrRcsReadWrites(m[1], m[3], processReadWriteBytes(m[2]), processReadWriteBytes(m[4]))
-
 					continue
-
 				}
-
 			}
-
 		}
 		if lbrAction == "lbrCompress" {
 			m = reTrackLbr.FindStringSubmatch(line)
@@ -1143,21 +1132,15 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 				if strings.HasPrefix(line, prefixTrackLbr) {
 					cmd.setLbrCompressOpensCloses(m[1], m[2], m[3], m[4])
 					continue
-
 				}
-
 			}
 			m = reTrackLbrReadWrite.FindStringSubmatch(line)
 			if len(m) > 0 {
 				if strings.HasPrefix(line, prefixTrackLbr2) {
 					cmd.setLbrCompressReadWrites(m[1], m[3], processReadWriteBytes(m[2]), processReadWriteBytes(m[4]))
-
 					continue
-
 				}
-
 			}
-
 		}
 		if lbrAction == "lbrUncompress" {
 			m = reTrackLbr.FindStringSubmatch(line)
@@ -1165,9 +1148,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 				if strings.HasPrefix(line, prefixTrackLbr) {
 					cmd.setLbrUncompressOpensCloses(m[1], m[2], m[3], m[4])
 					continue
-
 				}
-
 			}
 			m = reTrackLbrReadWrite.FindStringSubmatch(line)
 			if len(m) > 0 {
@@ -1175,7 +1156,6 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 					cmd.setLbrUncompressReadWrites(m[1], m[3], processReadWriteBytes(m[2]), processReadWriteBytes(m[4]))
 					continue
 				}
-
 			}
 		}
 
@@ -1258,9 +1238,9 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 	fp.addCommand(cmd, hasTrackInfo)
 }
 
-func processReadWriteBytes(readByteValue string) int64 {
-	l := readByteValue[len(readByteValue)-1:]
-	s, _ := strconv.ParseFloat(readByteValue[:len(readByteValue)-1], 32)
+func processReadWriteBytes(value string) int64 {
+	l := value[len(value)-1:]
+	s, _ := strconv.ParseFloat(value[:len(value)-1], 32)
 	var rtnVal int64
 	if l == "K" {
 		rtnVal = int64(float32(s * 1024))
@@ -1273,7 +1253,8 @@ func processReadWriteBytes(readByteValue string) int64 {
 	} else if l == "P" {
 		rtnVal = int64(float32(s * 1024 * 1024 * 1024 * 1024 * 1024))
 	} else {
-		rtnVal = int64(float32(s))
+		f, _ := strconv.ParseFloat(value, 32)
+		rtnVal = int64(f)
 	}
 	return rtnVal
 }
