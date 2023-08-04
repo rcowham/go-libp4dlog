@@ -1109,8 +1109,8 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			hasTrackInfo = true
 			continue
 		}
+		// Process lbr records if we found some
 		if lbrAction == "lbrRcs" {
-			//
 			m = reTrackLbr.FindStringSubmatch(line)
 			if len(m) > 0 {
 				if strings.HasPrefix(line, prefixTrackLbr) {
@@ -1121,7 +1121,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackLbrReadWrite.FindStringSubmatch(line)
 			if len(m) > 0 {
 				if strings.HasPrefix(line, prefixTrackLbr2) {
-					cmd.setLbrRcsReadWrites(m[1], m[3], processReadWriteBytes(m[2]), processReadWriteBytes(m[4]))
+					cmd.setLbrRcsReadWrites(m[1], m[3], parseBytesString(m[2]), parseBytesString(m[4]))
 					continue
 				}
 			}
@@ -1137,7 +1137,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackLbrReadWrite.FindStringSubmatch(line)
 			if len(m) > 0 {
 				if strings.HasPrefix(line, prefixTrackLbr2) {
-					cmd.setLbrCompressReadWrites(m[1], m[3], processReadWriteBytes(m[2]), processReadWriteBytes(m[4]))
+					cmd.setLbrCompressReadWrites(m[1], m[3], parseBytesString(m[2]), parseBytesString(m[4]))
 					continue
 				}
 			}
@@ -1153,7 +1153,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackLbrReadWrite.FindStringSubmatch(line)
 			if len(m) > 0 {
 				if strings.HasPrefix(line, prefixTrackLbr2) {
-					cmd.setLbrUncompressReadWrites(m[1], m[3], processReadWriteBytes(m[2]), processReadWriteBytes(m[4]))
+					cmd.setLbrUncompressReadWrites(m[1], m[3], parseBytesString(m[2]), parseBytesString(m[4]))
 					continue
 				}
 			}
@@ -1238,20 +1238,21 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 	fp.addCommand(cmd, hasTrackInfo)
 }
 
-func processReadWriteBytes(value string) int64 {
+// Extract values from strings such as "1.1K" or "2.3G"
+func parseBytesString(value string) int64 {
 	l := value[len(value)-1:]
 	s, _ := strconv.ParseFloat(value[:len(value)-1], 32)
 	var rtnVal int64
 	if l == "K" {
-		rtnVal = int64(float32(s * 1024))
+		rtnVal = int64(s * 1024)
 	} else if l == "M" {
-		rtnVal = int64(float32(s * 1024 * 1024))
+		rtnVal = int64(s * 1024 * 1024)
 	} else if l == "G" {
-		rtnVal = int64(float32(s * 1024 * 1024 * 1024))
+		rtnVal = int64(s * 1024 * 1024 * 1024)
 	} else if l == "T" {
-		rtnVal = int64(float32(s * 1024 * 1024 * 1024 * 1024))
+		rtnVal = int64(s * 1024 * 1024 * 1024 * 1024)
 	} else if l == "P" {
-		rtnVal = int64(float32(s * 1024 * 1024 * 1024 * 1024 * 1024))
+		rtnVal = int64(s * 1024 * 1024 * 1024 * 1024 * 1024)
 	} else {
 		f, _ := strconv.ParseFloat(value, 32)
 		rtnVal = int64(f)
@@ -1415,7 +1416,6 @@ func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 			fp.lastSyncPID = cmd.Pid
 		}
 	}
-
 }
 
 func (fp *P4dFileParser) updateCompletionTime(pid int64, lineNo int64, endTime string, completedLapse string) {
@@ -1464,7 +1464,6 @@ func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line 
 				break
 			}
 		}
-
 	}
 	if triggerLapse > 0 {
 		tableName := fmt.Sprintf("trigger_%s", trigger)
