@@ -41,6 +41,12 @@ func writeHeader(f io.Writer) {
 	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, running INT NULL,
 	netSyncFilesAdded INT NULL, netSyncFilesUpdated INT NULL, netSyncFilesDeleted INT NULL,
 	netSyncBytesAdded INT NULL, netSyncBytesUpdated INT NULL,
+	lbrRcsOpens INT NULL, lbrRcsCloses INT NULL, lbrRcsCheckins INT NULL, lbrRcsExists INT NULL,
+	lbrRcsReads INT NULL, lbrRcsReadBytes INT NULL, lbrRcsWrites INT NULL, lbrRcsWriteBytes INT NULL,
+	lbrCompressOpens INT NULL, lbrCompressCloses INT NULL, lbrCompressCheckins INT NULL, lbrCompressExists INT NULL,
+	lbrCompressReads INT NULL, lbrCompressReadBytes INT NULL, lbrCompressWrites INT NULL, lbrCompressWriteBytes INT NULL,
+	lbrUncompressOpens INT NULL, lbrUncompressCloses INT NULL, lbrUncompressCheckins INT NULL, lbrUncompressExists INT NULL,
+	lbrUncompressReads INT NULL, lbrUncompressReadBytes INT NULL, lbrUncompressWrites INT NULL, lbrUncompressWriteBytes INT NULL,
 	error TEXT NULL,
 	PRIMARY KEY (processkey, lineNumber));
 `)
@@ -91,8 +97,18 @@ func getProcessStatement() string {
 		rpcSnd, rpcRcv, running,
 		netSyncFilesAdded, netSyncFilesUpdated, netSyncFilesDeleted,
 		netSyncBytesAdded, netSyncBytesAdded,
+		lbrRcsOpens, lbrRcsCloses, lbrRcsCheckins, 
+		lbrRcsExists, lbrRcsReads, lbrRcsReadBytes,
+		lbrRcsWrites, lbrRcsWriteBytes, lbrCompressOpens,
+		lbrCompressCloses, lbrCompressCheckins, lbrCompressExists,
+		lbrCompressReads, lbrCompressReadBytes,
+		lbrCompressWrites, lbrCompressWriteBytes,
+		lbrUncompressOpens, lbrUncompressCloses,
+		lbrUncompressCheckins, lbrUncompressExists,
+		lbrUncompressReads, lbrUncompressReadBytes,
+		lbrUncompressWrites, lbrUncompressWriteBytes,
 		error)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
@@ -120,6 +136,12 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 		float64(cmd.RPCSnd), float64(cmd.RPCRcv), cmd.Running,
 		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
 		cmd.NetBytesAdded, cmd.NetBytesUpdated,
+		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
+		cmd.LbrRcsReads, cmd.LbrRcsReadBytes, cmd.LbrRcsWrites, cmd.LbrRcsWriteBytes,
+		cmd.LbrCompressOpens, cmd.LbrCompressCloses, cmd.LbrCompressCheckins, cmd.LbrCompressExists,
+		cmd.LbrCompressReads, cmd.LbrCompressReadBytes, cmd.LbrCompressWrites, cmd.LbrCompressWriteBytes,
+		cmd.LbrUncompressOpens, cmd.LbrUncompressCloses, cmd.LbrUncompressCheckins, cmd.LbrUncompressExists,
+		cmd.LbrUncompressReads, cmd.LbrUncompressReadBytes, cmd.LbrUncompressWrites, cmd.LbrUncompressWriteBytes,
 		cmd.CmdError)
 	if err != nil {
 		logger.Errorf("Process insert: %v pid %d, lineNo %d, %s",
@@ -146,7 +168,10 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 	rows := 1
 	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,`+
 		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
-		`%.3f,%.3f,%d,%d,%d,%d,%d,%d,"%v");`+"\n",
+		`%.3f,%.3f,%d,%d,%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,%d,%d,%d,%d,"%v");`+"\n",
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
 		cmd.ComputeLapse, cmd.CompletedLapse,
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
@@ -156,6 +181,12 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		cmd.RPCSnd, cmd.RPCRcv, cmd.Running,
 		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
 		cmd.NetBytesAdded, cmd.NetBytesUpdated,
+		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
+		cmd.LbrRcsReads, cmd.LbrRcsReadBytes, cmd.LbrRcsWrites, cmd.LbrRcsWriteBytes,
+		cmd.LbrCompressOpens, cmd.LbrCompressCloses, cmd.LbrCompressCheckins, cmd.LbrCompressExists,
+		cmd.LbrCompressReads, cmd.LbrCompressReadBytes, cmd.LbrCompressWrites, cmd.LbrCompressWriteBytes,
+		cmd.LbrUncompressOpens, cmd.LbrUncompressCloses, cmd.LbrUncompressCheckins, cmd.LbrUncompressExists,
+		cmd.LbrUncompressReads, cmd.LbrUncompressReadBytes, cmd.LbrUncompressWrites, cmd.LbrUncompressWriteBytes,
 		cmd.CmdError)
 	for _, t := range cmd.Tables {
 		rows++
