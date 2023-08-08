@@ -810,3 +810,102 @@ func TestP4PromLabelValues(t *testing.T) {
 	}
 
 }
+
+func TestP4PromTransmitCmds(t *testing.T) {
+	cfg := &Config{
+		ServerID:         "myserverid",
+		UpdateInterval:   10 * time.Millisecond,
+		OutputCmdsByUser: true}
+	input := `
+Perforce server info:
+	2023/07/01 02:00:02 pid 1871637 build@cmdr-tools-change-155476395 127.0.0.1/10.5.64.108 [p4/2018.1/LINUX26X86_64/1957529 (brokered)] 'user-transmit -t1871630 -b8 -s524288 -p'
+
+Perforce server info:
+	2023/07/01 02:00:02 pid 1871637 completed .011s 5+4us 0+0io 0+0net 10364k 0pf
+
+Perforce server info:
+	2023/07/01 02:00:02 pid 1871637 build@cmdr-tools-change-155476395 127.0.0.1/10.5.64.108 [p4/2018.1/LINUX26X86_64/1957529 (brokered)] 'user-transmit -t1871630 -b8 -s524288 -p'
+--- lapse .011s
+--- usage 5+4us 0+8io 0+0net 10364k 0pf
+--- memory cmd/proc 27mb/27mb
+--- rpc msgs/size in+out 2+74/0mb+0mb himarks 97604/318788 snd/rcv .000s/.001s
+--- db.topology
+---   pages in+out+cached 5+0+4
+---   locks read/write 1/0 rows get+pos+scan put+del 0+1+1 0+0
+--- db.monitor
+---   pages in+out+cached 2+4+4096
+---   locks read/write 0/2 rows get+pos+scan put+del 0+0+0 2+0
+---   total lock wait+held read/write 0ms+0ms/1ms+0ms
+---   max lock wait+held read/write 0ms+0ms/1ms+0ms
+--- lbr Rcs
+---   opens+closes+checkins+exists 1+2+3+4
+---   reads+readbytes+writes+writebytes 16+197.8G+2+1.5M
+--- lbr Compress
+---   opens+closes+checkins+exists 5+6+7+8
+---   reads+readbytes+writes+writebytes 32+138.7T+4+1.1P
+--- lbr Uncompress
+---   opens+closes+checkins+exists 9+10+11+12
+---   reads+readbytes+writes+writebytes 6+2.3K+5+4.1P
+`
+	// cmdTime1, _ := time.Parse(p4timeformat, "2017/12/07 15:00:21")
+	//cmdTime2, _ := time.Parse(p4timeformat, "2018/06/10 23:30:09")
+	historical := false
+	output := basicTest(t, cfg, input, historical)
+
+	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-transmit"} 1
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-transmit"} 0.004
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-transmit"} 0.005
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-transmit"} 0.011
+p4_cmd_program_counter{serverid="myserverid",program="p4/2018.1/LINUX26X86_64/1957529"} 1
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2018.1/LINUX26X86_64/1957529"} 0.011
+p4_cmd_replica_counter{serverid="myserverid",replica="127.0.0.1"} 1
+p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.011
+p4_cmd_running{serverid="myserverid"} 1
+p4_cmd_user_counter{serverid="myserverid",user="build"} 1
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="build"} 0.011
+p4_prom_cmds_pending{serverid="myserverid"} 0
+p4_prom_cmds_processed{serverid="myserverid"} 1
+p4_prom_cpu_system{serverid="myserverid"} 0.007865
+p4_prom_cpu_user{serverid="myserverid"} 0.008348
+p4_prom_log_lines_read{serverid="myserverid"} 31
+p4_sync_LbrCompressCheckins{serverid="myserverid"} 7
+p4_sync_LbrCompressCloses{serverid="myserverid"} 6
+p4_sync_LbrCompressExists{serverid="myserverid"} 8
+p4_sync_LbrCompressOpens{serverid="myserverid"} 5
+p4_sync_LbrCompressReadBytes{serverid="myserverid"} 152502259417088
+p4_sync_LbrCompressReads{serverid="myserverid"} 32
+p4_sync_LbrCompressWriteBytes{serverid="myserverid"} 1238489924370432
+p4_sync_LbrCompressWrites{serverid="myserverid"} 4
+p4_sync_LbrRcsCheckins{serverid="myserverid"} 3
+p4_sync_LbrRcsCloses{serverid="myserverid"} 2
+p4_sync_LbrRcsExists{serverid="myserverid"} 4
+p4_sync_LbrRcsOpens{serverid="myserverid"} 1
+p4_sync_LbrRcsReadBytes{serverid="myserverid"} 212386136064
+p4_sync_LbrRcsReads{serverid="myserverid"} 16
+p4_sync_LbrRcsWriteBytes{serverid="myserverid"} 1572864
+p4_sync_LbrRcsWrites{serverid="myserverid"} 2
+p4_sync_LbrUncompressCheckins{serverid="myserverid"} 11
+p4_sync_LbrUncompressCloses{serverid="myserverid"} 10
+p4_sync_LbrUncompressExists{serverid="myserverid"} 12
+p4_sync_LbrUncompressOpens{serverid="myserverid"} 9
+p4_sync_LbrUncompressReadBytes{serverid="myserverid"} 2355
+p4_sync_LbrUncompressReads{serverid="myserverid"} 6
+p4_sync_LbrUncompressWriteBytes{serverid="myserverid"} 4616189510680576
+p4_sync_LbrUncompressWrites{serverid="myserverid"} 5
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0
+p4_total_read_held_seconds{serverid="myserverid",table="monitor"} 0.000
+p4_total_read_held_seconds{serverid="myserverid",table="topology"} 0.000
+p4_total_read_wait_seconds{serverid="myserverid",table="monitor"} 0.000
+p4_total_read_wait_seconds{serverid="myserverid",table="topology"} 0.000
+p4_total_write_held_seconds{serverid="myserverid",table="monitor"} 0.000
+p4_total_write_held_seconds{serverid="myserverid",table="topology"} 0.000
+p4_total_write_wait_seconds{serverid="myserverid",table="monitor"} 0.001
+p4_total_write_wait_seconds{serverid="myserverid",table="topology"} 0.000`, -1)
+	assert.Equal(t, len(expected), len(output))
+	//assert.Equal(t, "", output[0])
+	compareOutput(t, expected, output)
+}
