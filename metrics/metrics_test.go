@@ -177,6 +177,30 @@ p4_prom_cmds_processed{serverid="myserverid"} 1
 p4_prom_log_lines_read{serverid="myserverid"} 10
 p4_prom_cpu_system{serverid="myserverid"} 0.0
 p4_prom_cpu_user{serverid="myserverid"} 0.0
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0
 p4_sync_bytes_added{serverid="myserverid"} 123
 p4_sync_bytes_updated{serverid="myserverid"} 456
 p4_sync_files_added{serverid="myserverid"} 1
@@ -204,6 +228,30 @@ p4_prom_cmds_processed;serverid=myserverid 1 1441207389
 p4_prom_log_lines_read;serverid=myserverid 10 1441207389
 p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
 p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441207389
 p4_sync_bytes_added;serverid=myserverid 123 1441207389
 p4_sync_bytes_updated;serverid=myserverid 456 1441207389
 p4_sync_files_added;serverid=myserverid 1 1441207389
@@ -246,25 +294,73 @@ Perforce server info:
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
 	expected := eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 2 1441210990
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441210990
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441210990
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.062 1441210990
 p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 2 1441210990
 p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.062 1441210990
 p4_cmd_running;serverid=myserverid 0 1441210990
 p4_cmd_running;serverid=myserverid 1 1441210990
 p4_cmd_user_counter;serverid=myserverid;user=robert 2 1441210990
-p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441210990
-p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441210990
 p4_cmd_user_cumulative_seconds;serverid=myserverid;user=robert 0.062 1441210990
 p4_prom_cmds_pending;serverid=myserverid 0 1441210990
-p4_prom_cmds_pending;serverid=myserverid 0 1441210990
+p4_prom_cmds_pending;serverid=myserverid 1 1441210990
 p4_prom_cmds_processed;serverid=myserverid 0 1441210990
 p4_prom_cmds_processed;serverid=myserverid 2 1441210990
+p4_prom_cpu_system;serverid=myserverid 0.007014 1441210990
+p4_prom_cpu_system;serverid=myserverid 0.007993 1441210990
+p4_prom_cpu_user;serverid=myserverid 0.004660 1441210990
+p4_prom_cpu_user;serverid=myserverid 0.006313 1441210990
 p4_prom_log_lines_read;serverid=myserverid 12 1441210990
 p4_prom_log_lines_read;serverid=myserverid 19 1441210990
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441210990
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441210990
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441210990
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441210990
 p4_sync_bytes_added;serverid=myserverid 0 1441210990
 p4_sync_bytes_added;serverid=myserverid 246 1441210990
 p4_sync_bytes_updated;serverid=myserverid 0 1441210990
@@ -311,6 +407,30 @@ p4_prom_cmds_processed{serverid="myserverid"} 1
 p4_prom_log_lines_read{serverid="myserverid"} 8
 p4_prom_cpu_system{serverid="myserverid"} 0.0
 p4_prom_cpu_user{serverid="myserverid"} 0.0
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0
 p4_sync_bytes_added{serverid="myserverid"} 0
 p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0
@@ -336,6 +456,30 @@ p4_prom_cmds_processed;serverid=myserverid 1 1441207389
 p4_prom_log_lines_read;serverid=myserverid 8 1441207389
 p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
 p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441207389
 p4_sync_bytes_added;serverid=myserverid 0 1441207389
 p4_sync_bytes_updated;serverid=myserverid 0 1441207389
 p4_sync_files_added;serverid=myserverid 0 1441207389
@@ -382,7 +526,31 @@ p4_sync_bytes_added;serverid=myserverid 0 1441207389
 p4_sync_bytes_updated;serverid=myserverid 0 1441207389
 p4_sync_files_added;serverid=myserverid 0 1441207389
 p4_sync_files_deleted;serverid=myserverid 0 1441207389
-p4_sync_files_updated;serverid=myserverid 0 1441207389`, -1)
+p4_sync_files_updated;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441207389
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441207389`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
@@ -461,7 +629,79 @@ p4_sync_files_deleted;serverid=myserverid 0 1441207511
 p4_sync_files_deleted;serverid=myserverid 0 1441207511
 p4_sync_files_updated;serverid=myserverid 0 1441207450
 p4_sync_files_updated;serverid=myserverid 0 1441207511
-p4_sync_files_updated;serverid=myserverid 0 1441207511`, -1)
+p4_sync_files_updated;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441207450
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441207511
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441207450
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441207511
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441207450
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441207511
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1441207511`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
@@ -540,6 +780,30 @@ p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0
 p4_sync_files_deleted{serverid="myserverid"} 0
 p4_sync_files_updated{serverid="myserverid"} 0
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0
 p4_total_read_held_seconds{serverid="myserverid",table="archmap"} 0.033
 p4_total_read_held_seconds{serverid="myserverid",table="counters"} 0.000
 p4_total_read_held_seconds{serverid="myserverid",table="integed"} 0.022
@@ -611,6 +875,78 @@ p4_sync_files_deleted;serverid=myserverid 0 1528673409
 p4_sync_files_updated;serverid=myserverid 0 1528673408
 p4_sync_files_updated;serverid=myserverid 0 1528673409
 p4_sync_files_updated;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_checkins;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_closes;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_exists;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_opens;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_readbytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_reads;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_writebytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1528673408
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1528673409
+p4_sync_lbr_compress_writes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_checkins;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_closes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_exists;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_opens;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_readbytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_reads;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_writebytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1528673408
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1528673409
+p4_sync_lbr_rcs_writes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_checkins;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_closes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_exists;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_opens;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_readbytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_reads;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_writebytes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1528673408
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1528673409
+p4_sync_lbr_uncompress_writes;serverid=myserverid 0 1528673409
 p4_total_read_held_seconds;serverid=myserverid;table=archmap 0.033 1528673409
 p4_total_read_held_seconds;serverid=myserverid;table=counters 0.000 1528673409
 p4_total_read_held_seconds;serverid=myserverid;table=integed 0.022 1528673409
@@ -669,7 +1005,31 @@ func TestP4PromBasicMultiUserCaseSensitive(t *testing.T) {
 	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="ROBERT"} 1
 p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
-p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011`, -1)
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
@@ -687,7 +1047,31 @@ func TestP4PromBasicMultiUserCaseInsensitive(t *testing.T) {
 		CaseSensitiveServer: false}
 	output := basicTest(t, cfg, multiUserInput, false)
 	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="robert"} 2
-p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.022`, -1)
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.022
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
@@ -712,7 +1096,31 @@ p4_cmd_user_detail_counter{serverid="myserverid",user="robert",cmd="user-fstat"}
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011
 p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 0.011
-p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="robert",cmd="user-fstat"} 0.011`, -1)
+p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="robert",cmd="user-fstat"} 0.011
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
@@ -759,8 +1167,52 @@ func TestP4PromBasicMultiIPFalse(t *testing.T) {
 		UpdateInterval: 10 * time.Millisecond,
 		OutputCmdsByIP: false}
 	output := basicTest(t, cfg, multiIPInput, false)
-	assert.Equal(t, len(multiIPExpected), len(output))
-	compareOutput(t, multiIPExpected, output)
+
+	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
+p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 2
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
+p4_cmd_replica_counter{serverid="myserverid",replica="127.0.0.1"} 1
+p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.011
+p4_cmd_running{serverid="myserverid"} 1
+p4_prom_cmds_pending{serverid="myserverid"} 0
+p4_prom_cmds_processed{serverid="myserverid"} 2
+p4_prom_cpu_system{serverid="myserverid"} 0.005965
+p4_prom_cpu_user{serverid="myserverid"} 0.004574
+p4_prom_log_lines_read{serverid="myserverid"} 11
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0`, -1)
+	assert.Equal(t, len(expected), len(output))
+	compareOutput(t, expected, output)
 }
 
 func TestP4PromBasicMultiIPTrue(t *testing.T) {
@@ -774,7 +1226,31 @@ func TestP4PromBasicMultiIPTrue(t *testing.T) {
 	expected := eol.Split(`p4_cmd_ip_counter{serverid="myserverid",ip="10.1.2.3"} 1
 p4_cmd_ip_counter{serverid="myserverid",ip="10.10.4.5"} 1
 p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.1.2.3"} 0.011
-p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.10.4.5"} 0.011`, -1)
+p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.10.4.5"} 0.011
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_compress_closes{serverid="myserverid"} 0
+p4_sync_lbr_compress_exists{serverid="myserverid"} 0
+p4_sync_lbr_compress_opens{serverid="myserverid"} 0
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_reads{serverid="myserverid"} 0
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_compress_writes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 0
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 0
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 0
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 0
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 0`, -1)
 	for _, l := range multiIPExpected {
 		expected = append(expected, l)
 	}
@@ -868,30 +1344,30 @@ p4_prom_cmds_processed{serverid="myserverid"} 1
 p4_prom_cpu_system{serverid="myserverid"} 0.007865
 p4_prom_cpu_user{serverid="myserverid"} 0.008348
 p4_prom_log_lines_read{serverid="myserverid"} 31
-p4_sync_LbrCompressCheckins{serverid="myserverid"} 7
-p4_sync_LbrCompressCloses{serverid="myserverid"} 6
-p4_sync_LbrCompressExists{serverid="myserverid"} 8
-p4_sync_LbrCompressOpens{serverid="myserverid"} 5
-p4_sync_LbrCompressReadBytes{serverid="myserverid"} 152502259417088
-p4_sync_LbrCompressReads{serverid="myserverid"} 32
-p4_sync_LbrCompressWriteBytes{serverid="myserverid"} 1238489924370432
-p4_sync_LbrCompressWrites{serverid="myserverid"} 4
-p4_sync_LbrRcsCheckins{serverid="myserverid"} 3
-p4_sync_LbrRcsCloses{serverid="myserverid"} 2
-p4_sync_LbrRcsExists{serverid="myserverid"} 4
-p4_sync_LbrRcsOpens{serverid="myserverid"} 1
-p4_sync_LbrRcsReadBytes{serverid="myserverid"} 212386136064
-p4_sync_LbrRcsReads{serverid="myserverid"} 16
-p4_sync_LbrRcsWriteBytes{serverid="myserverid"} 1572864
-p4_sync_LbrRcsWrites{serverid="myserverid"} 2
-p4_sync_LbrUncompressCheckins{serverid="myserverid"} 11
-p4_sync_LbrUncompressCloses{serverid="myserverid"} 10
-p4_sync_LbrUncompressExists{serverid="myserverid"} 12
-p4_sync_LbrUncompressOpens{serverid="myserverid"} 9
-p4_sync_LbrUncompressReadBytes{serverid="myserverid"} 2355
-p4_sync_LbrUncompressReads{serverid="myserverid"} 6
-p4_sync_LbrUncompressWriteBytes{serverid="myserverid"} 4616189510680576
-p4_sync_LbrUncompressWrites{serverid="myserverid"} 5
+p4_sync_lbr_compress_checkins{serverid="myserverid"} 7
+p4_sync_lbr_compress_closes{serverid="myserverid"} 6
+p4_sync_lbr_compress_exists{serverid="myserverid"} 8
+p4_sync_lbr_compress_opens{serverid="myserverid"} 5
+p4_sync_lbr_compress_readbytes{serverid="myserverid"} 152502259417088
+p4_sync_lbr_compress_reads{serverid="myserverid"} 32
+p4_sync_lbr_compress_writebytes{serverid="myserverid"} 1238489924370432
+p4_sync_lbr_compress_writes{serverid="myserverid"} 4
+p4_sync_lbr_rcs_checkins{serverid="myserverid"} 3
+p4_sync_lbr_rcs_closes{serverid="myserverid"} 2
+p4_sync_lbr_rcs_exists{serverid="myserverid"} 4
+p4_sync_lbr_rcs_opens{serverid="myserverid"} 1
+p4_sync_lbr_rcs_readbytes{serverid="myserverid"} 212386136064
+p4_sync_lbr_rcs_reads{serverid="myserverid"} 16
+p4_sync_lbr_rcs_writebytes{serverid="myserverid"} 1572864
+p4_sync_lbr_rcs_writes{serverid="myserverid"} 2
+p4_sync_lbr_uncompress_checkins{serverid="myserverid"} 11
+p4_sync_lbr_uncompress_closes{serverid="myserverid"} 10
+p4_sync_lbr_uncompress_exists{serverid="myserverid"} 12
+p4_sync_lbr_uncompress_opens{serverid="myserverid"} 9
+p4_sync_lbr_uncompress_readbytes{serverid="myserverid"} 2355
+p4_sync_lbr_uncompress_reads{serverid="myserverid"} 6
+p4_sync_lbr_uncompress_writebytes{serverid="myserverid"} 4616189510680576
+p4_sync_lbr_uncompress_writes{serverid="myserverid"} 5
 p4_sync_bytes_added{serverid="myserverid"} 0
 p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0

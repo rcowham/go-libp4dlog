@@ -42,68 +42,68 @@ type Config struct {
 
 // P4DMetrics structure
 type P4DMetrics struct {
-	config                      *Config
-	historical                  bool
-	debug                       int
-	fp                          *p4dlog.P4dFileParser
-	timeLatestStartCmd          time.Time
-	latestStartCmdBuf           string
-	logger                      *logrus.Logger
-	metricWriter                io.Writer
-	timeChan                    chan time.Time
-	cmdRunning                  int64
-	cmdCounter                  map[string]int64
-	cmdErrorCounter             map[string]int64
-	cmdCumulative               map[string]float64
-	cmduCPUCumulative           map[string]float64
-	cmdsCPUCumulative           map[string]float64
-	cmdByUserCounter            map[string]int64
-	cmdByUserCumulative         map[string]float64
-	cmdByIPCounter              map[string]int64
-	cmdByIPCumulative           map[string]float64
-	cmdByReplicaCounter         map[string]int64
-	cmdByReplicaCumulative      map[string]float64
-	cmdByProgramCounter         map[string]int64
-	cmdByProgramCumulative      map[string]float64
-	cmdByUserDetailCounter      map[string]map[string]int64
-	cmdByUserDetailCumulative   map[string]map[string]float64
-	totalReadWait               map[string]float64
-	totalReadHeld               map[string]float64
-	totalWriteWait              map[string]float64
-	totalWriteHeld              map[string]float64
-	totalTriggerLapse           map[string]float64
-	syncFilesAdded              int64
-	syncFilesUpdated            int64
-	syncFilesDeleted            int64
-	syncBytesAdded              int64
-	syncBytesUpdated            int64
-	cmdsProcessed               int64
-	linesRead                   int64
-	syncLbrRcsOpens             int64
-	syncLbrRcsCloses            int64
-	syncLbrRcsCheckins          int64
-	syncLbrRcsExists            int64
-	syncLbrRcsReads             int64
-	syncLbrRcsReadBytes         int64
-	syncLbrRcsWrites            int64
-	syncLbrRcsWriteBytes        int64
-	syncLbrCompressOpens        int64
-	syncLbrCompressCloses       int64
-	syncLbrCompressCheckins     int64
-	syncLbrCompressExists       int64
-	syncLbrCompressReads        int64
-	syncLbrCompressReadBytes    int64
-	syncLbrCompressWrites       int64
-	syncLbrCompressWriteBytes   int64
-	syncLbrUncompressOpens      int64
-	syncLbrUncompressCloses     int64
-	syncLbrUncompressCheckins   int64
-	syncLbrUncompressExists     int64
-	syncLbrUncompressReads      int64
-	syncLbrUncompressReadBytes  int64
-	syncLbrUncompressWrites     int64
-	syncLbrUncompressWriteBytes int64
-	outputCmdsByUserRegex       *regexp.Regexp
+	config                    *Config
+	historical                bool
+	debug                     int
+	fp                        *p4dlog.P4dFileParser
+	timeLatestStartCmd        time.Time
+	latestStartCmdBuf         string
+	logger                    *logrus.Logger
+	metricWriter              io.Writer
+	timeChan                  chan time.Time
+	cmdRunning                int64
+	cmdCounter                map[string]int64
+	cmdErrorCounter           map[string]int64
+	cmdCumulative             map[string]float64
+	cmduCPUCumulative         map[string]float64
+	cmdsCPUCumulative         map[string]float64
+	cmdByUserCounter          map[string]int64
+	cmdByUserCumulative       map[string]float64
+	cmdByIPCounter            map[string]int64
+	cmdByIPCumulative         map[string]float64
+	cmdByReplicaCounter       map[string]int64
+	cmdByReplicaCumulative    map[string]float64
+	cmdByProgramCounter       map[string]int64
+	cmdByProgramCumulative    map[string]float64
+	cmdByUserDetailCounter    map[string]map[string]int64
+	cmdByUserDetailCumulative map[string]map[string]float64
+	totalReadWait             map[string]float64
+	totalReadHeld             map[string]float64
+	totalWriteWait            map[string]float64
+	totalWriteHeld            map[string]float64
+	totalTriggerLapse         map[string]float64
+	syncFilesAdded            int64
+	syncFilesUpdated          int64
+	syncFilesDeleted          int64
+	syncBytesAdded            int64
+	syncBytesUpdated          int64
+	cmdsProcessed             int64
+	linesRead                 int64
+	LbrRcsOpens               int64
+	LbrRcsCloses              int64
+	LbrRcsCheckins            int64
+	LbrRcsExists              int64
+	LbrRcsReads               int64
+	LbrRcsReadBytes           int64
+	LbrRcsWrites              int64
+	LbrRcsWriteBytes          int64
+	LbrCompressOpens          int64
+	LbrCompressCloses         int64
+	LbrCompressCheckins       int64
+	LbrCompressExists         int64
+	LbrCompressReads          int64
+	LbrCompressReadBytes      int64
+	LbrCompressWrites         int64
+	LbrCompressWriteBytes     int64
+	LbrUncompressOpens        int64
+	LbrUncompressCloses       int64
+	LbrUncompressCheckins     int64
+	LbrUncompressExists       int64
+	LbrUncompressReads        int64
+	LbrUncompressReadBytes    int64
+	LbrUncompressWrites       int64
+	LbrUncompressWriteBytes   int64
+	outputCmdsByUserRegex     *regexp.Regexp
 }
 
 // NewP4DMetricsLogParser - wraps P4dFileParser
@@ -272,124 +272,124 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	metricVal = fmt.Sprintf("%d", p4m.syncBytesUpdated)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsOpens"
-	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs Open updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsOpens)
+	mname = "p4_sync_lbr_rcs_opens"
+	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs opens for commands", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsOpens)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsCloses"
-	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs Closes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsCloses)
+	mname = "p4_sync_lbr_rcs_closes"
+	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs closes for commands", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsCloses)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsExists"
-	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs Exists updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsExists)
+	mname = "p4_sync_lbr_rcs_exists"
+	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs exists for commands", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsExists)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsCheckins"
-	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs Checkins updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsCheckins)
+	mname = "p4_sync_lbr_rcs_checkins"
+	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs checkins for commands", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsCheckins)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsReads"
-	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs Reads updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsReads)
+	mname = "p4_sync_lbr_rcs_reads"
+	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs reads for commands", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsReads)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsReadBytes"
-	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs ReadBytes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsReadBytes)
+	mname = "p4_sync_lbr_rcs_readbytes"
+	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs readbytes for commands", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsReadBytes)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsWrites"
+	mname = "p4_sync_lbr_rcs_writes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs Writes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsWrites)
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsWrites)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrRcsWriteBytes"
+	mname = "p4_sync_lbr_rcs_writebytes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Rcs WriteBytes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrRcsWriteBytes)
+	metricVal = fmt.Sprintf("%d", p4m.LbrRcsWriteBytes)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressOpens"
+	mname = "p4_sync_lbr_compress_opens"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress Open updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressOpens)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressOpens)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressCloses"
+	mname = "p4_sync_lbr_compress_closes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress Closes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressCloses)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressCloses)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressExists"
+	mname = "p4_sync_lbr_compress_exists"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress Exists updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressExists)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressExists)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressCheckins"
+	mname = "p4_sync_lbr_compress_checkins"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress Checkins updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressCheckins)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressCheckins)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressReads"
+	mname = "p4_sync_lbr_compress_reads"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress Reads updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressReads)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressReads)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressReadBytes"
+	mname = "p4_sync_lbr_compress_readbytes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress ReadBytes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressReadBytes)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressReadBytes)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressWrites"
+	mname = "p4_sync_lbr_compress_writes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress Writes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressWrites)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressWrites)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrCompressWriteBytes"
+	mname = "p4_sync_lbr_compress_writebytes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Compress WriteBytes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrCompressWriteBytes)
+	metricVal = fmt.Sprintf("%d", p4m.LbrCompressWriteBytes)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressOpens"
+	mname = "p4_sync_lbr_uncompress_opens"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress Open updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressOpens)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressOpens)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressCloses"
+	mname = "p4_sync_lbr_uncompress_closes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress Closes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressCloses)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressCloses)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressExists"
+	mname = "p4_sync_lbr_uncompress_exists"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress Exists updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressExists)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressExists)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressCheckins"
+	mname = "p4_sync_lbr_uncompress_checkins"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress Checkins updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressCheckins)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressCheckins)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressReads"
+	mname = "p4_sync_lbr_uncompress_reads"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress Reads updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressReads)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressReads)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressReadBytes"
+	mname = "p4_sync_lbr_uncompress_readbytes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress ReadBytes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressReadBytes)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressReadBytes)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressWrites"
+	mname = "p4_sync_lbr_uncompress_writes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress Writes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressWrites)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressWrites)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
-	mname = "p4_sync_LbrUncompressWriteBytes"
+	mname = "p4_sync_lbr_uncompress_writebytes"
 	p4m.printMetricHeader(metrics, mname, "The number of Lbr Uncompress WriteBytes updated in workspaces by syncs", "counter")
-	metricVal = fmt.Sprintf("%d", p4m.syncLbrUncompressWriteBytes)
+	metricVal = fmt.Sprintf("%d", p4m.LbrUncompressWriteBytes)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_cmd_counter"
@@ -573,30 +573,30 @@ func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
 	p4m.syncFilesDeleted += cmd.NetFilesDeleted
 	p4m.syncBytesAdded += cmd.NetBytesAdded
 	p4m.syncBytesUpdated += cmd.NetBytesUpdated
-	p4m.syncLbrRcsOpens += cmd.LbrRcsOpens
-	p4m.syncLbrRcsCloses += cmd.LbrRcsCloses
-	p4m.syncLbrRcsExists += cmd.LbrRcsExists
-	p4m.syncLbrRcsCheckins += cmd.LbrRcsCheckins
-	p4m.syncLbrRcsReads += cmd.LbrRcsReads
-	p4m.syncLbrRcsReadBytes += cmd.LbrRcsReadBytes
-	p4m.syncLbrRcsWrites += cmd.LbrRcsWrites
-	p4m.syncLbrRcsWriteBytes += cmd.LbrRcsWriteBytes
-	p4m.syncLbrCompressOpens += cmd.LbrCompressOpens
-	p4m.syncLbrCompressCloses += cmd.LbrCompressCloses
-	p4m.syncLbrCompressExists += cmd.LbrCompressExists
-	p4m.syncLbrCompressCheckins += cmd.LbrCompressCheckins
-	p4m.syncLbrCompressReads += cmd.LbrCompressReads
-	p4m.syncLbrCompressReadBytes += cmd.LbrCompressReadBytes
-	p4m.syncLbrCompressWrites += cmd.LbrCompressWrites
-	p4m.syncLbrCompressWriteBytes += cmd.LbrCompressWriteBytes
-	p4m.syncLbrUncompressOpens += cmd.LbrUncompressOpens
-	p4m.syncLbrUncompressCloses += cmd.LbrUncompressCloses
-	p4m.syncLbrUncompressExists += cmd.LbrUncompressExists
-	p4m.syncLbrUncompressCheckins += cmd.LbrUncompressCheckins
-	p4m.syncLbrUncompressReads += cmd.LbrUncompressReads
-	p4m.syncLbrUncompressReadBytes += cmd.LbrUncompressReadBytes
-	p4m.syncLbrUncompressWrites += cmd.LbrUncompressWrites
-	p4m.syncLbrUncompressWriteBytes += cmd.LbrUncompressWriteBytes
+	p4m.LbrRcsOpens += cmd.LbrRcsOpens
+	p4m.LbrRcsCloses += cmd.LbrRcsCloses
+	p4m.LbrRcsExists += cmd.LbrRcsExists
+	p4m.LbrRcsCheckins += cmd.LbrRcsCheckins
+	p4m.LbrRcsReads += cmd.LbrRcsReads
+	p4m.LbrRcsReadBytes += cmd.LbrRcsReadBytes
+	p4m.LbrRcsWrites += cmd.LbrRcsWrites
+	p4m.LbrRcsWriteBytes += cmd.LbrRcsWriteBytes
+	p4m.LbrCompressOpens += cmd.LbrCompressOpens
+	p4m.LbrCompressCloses += cmd.LbrCompressCloses
+	p4m.LbrCompressExists += cmd.LbrCompressExists
+	p4m.LbrCompressCheckins += cmd.LbrCompressCheckins
+	p4m.LbrCompressReads += cmd.LbrCompressReads
+	p4m.LbrCompressReadBytes += cmd.LbrCompressReadBytes
+	p4m.LbrCompressWrites += cmd.LbrCompressWrites
+	p4m.LbrCompressWriteBytes += cmd.LbrCompressWriteBytes
+	p4m.LbrUncompressOpens += cmd.LbrUncompressOpens
+	p4m.LbrUncompressCloses += cmd.LbrUncompressCloses
+	p4m.LbrUncompressExists += cmd.LbrUncompressExists
+	p4m.LbrUncompressCheckins += cmd.LbrUncompressCheckins
+	p4m.LbrUncompressReads += cmd.LbrUncompressReads
+	p4m.LbrUncompressReadBytes += cmd.LbrUncompressReadBytes
+	p4m.LbrUncompressWrites += cmd.LbrUncompressWrites
+	p4m.LbrUncompressWriteBytes += cmd.LbrUncompressWriteBytes
 	user := cmd.User
 	if !p4m.config.CaseSensitiveServer {
 		user = strings.ToLower(user)
