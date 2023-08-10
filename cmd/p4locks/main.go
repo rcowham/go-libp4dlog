@@ -23,7 +23,7 @@ import (
 	// "github.com/pkg/profile"
 
 	"github.com/perforce/p4prometheus/version"
-	p4dlog "github.com/rcowham/go-libp4dlog"
+	p4dlog "github.com/RishiMunagala/go-libp4dlog"
 )
 
 // Threshold in milliseconds below which we filter out commands - for at least one of read/write wait/held
