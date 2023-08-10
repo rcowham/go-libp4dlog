@@ -158,6 +158,10 @@ type Command struct {
 	LbrRcsReadBytes         int64     `json:"lbrRcsReadBytes"`
 	LbrRcsWrites            int64     `json:"lbrRcsWrites"`
 	LbrRcsWriteBytes        int64     `json:"lbrRcsWriteBytes"`
+	LbrRcsDigests           int64     `json:"lbrRcsDigests"`
+	LbrRcsFileSizes         int64     `json:"lbrRcsFileSizes"`
+	LbrRcsModTimes          int64     `json:"lbrRcsModTimes"`
+	LbrRcsCopies            int64     `json:"lbrRcsCopies"`
 	LbrCompressOpens        int64     `json:"lbrCompressOpens"`
 	LbrCompressCloses       int64     `json:"lbrCompressCloses"`
 	LbrCompressCheckins     int64     `json:"lbrCompressCheckins"`
@@ -166,6 +170,10 @@ type Command struct {
 	LbrCompressReadBytes    int64     `json:"lbrCompressReadBytes"`
 	LbrCompressWrites       int64     `json:"lbrCompressWrites"`
 	LbrCompressWriteBytes   int64     `json:"lbrCompressWriteBytes"`
+	LbrCompressDigests      int64     `json:"lbrCompressDigests"`
+	LbrCompressFileSizes    int64     `json:"lbrCompressFileSizes"`
+	LbrCompressModTimes     int64     `json:"lbrCompressModTimes"`
+	LbrCompressCopies       int64     `json:"lbrCompressCopies"`
 	LbrUncompressOpens      int64     `json:"lbrUncompressOpens"`
 	LbrUncompressCloses     int64     `json:"lbrUncompressCloses"`
 	LbrUncompressCheckins   int64     `json:"lbrUncompressCheckins"`
@@ -174,6 +182,10 @@ type Command struct {
 	LbrUncompressReadBytes  int64     `json:"lbrUncompressReadBytes"`
 	LbrUncompressWrites     int64     `json:"lbrUncompressWrites"`
 	LbrUncompressWriteBytes int64     `json:"lbrUncompressWriteBytes"`
+	LbrUncompressDigests    int64     `json:"lbrUncompressDigests"`
+	LbrUncompressFileSizes  int64     `json:"lbrUncompressFileSizes"`
+	LbrUncompressModTimes   int64     `json:"lbrUncompressModTimes"`
+	LbrUncompressCopies     int64     `json:"lbrUncompressCopies"`
 	CmdError                bool      `json:"cmderror"`
 	Tables                  map[string]*Table
 	duplicateKey            bool
@@ -382,6 +394,22 @@ func (c *Command) setLbrRcsReadWrites(lbrReads, lbrWrites string, lbrReadBytes, 
 
 }
 
+func (c *Command) setLbrRcsDigestFilesizes(digests, filesizez, modtimes, copies string) {
+
+	if digests != "" {
+		c.LbrRcsDigests, _ = strconv.ParseInt(digests, 10, 64)
+	}
+	if filesizez != "" {
+		c.LbrRcsFileSizes, _ = strconv.ParseInt(filesizez, 10, 64)
+	}
+	if modtimes != "" {
+		c.LbrRcsModTimes, _ = strconv.ParseInt(modtimes, 10, 64)
+	}
+	if copies != "" {
+		c.LbrRcsCopies, _ = strconv.ParseInt(copies, 10, 64)
+	}
+}
+
 func (c *Command) setLbrCompressOpensCloses(lbrOpens, lbrCloses, lbrCheckins, lbrExists string) {
 
 	if lbrOpens != "" {
@@ -411,6 +439,23 @@ func (c *Command) setLbrCompressReadWrites(lbrReads, lbrWrites string, lbrReadBy
 	c.LbrCompressWriteBytes = lbrWriteBytes
 
 }
+
+func (c *Command) setLbrCompressDigestFilesizes(digests, filesizez, modtimes, copies string) {
+
+	if digests != "" {
+		c.LbrCompressDigests, _ = strconv.ParseInt(digests, 10, 64)
+	}
+	if filesizez != "" {
+		c.LbrCompressFileSizes, _ = strconv.ParseInt(filesizez, 10, 64)
+	}
+	if modtimes != "" {
+		c.LbrCompressModTimes, _ = strconv.ParseInt(modtimes, 10, 64)
+	}
+	if copies != "" {
+		c.LbrCompressCopies, _ = strconv.ParseInt(copies, 10, 64)
+	}
+}
+
 func (c *Command) setLbrUncompressOpensCloses(lbrOpens, lbrCloses, lbrCheckins, lbrExists string) {
 
 	if lbrOpens != "" {
@@ -427,6 +472,7 @@ func (c *Command) setLbrUncompressOpensCloses(lbrOpens, lbrCloses, lbrCheckins, 
 	}
 
 }
+
 func (c *Command) setLbrUncompressReadWrites(lbrReads, lbrWrites string, lbrReadBytes, lbrWriteBytes int64) {
 
 	if lbrReads != "" {
@@ -438,6 +484,22 @@ func (c *Command) setLbrUncompressReadWrites(lbrReads, lbrWrites string, lbrRead
 	c.LbrUncompressReadBytes = lbrReadBytes
 	c.LbrUncompressWriteBytes = lbrWriteBytes
 
+}
+
+func (c *Command) setLbrUncompressDigestFilesizes(digests, filesizez, modtimes, copies string) {
+
+	if digests != "" {
+		c.LbrUncompressDigests, _ = strconv.ParseInt(digests, 10, 64)
+	}
+	if filesizez != "" {
+		c.LbrUncompressFileSizes, _ = strconv.ParseInt(filesizez, 10, 64)
+	}
+	if modtimes != "" {
+		c.LbrUncompressModTimes, _ = strconv.ParseInt(modtimes, 10, 64)
+	}
+	if copies != "" {
+		c.LbrUncompressCopies, _ = strconv.ParseInt(copies, 10, 64)
+	}
 }
 
 // MarshalJSON - handle time formatting
@@ -487,7 +549,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		NetFilesDeleted         int64   `json:"netFilesDeleted"`
 		NetBytesAdded           int64   `json:"netBytesAdded"`
 		NetBytesUpdated         int64   `json:"netBytesUpdated"`
-		LbrRcsOpens             int64   `json:"lbrRcsOpens"`
+		LbrRcsOpens             int64   `json:"lbrRcsOpens"` // Required for processing lbr records
 		LbrRcsCloses            int64   `json:"lbrRcsCloses"`
 		LbrRcsCheckins          int64   `json:"lbrRcsCheckins"`
 		LbrRcsExists            int64   `json:"lbrRcsExists"`
@@ -495,6 +557,10 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		LbrRcsReadBytes         int64   `json:"lbrRcsReadBytes"`
 		LbrRcsWrites            int64   `json:"lbrRcsWrites"`
 		LbrRcsWriteBytes        int64   `json:"lbrRcsWriteBytes"`
+		LbrRcsDigests           int64   `json:"lbrRcsDigests"`
+		LbrRcsFileSizes         int64   `json:"lbrRcsFileSizes"`
+		LbrRcsModTimes          int64   `json:"lbrRcsModTimes"`
+		LbrRcsCopies            int64   `json:"lbrRcsCopies"`
 		LbrCompressOpens        int64   `json:"lbrCompressOpens"`
 		LbrCompressCloses       int64   `json:"lbrCompressCloses"`
 		LbrCompressCheckins     int64   `json:"lbrCompressCheckins"`
@@ -503,6 +569,10 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		LbrCompressReadBytes    int64   `json:"lbrCompressReadBytes"`
 		LbrCompressWrites       int64   `json:"lbrCompressWrites"`
 		LbrCompressWriteBytes   int64   `json:"lbrCompressWriteBytes"`
+		LbrCompressDigests      int64   `json:"lbrCompressDigests"`
+		LbrCompressFileSizes    int64   `json:"lbrCompressFileSizes"`
+		LbrCompressModTimes     int64   `json:"lbrCompressModTimes"`
+		LbrCompressCopies       int64   `json:"lbrCompressCopies"`
 		LbrUncompressOpens      int64   `json:"lbrUncompressOpens"`
 		LbrUncompressCloses     int64   `json:"lbrUncompressCloses"`
 		LbrUncompressCheckins   int64   `json:"lbrUncompressCheckins"`
@@ -511,6 +581,10 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		LbrUncompressReadBytes  int64   `json:"lbrUncompressReadBytes"`
 		LbrUncompressWrites     int64   `json:"lbrUncompressWrites"`
 		LbrUncompressWriteBytes int64   `json:"lbrUncompressWriteBytes"`
+		LbrUncompressDigests    int64   `json:"lbrUncompressDigests"`
+		LbrUncompressFileSizes  int64   `json:"lbrUncompressFileSizes"`
+		LbrUncompressModTimes   int64   `json:"lbrUncompressModTimes"`
+		LbrUncompressCopies     int64   `json:"lbrUncompressCopies"`
 		CmdError                bool    `json:"cmdError"`
 		Tables                  []Table `json:"tables"`
 	}{
@@ -557,6 +631,10 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		LbrRcsReadBytes:         c.LbrRcsReadBytes,
 		LbrRcsWrites:            c.LbrRcsWrites,
 		LbrRcsWriteBytes:        c.LbrRcsWriteBytes,
+		LbrRcsDigests:           c.LbrRcsDigests,
+		LbrRcsFileSizes:         c.LbrRcsFileSizes,
+		LbrRcsModTimes:          c.LbrRcsModTimes,
+		LbrRcsCopies:            c.LbrRcsCopies,
 		LbrCompressOpens:        c.LbrCompressOpens,
 		LbrCompressCloses:       c.LbrCompressCloses,
 		LbrCompressCheckins:     c.LbrCompressCheckins,
@@ -565,6 +643,10 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		LbrCompressReadBytes:    c.LbrCompressReadBytes,
 		LbrCompressWrites:       c.LbrCompressWrites,
 		LbrCompressWriteBytes:   c.LbrCompressWriteBytes,
+		LbrCompressDigests:      c.LbrCompressDigests,
+		LbrCompressFileSizes:    c.LbrCompressFileSizes,
+		LbrCompressModTimes:     c.LbrCompressModTimes,
+		LbrCompressCopies:       c.LbrCompressCopies,
 		LbrUncompressOpens:      c.LbrUncompressOpens,
 		LbrUncompressCloses:     c.LbrUncompressCloses,
 		LbrUncompressCheckins:   c.LbrUncompressCheckins,
@@ -573,6 +655,10 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		LbrUncompressReadBytes:  c.LbrUncompressReadBytes,
 		LbrUncompressWrites:     c.LbrUncompressWrites,
 		LbrUncompressWriteBytes: c.LbrUncompressWriteBytes,
+		LbrUncompressDigests:    c.LbrUncompressDigests,
+		LbrUncompressFileSizes:  c.LbrUncompressFileSizes,
+		LbrUncompressModTimes:   c.LbrUncompressModTimes,
+		LbrUncompressCopies:     c.LbrUncompressCopies,
 		CmdError:                c.CmdError,
 		Tables:                  tables,
 	})
@@ -715,6 +801,18 @@ func (c *Command) updateFrom(other *Command) {
 	if other.LbrRcsWriteBytes > 0 {
 		c.LbrRcsWriteBytes = other.LbrRcsWriteBytes
 	}
+	if other.LbrRcsDigests > 0 {
+		c.LbrRcsDigests = other.LbrRcsDigests
+	}
+	if other.LbrRcsFileSizes > 0 {
+		c.LbrRcsFileSizes = other.LbrRcsFileSizes
+	}
+	if other.LbrRcsModTimes > 0 {
+		c.LbrRcsModTimes = other.LbrRcsModTimes
+	}
+	if other.LbrRcsCopies > 0 {
+		c.LbrRcsCopies = other.LbrRcsCopies
+	}
 	if other.LbrCompressOpens > 0 {
 		c.LbrCompressOpens = other.LbrCompressOpens
 	}
@@ -739,6 +837,18 @@ func (c *Command) updateFrom(other *Command) {
 	if other.LbrCompressWriteBytes > 0 {
 		c.LbrCompressWriteBytes = other.LbrCompressWriteBytes
 	}
+	if other.LbrCompressDigests > 0 {
+		c.LbrCompressDigests = other.LbrCompressDigests
+	}
+	if other.LbrCompressFileSizes > 0 {
+		c.LbrCompressFileSizes = other.LbrCompressFileSizes
+	}
+	if other.LbrCompressModTimes > 0 {
+		c.LbrCompressModTimes = other.LbrCompressModTimes
+	}
+	if other.LbrCompressCopies > 0 {
+		c.LbrCompressCopies = other.LbrCompressCopies
+	}
 	if other.LbrUncompressOpens > 0 {
 		c.LbrUncompressOpens = other.LbrUncompressOpens
 	}
@@ -762,6 +872,18 @@ func (c *Command) updateFrom(other *Command) {
 	}
 	if other.LbrUncompressWriteBytes > 0 {
 		c.LbrUncompressWriteBytes = other.LbrUncompressWriteBytes
+	}
+	if other.LbrUncompressDigests > 0 {
+		c.LbrUncompressDigests = other.LbrUncompressDigests
+	}
+	if other.LbrUncompressFileSizes > 0 {
+		c.LbrUncompressFileSizes = other.LbrUncompressFileSizes
+	}
+	if other.LbrUncompressModTimes > 0 {
+		c.LbrUncompressModTimes = other.LbrUncompressModTimes
+	}
+	if other.LbrUncompressCopies > 0 {
+		c.LbrUncompressCopies = other.LbrUncompressCopies
 	}
 }
 
@@ -978,8 +1100,10 @@ var reTriggerLapse = regexp.MustCompile(`^lapse (\d+\.\d+)s|^lapse (\.\d+)s|^lap
 var prefixTrackRPC = "--- rpc msgs/size in+out "
 var prefixTrackLbr = "---   opens+closes"
 var prefixTrackLbr2 = "---   reads+readbytes"
+var prefixTrackLbr3 = "---   digests+filesizes"
 var reTrackLbr = regexp.MustCompile(`^---   opens\+closes\+checkins\+exists +(\d+)\+(\d+)\+(\d+)\+(\d+)`)
 var reTrackLbrReadWrite = regexp.MustCompile(`^---   reads\+readbytes\+writes\+writebytes (\d+)\+([\.0-9KMGTP]+)\+(\d+)\+([\.0-9KMGTP]+)`)
+var reTrackLbrDigestFilesize = regexp.MustCompile(`^---   digests\+filesizes\+modtimes\+copies +(\d+)\+(\d+)\+(\d+)\+(\d+)`)
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var prefixTrackUsage = "--- usage"
@@ -1125,6 +1249,13 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 					continue
 				}
 			}
+			m = reTrackLbrDigestFilesize.FindStringSubmatch(line)
+			if len(m) > 0 {
+				if strings.HasPrefix(line, prefixTrackLbr3) {
+					cmd.setLbrRcsDigestFilesizes(m[1], m[2], m[3], m[4])
+					continue
+				}
+			}
 		}
 		if lbrAction == "lbrCompress" {
 			m = reTrackLbr.FindStringSubmatch(line)
@@ -1141,6 +1272,13 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 					continue
 				}
 			}
+			m = reTrackLbrDigestFilesize.FindStringSubmatch(line)
+			if len(m) > 0 {
+				if strings.HasPrefix(line, prefixTrackLbr3) {
+					cmd.setLbrCompressDigestFilesizes(m[1], m[2], m[3], m[4])
+					continue
+				}
+			}
 		}
 		if lbrAction == "lbrUncompress" {
 			m = reTrackLbr.FindStringSubmatch(line)
@@ -1154,6 +1292,13 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			if len(m) > 0 {
 				if strings.HasPrefix(line, prefixTrackLbr2) {
 					cmd.setLbrUncompressReadWrites(m[1], m[3], parseBytesString(m[2]), parseBytesString(m[4]))
+					continue
+				}
+			}
+			m = reTrackLbrDigestFilesize.FindStringSubmatch(line)
+			if len(m) > 0 {
+				if strings.HasPrefix(line, prefixTrackLbr3) {
+					cmd.setLbrUncompressDigestFilesizes(m[1], m[2], m[3], m[4])
 					continue
 				}
 			}
