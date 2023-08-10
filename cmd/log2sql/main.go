@@ -24,8 +24,8 @@ import (
 	// "github.com/pkg/profile"
 
 	"github.com/perforce/p4prometheus/version"
-	p4dlog "github.com/rcowham/go-libp4dlog"
-	"github.com/rcowham/go-libp4dlog/metrics"
+	p4dlog "github.com/RishiMunagala/go-libp4dlog"
+	"github.com/RishiMunagala/go-libp4dlog/metrics"
 )
 
 const statementsPerTransaction = 50 * 1000
