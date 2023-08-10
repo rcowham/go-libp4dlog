@@ -1,4 +1,4 @@
-module github.com/rcowham/go-libp4dlog
+module github.com/RishiMunagala/go-libp4dlog
 
 go 1.18
 
