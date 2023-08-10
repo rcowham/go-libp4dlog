@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	p4dlog "github.com/rcowham/go-libp4dlog"
+	p4dlog "github.com/RishiMunagala/go-libp4dlog"
 	"github.com/sirupsen/logrus"
 )
 
