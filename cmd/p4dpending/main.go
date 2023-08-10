@@ -21,7 +21,7 @@ import (
 	// "github.com/pkg/profile"
 
 	"github.com/perforce/p4prometheus/version"
-	p4dlog "github.com/rcowham/go-libp4dlog"
+	p4dlog "github.com/RishiMunagala/go-libp4dlog"
 )
 
 func dateStr(t time.Time) string {
