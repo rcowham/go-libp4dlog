@@ -43,10 +43,13 @@ func writeHeader(f io.Writer) {
 	netSyncBytesAdded INT NULL, netSyncBytesUpdated INT NULL,
 	lbrRcsOpens INT NULL, lbrRcsCloses INT NULL, lbrRcsCheckins INT NULL, lbrRcsExists INT NULL,
 	lbrRcsReads INT NULL, lbrRcsReadBytes INT NULL, lbrRcsWrites INT NULL, lbrRcsWriteBytes INT NULL,
+    lbrRcsDigests INT NULL, lbrRcsfileSizes INT NULL, lbrRcsModtimes INT NULL, lbrRcsCopies INT NULL,
 	lbrCompressOpens INT NULL, lbrCompressCloses INT NULL, lbrCompressCheckins INT NULL, lbrCompressExists INT NULL,
 	lbrCompressReads INT NULL, lbrCompressReadBytes INT NULL, lbrCompressWrites INT NULL, lbrCompressWriteBytes INT NULL,
+	lbrCompressDigests INT NULL, lbrCompressFilesizes INT NULL, lbrCompressModtimes INT NULL, lbrCompressCopies INT NULL,
 	lbrUncompressOpens INT NULL, lbrUncompressCloses INT NULL, lbrUncompressCheckins INT NULL, lbrUncompressExists INT NULL,
 	lbrUncompressReads INT NULL, lbrUncompressReadBytes INT NULL, lbrUncompressWrites INT NULL, lbrUncompressWriteBytes INT NULL,
+	lbrUncompressDigests INT NULL, lbrUncompressFilesizes INT NULL, lbrUncompressModtimes INT NULL, lbrUncompressCopies INT NULL,
 	error TEXT NULL,
 	PRIMARY KEY (processkey, lineNumber));
 `)
@@ -97,18 +100,19 @@ func getProcessStatement() string {
 		rpcSnd, rpcRcv, running,
 		netSyncFilesAdded, netSyncFilesUpdated, netSyncFilesDeleted,
 		netSyncBytesAdded, netSyncBytesAdded,
-		lbrRcsOpens, lbrRcsCloses, lbrRcsCheckins, 
-		lbrRcsExists, lbrRcsReads, lbrRcsReadBytes,
-		lbrRcsWrites, lbrRcsWriteBytes, lbrCompressOpens,
-		lbrCompressCloses, lbrCompressCheckins, lbrCompressExists,
-		lbrCompressReads, lbrCompressReadBytes,
+		lbrRcsOpens, lbrRcsCloses, lbrRcsCheckins, lbrRcsExists,
+		lbrRcsReads, lbrRcsReadBytes, lbrRcsWrites, lbrRcsWriteBytes,
+		lbrRcsDigests, lbrRcsFilesizes, lbrRcsModtimes, lbrRcsCopies,
+		lbrCompressOpens, lbrCompressCloses, lbrCompressCheckins,
+		lbrCompressExists, lbrCompressReads, lbrCompressReadBytes,
 		lbrCompressWrites, lbrCompressWriteBytes,
-		lbrUncompressOpens, lbrUncompressCloses,
-		lbrUncompressCheckins, lbrUncompressExists,
-		lbrUncompressReads, lbrUncompressReadBytes,
+        lbrCompressDigests, lbrCompressFilesizes, lbrCompressModtimes, lbrCompressCopies,
+		lbrUncompressOpens, lbrUncompressCloses, lbrUncompressCheckins,
+		lbrUncompressExists, lbrUncompressReads, lbrUncompressReadBytes,
 		lbrUncompressWrites, lbrUncompressWriteBytes,
+		lbrUncompressDigests, lbrUncompressFilesizes, lbrUncompressModtimes, lbrUncompressCopies,
 		error)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
@@ -138,10 +142,13 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 		cmd.NetBytesAdded, cmd.NetBytesUpdated,
 		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
 		cmd.LbrRcsReads, cmd.LbrRcsReadBytes, cmd.LbrRcsWrites, cmd.LbrRcsWriteBytes,
+		cmd.LbrRcsDigests, cmd.LbrRcsFileSizes, cmd.LbrRcsModTimes, cmd.LbrRcsCopies,
 		cmd.LbrCompressOpens, cmd.LbrCompressCloses, cmd.LbrCompressCheckins, cmd.LbrCompressExists,
 		cmd.LbrCompressReads, cmd.LbrCompressReadBytes, cmd.LbrCompressWrites, cmd.LbrCompressWriteBytes,
+		cmd.LbrCompressDigests, cmd.LbrCompressFileSizes, cmd.LbrCompressModTimes, cmd.LbrCompressCopies,
 		cmd.LbrUncompressOpens, cmd.LbrUncompressCloses, cmd.LbrUncompressCheckins, cmd.LbrUncompressExists,
 		cmd.LbrUncompressReads, cmd.LbrUncompressReadBytes, cmd.LbrUncompressWrites, cmd.LbrUncompressWriteBytes,
+		cmd.LbrUncompressDigests, cmd.LbrUncompressFileSizes, cmd.LbrUncompressModTimes, cmd.LbrUncompressCopies,
 		cmd.CmdError)
 	if err != nil {
 		logger.Errorf("Process insert: %v pid %d, lineNo %d, %s",
@@ -171,7 +178,9 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		`%.3f,%.3f,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
-		`%d,%d,%d,%d,%d,%d,%d,%d,"%v");`+"\n",
+		`%d,%d,%d,%d,%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,"%v");`+"\n",
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
 		cmd.ComputeLapse, cmd.CompletedLapse,
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
@@ -183,10 +192,13 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		cmd.NetBytesAdded, cmd.NetBytesUpdated,
 		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
 		cmd.LbrRcsReads, cmd.LbrRcsReadBytes, cmd.LbrRcsWrites, cmd.LbrRcsWriteBytes,
+		cmd.LbrRcsDigests, cmd.LbrRcsFileSizes, cmd.LbrRcsModTimes, cmd.LbrRcsCopies,
 		cmd.LbrCompressOpens, cmd.LbrCompressCloses, cmd.LbrCompressCheckins, cmd.LbrCompressExists,
 		cmd.LbrCompressReads, cmd.LbrCompressReadBytes, cmd.LbrCompressWrites, cmd.LbrCompressWriteBytes,
+		cmd.LbrCompressDigests, cmd.LbrCompressFileSizes, cmd.LbrCompressModTimes, cmd.LbrCompressCopies,
 		cmd.LbrUncompressOpens, cmd.LbrUncompressCloses, cmd.LbrUncompressCheckins, cmd.LbrUncompressExists,
 		cmd.LbrUncompressReads, cmd.LbrUncompressReadBytes, cmd.LbrUncompressWrites, cmd.LbrUncompressWriteBytes,
+		cmd.LbrUncompressDigests, cmd.LbrUncompressFileSizes, cmd.LbrUncompressModTimes, cmd.LbrUncompressCopies,
 		cmd.CmdError)
 	for _, t := range cmd.Tables {
 		rows++
