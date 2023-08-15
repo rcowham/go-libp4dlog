@@ -378,7 +378,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	}
 	mname = "p4_total_read_held_seconds_bucket"
 	p4m.printMetricHeader(metrics, mname,
-		"The total read locks held in seconds (by table)", "counter")
+		"The total read locks held in seconds (by table)", "gauge")
 	for table, total := range p4m.totalReadHeld {
 		metricVal = fmt.Sprintf("%0.3f", total)
 		labels := append(fixedLabels, labelStruct{"table", table})
