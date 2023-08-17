@@ -128,7 +128,7 @@ func compareOutput(t *testing.T, expected, actual []string) {
 	nExpected := make([]string, 0)
 	nActual := make([]string, 0)
 	// Ignore these elements as the contents varies per test run
-	ignorePrefixes := []string{"p4_prom_cmds_pending_bucket", "p4_prom_cpu_user_bucket", "p4_prom_cpu_system_bucket"}
+	ignorePrefixes := []string{"p4_prom_cmds_pending", "p4_prom_cpu_user", "p4_prom_cpu_system"}
 	for _, line := range expected {
 		if !hasPrefix(ignorePrefixes, line) {
 			nExpected = append(nExpected, line)
@@ -163,25 +163,25 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	expected := eol.Split(`p4_cmd_counter_bucket{serverid="myserverid",cmd="user-sync"} 1
-p4_cmd_cumulative_seconds_bucket{serverid="myserverid",cmd="user-sync"} 0.031
-p4_cmd_program_counter_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1
-p4_cmd_program_cumulative_seconds_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.031
+	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
+p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.031
 p4_cmd_running{serverid="myserverid"} 1
-p4_cmd_user_counter_bucket{serverid="myserverid",user="robert"} 1
-p4_cmd_cpu_system_cumulative_seconds_bucket{serverid="myserverid",cmd="user-sync"} 0.000
-p4_cmd_cpu_user_cumulative_seconds_bucket{serverid="myserverid",cmd="user-sync"} 0.000
-p4_cmd_user_cumulative_seconds_bucket{serverid="myserverid",user="robert"} 0.031
-p4_prom_cmds_pending_bucket{serverid="myserverid"} 0
-p4_prom_cmds_processed_bucket{serverid="myserverid"} 1
-p4_prom_log_lines_read_bucket{serverid="myserverid"} 10
-p4_prom_cpu_system_bucket{serverid="myserverid"} 0.0
-p4_prom_cpu_user_bucket{serverid="myserverid"} 0.0
-p4_sync_bytes_added_bucket{serverid="myserverid"} 123
-p4_sync_bytes_updated_bucket{serverid="myserverid"} 456
-p4_sync_files_added_bucket{serverid="myserverid"} 1
-p4_sync_files_deleted_bucket{serverid="myserverid"} 2
-p4_sync_files_updated_bucket{serverid="myserverid"} 3`, -1)
+p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.031
+p4_prom_cmds_pending{serverid="myserverid"} 0
+p4_prom_cmds_processed{serverid="myserverid"} 1
+p4_prom_log_lines_read{serverid="myserverid"} 10
+p4_prom_cpu_system{serverid="myserverid"} 0.0
+p4_prom_cpu_user{serverid="myserverid"} 0.0
+p4_sync_bytes_added{serverid="myserverid"} 123
+p4_sync_bytes_updated{serverid="myserverid"} 456
+p4_sync_files_added{serverid="myserverid"} 1
+p4_sync_files_deleted{serverid="myserverid"} 2
+p4_sync_files_updated{serverid="myserverid"} 3`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
@@ -190,25 +190,25 @@ p4_sync_files_updated_bucket{serverid="myserverid"} 3`, -1)
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
-	expected = eol.Split(`p4_cmd_counter_bucket;serverid=myserverid;cmd=user-sync 1 1441207389
-p4_cmd_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.031 1441207389
-p4_cmd_program_counter_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1 1441207389
-p4_cmd_program_cumulative_seconds_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.031 1441207389
+	expected = eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
+p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1 1441207389
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.031 1441207389
 p4_cmd_running;serverid=myserverid 1 1441207389
-p4_cmd_user_counter_bucket;serverid=myserverid;user=robert 1 1441207389
-p4_cmd_cpu_system_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_cmd_cpu_user_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_cmd_user_cumulative_seconds_bucket;serverid=myserverid;user=robert 0.031 1441207389
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441207389
-p4_prom_cmds_processed_bucket;serverid=myserverid 1 1441207389
-p4_prom_log_lines_read_bucket;serverid=myserverid 10 1441207389
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207389
-p4_sync_bytes_added_bucket;serverid=myserverid 123 1441207389
-p4_sync_bytes_updated_bucket;serverid=myserverid 456 1441207389
-p4_sync_files_added_bucket;serverid=myserverid 1 1441207389
-p4_sync_files_deleted_bucket;serverid=myserverid 2 1441207389
-p4_sync_files_updated_bucket;serverid=myserverid 3 1441207389`, -1)
+p4_cmd_user_counter;serverid=myserverid;user=robert 1 1441207389
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_cmd_user_cumulative_seconds;serverid=myserverid;user=robert 0.031 1441207389
+p4_prom_cmds_pending;serverid=myserverid 0 1441207389
+p4_prom_cmds_processed;serverid=myserverid 1 1441207389
+p4_prom_log_lines_read;serverid=myserverid 10 1441207389
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_bytes_added;serverid=myserverid 123 1441207389
+p4_sync_bytes_updated;serverid=myserverid 456 1441207389
+p4_sync_files_added;serverid=myserverid 1 1441207389
+p4_sync_files_deleted;serverid=myserverid 2 1441207389
+p4_sync_files_updated;serverid=myserverid 3 1441207389`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
@@ -245,36 +245,36 @@ Perforce server info:
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
-	expected := eol.Split(`p4_cmd_counter_bucket;serverid=myserverid;cmd=user-sync 2 1441210990
-p4_cmd_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.062 1441210990
-p4_cmd_program_counter_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 2 1441210990
-p4_cmd_program_cumulative_seconds_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.062 1441210990
+	expected := eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 2 1441210990
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.062 1441210990
+p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 2 1441210990
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.062 1441210990
 p4_cmd_running;serverid=myserverid 0 1441210990
 p4_cmd_running;serverid=myserverid 1 1441210990
-p4_cmd_user_counter_bucket;serverid=myserverid;user=robert 2 1441210990
-p4_cmd_cpu_system_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441210990
-p4_cmd_cpu_user_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441210990
-p4_cmd_user_cumulative_seconds_bucket;serverid=myserverid;user=robert 0.062 1441210990
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441210990
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441210990
-p4_prom_cmds_processed_bucket;serverid=myserverid 0 1441210990
-p4_prom_cmds_processed_bucket;serverid=myserverid 2 1441210990
-p4_prom_log_lines_read_bucket;serverid=myserverid 12 1441210990
-p4_prom_log_lines_read_bucket;serverid=myserverid 19 1441210990
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207389
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1441210990
-p4_sync_bytes_added_bucket;serverid=myserverid 246 1441210990
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1441210990
-p4_sync_bytes_updated_bucket;serverid=myserverid 912 1441210990
-p4_sync_files_added_bucket;serverid=myserverid 0 1441210990
-p4_sync_files_added_bucket;serverid=myserverid 2 1441210990
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1441210990
-p4_sync_files_deleted_bucket;serverid=myserverid 4 1441210990
-p4_sync_files_updated_bucket;serverid=myserverid 0 1441210990
-p4_sync_files_updated_bucket;serverid=myserverid 6 1441210990`, -1)
+p4_cmd_user_counter;serverid=myserverid;user=robert 2 1441210990
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441210990
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441210990
+p4_cmd_user_cumulative_seconds;serverid=myserverid;user=robert 0.062 1441210990
+p4_prom_cmds_pending;serverid=myserverid 0 1441210990
+p4_prom_cmds_pending;serverid=myserverid 0 1441210990
+p4_prom_cmds_processed;serverid=myserverid 0 1441210990
+p4_prom_cmds_processed;serverid=myserverid 2 1441210990
+p4_prom_log_lines_read;serverid=myserverid 12 1441210990
+p4_prom_log_lines_read;serverid=myserverid 19 1441210990
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_bytes_added;serverid=myserverid 0 1441210990
+p4_sync_bytes_added;serverid=myserverid 246 1441210990
+p4_sync_bytes_updated;serverid=myserverid 0 1441210990
+p4_sync_bytes_updated;serverid=myserverid 912 1441210990
+p4_sync_files_added;serverid=myserverid 0 1441210990
+p4_sync_files_added;serverid=myserverid 2 1441210990
+p4_sync_files_deleted;serverid=myserverid 0 1441210990
+p4_sync_files_deleted;serverid=myserverid 4 1441210990
+p4_sync_files_updated;serverid=myserverid 0 1441210990
+p4_sync_files_updated;serverid=myserverid 6 1441210990`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
@@ -299,23 +299,23 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	expected := eol.Split(`p4_cmd_counter_bucket{serverid="myserverid",cmd="user-sync"} 1
-p4_cmd_cumulative_seconds_bucket{serverid="myserverid",cmd="user-sync"} 0.031
-p4_cmd_program_counter_bucket{serverid="myserverid",program="some_unknown_prog_p4python_v2"} 1
-p4_cmd_program_cumulative_seconds_bucket{serverid="myserverid",program="some_unknown_prog_p4python_v2"} 0.031
+	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
+p4_cmd_program_counter{serverid="myserverid",program="some_unknown_prog_p4python_v2"} 1
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="some_unknown_prog_p4python_v2"} 0.031
 p4_cmd_running{serverid="myserverid"} 1
-p4_cmd_cpu_system_cumulative_seconds_bucket{serverid="myserverid",cmd="user-sync"} 0.000
-p4_cmd_cpu_user_cumulative_seconds_bucket{serverid="myserverid",cmd="user-sync"} 0.000
-p4_prom_cmds_pending_bucket{serverid="myserverid"} 0
-p4_prom_cmds_processed_bucket{serverid="myserverid"} 1
-p4_prom_log_lines_read_bucket{serverid="myserverid"} 8
-p4_prom_cpu_system_bucket{serverid="myserverid"} 0.0
-p4_prom_cpu_user_bucket{serverid="myserverid"} 0.0
-p4_sync_bytes_added_bucket{serverid="myserverid"} 0
-p4_sync_bytes_updated_bucket{serverid="myserverid"} 0
-p4_sync_files_added_bucket{serverid="myserverid"} 0
-p4_sync_files_deleted_bucket{serverid="myserverid"} 0
-p4_sync_files_updated_bucket{serverid="myserverid"} 0`, -1)
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
+p4_prom_cmds_pending{serverid="myserverid"} 0
+p4_prom_cmds_processed{serverid="myserverid"} 1
+p4_prom_log_lines_read{serverid="myserverid"} 8
+p4_prom_cpu_system{serverid="myserverid"} 0.0
+p4_prom_cpu_user{serverid="myserverid"} 0.0
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
@@ -324,23 +324,23 @@ p4_sync_files_updated_bucket{serverid="myserverid"} 0`, -1)
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
-	expected = eol.Split(`p4_cmd_counter_bucket;serverid=myserverid;cmd=user-sync 1 1441207389
-p4_cmd_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.031 1441207389
-p4_cmd_program_counter_bucket;serverid=myserverid;program=some_unknown_prog_p4python_v2 1 1441207389
-p4_cmd_program_cumulative_seconds_bucket;serverid=myserverid;program=some_unknown_prog_p4python_v2 0.031 1441207389
+	expected = eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
+p4_cmd_program_counter;serverid=myserverid;program=some_unknown_prog_p4python_v2 1 1441207389
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=some_unknown_prog_p4python_v2 0.031 1441207389
 p4_cmd_running;serverid=myserverid 1 1441207389
-p4_cmd_cpu_system_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_cmd_cpu_user_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441207389
-p4_prom_cmds_processed_bucket;serverid=myserverid 1 1441207389
-p4_prom_log_lines_read_bucket;serverid=myserverid 8 1441207389
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207389
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1441207389
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1441207389
-p4_sync_files_added_bucket;serverid=myserverid 0 1441207389
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1441207389
-p4_sync_files_updated_bucket;serverid=myserverid 0 1441207389`, -1)
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_prom_cmds_pending;serverid=myserverid 0 1441207389
+p4_prom_cmds_processed;serverid=myserverid 1 1441207389
+p4_prom_log_lines_read;serverid=myserverid 8 1441207389
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_bytes_added;serverid=myserverid 0 1441207389
+p4_sync_bytes_updated;serverid=myserverid 0 1441207389
+p4_sync_files_added;serverid=myserverid 0 1441207389
+p4_sync_files_deleted;serverid=myserverid 0 1441207389
+p4_sync_files_updated;serverid=myserverid 0 1441207389`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
@@ -366,23 +366,23 @@ Perforce server info:
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
-	expected := eol.Split(`p4_cmd_counter_bucket;serverid=myserverid;cmd=user-sync 1 1441207389
-p4_cmd_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.031 1441207389
-p4_cmd_program_counter_bucket;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 1 1441207389
-p4_cmd_program_cumulative_seconds_bucket;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 0.031 1441207389
+	expected := eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 1 1441207389
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
+p4_cmd_program_counter;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 1 1441207389
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 0.031 1441207389
 p4_cmd_running;serverid=myserverid 1 1441207389
-p4_cmd_cpu_system_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_cmd_cpu_user_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441207389
-p4_prom_cmds_processed_bucket;serverid=myserverid 1 1441207389
-p4_prom_log_lines_read_bucket;serverid=myserverid 8 1441207389
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207389
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1441207389
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1441207389
-p4_sync_files_added_bucket;serverid=myserverid 0 1441207389
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1441207389
-p4_sync_files_updated_bucket;serverid=myserverid 0 1441207389`, -1)
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
+p4_prom_cmds_pending;serverid=myserverid 0 1441207389
+p4_prom_cmds_processed;serverid=myserverid 1 1441207389
+p4_prom_log_lines_read;serverid=myserverid 8 1441207389
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
+p4_sync_bytes_added;serverid=myserverid 0 1441207389
+p4_sync_bytes_updated;serverid=myserverid 0 1441207389
+p4_sync_files_added;serverid=myserverid 0 1441207389
+p4_sync_files_deleted;serverid=myserverid 0 1441207389
+p4_sync_files_updated;serverid=myserverid 0 1441207389`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
@@ -423,45 +423,45 @@ Perforce server info:
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
-	expected := eol.Split(`p4_cmd_counter_bucket;serverid=myserverid;cmd=user-sync 3 1441207511
-p4_cmd_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.096 1441207511
-p4_cmd_program_counter_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 3 1441207511
-p4_cmd_program_cumulative_seconds_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.096 1441207511
+	expected := eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=user-sync 3 1441207511
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.096 1441207511
+p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 3 1441207511
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.096 1441207511
 p4_cmd_running;serverid=myserverid 0 1441207450
 p4_cmd_running;serverid=myserverid 0 1441207511
 p4_cmd_running;serverid=myserverid 1 1441207511
-p4_cmd_cpu_system_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207511
-p4_cmd_cpu_user_cumulative_seconds_bucket;serverid=myserverid;cmd=user-sync 0.000 1441207511
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441207450
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441207511
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1441207511
-p4_prom_cmds_processed_bucket;serverid=myserverid 0 1441207450
-p4_prom_cmds_processed_bucket;serverid=myserverid 0 1441207511
-p4_prom_cmds_processed_bucket;serverid=myserverid 3 1441207511
-p4_prom_log_lines_read_bucket;serverid=myserverid 10 1441207450
-p4_prom_log_lines_read_bucket;serverid=myserverid 17 1441207511
-p4_prom_log_lines_read_bucket;serverid=myserverid 22 1441207511
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207450
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207511
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1441207511
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207450
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207511
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1441207511
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1441207450
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1441207511
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1441207511
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1441207450
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1441207511
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1441207511
-p4_sync_files_added_bucket;serverid=myserverid 0 1441207450
-p4_sync_files_added_bucket;serverid=myserverid 0 1441207511
-p4_sync_files_added_bucket;serverid=myserverid 0 1441207511
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1441207450
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1441207511
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1441207511
-p4_sync_files_updated_bucket;serverid=myserverid 0 1441207450
-p4_sync_files_updated_bucket;serverid=myserverid 0 1441207511
-p4_sync_files_updated_bucket;serverid=myserverid 0 1441207511`, -1)
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207511
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207511
+p4_prom_cmds_pending;serverid=myserverid 0 1441207450
+p4_prom_cmds_pending;serverid=myserverid 0 1441207511
+p4_prom_cmds_pending;serverid=myserverid 0 1441207511
+p4_prom_cmds_processed;serverid=myserverid 0 1441207450
+p4_prom_cmds_processed;serverid=myserverid 0 1441207511
+p4_prom_cmds_processed;serverid=myserverid 3 1441207511
+p4_prom_log_lines_read;serverid=myserverid 10 1441207450
+p4_prom_log_lines_read;serverid=myserverid 17 1441207511
+p4_prom_log_lines_read;serverid=myserverid 22 1441207511
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207450
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207511
+p4_prom_cpu_system;serverid=myserverid 0.0 1441207511
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207450
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207511
+p4_prom_cpu_user;serverid=myserverid 0.0 1441207511
+p4_sync_bytes_added;serverid=myserverid 0 1441207450
+p4_sync_bytes_added;serverid=myserverid 0 1441207511
+p4_sync_bytes_added;serverid=myserverid 0 1441207511
+p4_sync_bytes_updated;serverid=myserverid 0 1441207450
+p4_sync_bytes_updated;serverid=myserverid 0 1441207511
+p4_sync_bytes_updated;serverid=myserverid 0 1441207511
+p4_sync_files_added;serverid=myserverid 0 1441207450
+p4_sync_files_added;serverid=myserverid 0 1441207511
+p4_sync_files_added;serverid=myserverid 0 1441207511
+p4_sync_files_deleted;serverid=myserverid 0 1441207450
+p4_sync_files_deleted;serverid=myserverid 0 1441207511
+p4_sync_files_deleted;serverid=myserverid 0 1441207511
+p4_sync_files_updated;serverid=myserverid 0 1441207450
+p4_sync_files_updated;serverid=myserverid 0 1441207511
+p4_sync_files_updated;serverid=myserverid 0 1441207511`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
@@ -513,46 +513,46 @@ Perforce server info:
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
-	expected := eol.Split(`p4_cmd_counter_bucket{serverid="myserverid",cmd="dm-CommitSubmit"} 1
-p4_cmd_counter_bucket{serverid="myserverid",cmd="user-change"} 1
-p4_cmd_cumulative_seconds_bucket{serverid="myserverid",cmd="dm-CommitSubmit"} 1.380
-p4_cmd_cumulative_seconds_bucket{serverid="myserverid",cmd="user-change"} 0.413
-p4_cmd_program_counter_bucket{serverid="myserverid",program="3DSMax/1.0.0.0"} 1
-p4_cmd_program_counter_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1
-p4_cmd_program_cumulative_seconds_bucket{serverid="myserverid",program="3DSMax/1.0.0.0"} 0.413
-p4_cmd_program_cumulative_seconds_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1.380
-p4_cmd_replica_counter_bucket{serverid="myserverid",replica="10.40.16.14"} 1
-p4_cmd_replica_cumulative_seconds_bucket{serverid="myserverid",replica="10.40.16.14"} 0.413
+	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="dm-CommitSubmit"} 1
+p4_cmd_counter{serverid="myserverid",cmd="user-change"} 1
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 1.380
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.413
+p4_cmd_program_counter{serverid="myserverid",program="3DSMax/1.0.0.0"} 1
+p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="3DSMax/1.0.0.0"} 0.413
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1.380
+p4_cmd_replica_counter{serverid="myserverid",replica="10.40.16.14"} 1
+p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="10.40.16.14"} 0.413
 p4_cmd_running{serverid="myserverid"} 1
-p4_cmd_user_counter_bucket{serverid="myserverid",user="fred"} 2
-p4_cmd_cpu_system_cumulative_seconds_bucket{serverid="myserverid",cmd="dm-CommitSubmit"} 0.061
-p4_cmd_cpu_system_cumulative_seconds_bucket{serverid="myserverid",cmd="user-change"} 0.011
-p4_cmd_cpu_user_cumulative_seconds_bucket{serverid="myserverid",cmd="dm-CommitSubmit"} 0.034
-p4_cmd_cpu_user_cumulative_seconds_bucket{serverid="myserverid",cmd="user-change"} 0.010
-p4_cmd_user_cumulative_seconds_bucket{serverid="myserverid",user="fred"} 1.793
-p4_prom_cmds_pending_bucket{serverid="myserverid"} 0
-p4_prom_cmds_processed_bucket{serverid="myserverid"} 2
-p4_prom_log_lines_read_bucket{serverid="myserverid"} 37
-p4_prom_cpu_system_bucket{serverid="myserverid"} 0.0
-p4_prom_cpu_user_bucket{serverid="myserverid"} 0.0
-p4_sync_bytes_added_bucket{serverid="myserverid"} 0
-p4_sync_bytes_updated_bucket{serverid="myserverid"} 0
-p4_sync_files_added_bucket{serverid="myserverid"} 0
-p4_sync_files_deleted_bucket{serverid="myserverid"} 0
-p4_sync_files_updated_bucket{serverid="myserverid"} 0
-p4_total_read_held_seconds_bucket{serverid="myserverid",table="archmap"} 0.033
-p4_total_read_held_seconds_bucket{serverid="myserverid",table="counters"} 0.000
-p4_total_read_held_seconds_bucket{serverid="myserverid",table="integed"} 0.022
-p4_total_read_wait_seconds_bucket{serverid="myserverid",table="archmap"} 0.032
-p4_total_read_wait_seconds_bucket{serverid="myserverid",table="counters"} 0.000
-p4_total_read_wait_seconds_bucket{serverid="myserverid",table="integed"} 0.012
-p4_total_trigger_lapse_seconds_bucket{serverid="myserverid",trigger="swarm.changesave"} 0.044
-p4_total_write_held_seconds_bucket{serverid="myserverid",table="archmap"} 0.780
-p4_total_write_held_seconds_bucket{serverid="myserverid",table="counters"} 0.000
-p4_total_write_held_seconds_bucket{serverid="myserverid",table="integed"} 0.795
-p4_total_write_wait_seconds_bucket{serverid="myserverid",table="archmap"} 0.034
-p4_total_write_wait_seconds_bucket{serverid="myserverid",table="counters"} 0.000
-p4_total_write_wait_seconds_bucket{serverid="myserverid",table="integed"} 0.024`, -1)
+p4_cmd_user_counter{serverid="myserverid",user="fred"} 2
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 0.061
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.011
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 0.034
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.010
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="fred"} 1.793
+p4_prom_cmds_pending{serverid="myserverid"} 0
+p4_prom_cmds_processed{serverid="myserverid"} 2
+p4_prom_log_lines_read{serverid="myserverid"} 37
+p4_prom_cpu_system{serverid="myserverid"} 0.0
+p4_prom_cpu_user{serverid="myserverid"} 0.0
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0
+p4_total_read_held_seconds{serverid="myserverid",table="archmap"} 0.033
+p4_total_read_held_seconds{serverid="myserverid",table="counters"} 0.000
+p4_total_read_held_seconds{serverid="myserverid",table="integed"} 0.022
+p4_total_read_wait_seconds{serverid="myserverid",table="archmap"} 0.032
+p4_total_read_wait_seconds{serverid="myserverid",table="counters"} 0.000
+p4_total_read_wait_seconds{serverid="myserverid",table="integed"} 0.012
+p4_total_trigger_lapse_seconds{serverid="myserverid",trigger="swarm.changesave"} 0.044
+p4_total_write_held_seconds{serverid="myserverid",table="archmap"} 0.780
+p4_total_write_held_seconds{serverid="myserverid",table="counters"} 0.000
+p4_total_write_held_seconds{serverid="myserverid",table="integed"} 0.795
+p4_total_write_wait_seconds{serverid="myserverid",table="archmap"} 0.034
+p4_total_write_wait_seconds{serverid="myserverid",table="counters"} 0.000
+p4_total_write_wait_seconds{serverid="myserverid",table="integed"} 0.024`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
@@ -562,68 +562,68 @@ p4_total_write_wait_seconds_bucket{serverid="myserverid",table="integed"} 0.024`
 	// Cross check appropriate time is being produced for historical runs
 	// assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime1.Unix()))
 	assert.Contains(t, output[len(output)-1], fmt.Sprintf("%d", cmdTime2.Unix()))
-	expected = eol.Split(`p4_cmd_counter_bucket;serverid=myserverid;cmd=dm-CommitSubmit 1 1528673409
-p4_cmd_counter_bucket;serverid=myserverid;cmd=user-change 1 1528673409
-p4_cmd_cumulative_seconds_bucket;serverid=myserverid;cmd=dm-CommitSubmit 1.380 1528673409
-p4_cmd_cumulative_seconds_bucket;serverid=myserverid;cmd=user-change 0.413 1528673409
-p4_cmd_program_counter_bucket;serverid=myserverid;program=3DSMax/1.0.0.0 1 1528673409
-p4_cmd_program_counter_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1 1528673409
-p4_cmd_program_cumulative_seconds_bucket;serverid=myserverid;program=3DSMax/1.0.0.0 0.413 1528673409
-p4_cmd_program_cumulative_seconds_bucket;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1.380 1528673409
-p4_cmd_replica_counter_bucket;serverid=myserverid;replica=10.40.16.14 1 1528673409
-p4_cmd_replica_cumulative_seconds_bucket;serverid=myserverid;replica=10.40.16.14 0.413 1528673409
+	expected = eol.Split(`p4_cmd_counter;serverid=myserverid;cmd=dm-CommitSubmit 1 1528673409
+p4_cmd_counter;serverid=myserverid;cmd=user-change 1 1528673409
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=dm-CommitSubmit 1.380 1528673409
+p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-change 0.413 1528673409
+p4_cmd_program_counter;serverid=myserverid;program=3DSMax/1.0.0.0 1 1528673409
+p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1 1528673409
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=3DSMax/1.0.0.0 0.413 1528673409
+p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1.380 1528673409
+p4_cmd_replica_counter;serverid=myserverid;replica=10.40.16.14 1 1528673409
+p4_cmd_replica_cumulative_seconds;serverid=myserverid;replica=10.40.16.14 0.413 1528673409
 p4_cmd_running;serverid=myserverid 0 1528673408
 p4_cmd_running;serverid=myserverid 0 1528673409
 p4_cmd_running;serverid=myserverid 1 1528673409
-p4_cmd_user_counter_bucket;serverid=myserverid;user=fred 2 1528673409
-p4_cmd_cpu_system_cumulative_seconds_bucket;serverid=myserverid;cmd=dm-CommitSubmit 0.061 1528673409
-p4_cmd_cpu_system_cumulative_seconds_bucket;serverid=myserverid;cmd=user-change 0.011 1528673409
-p4_cmd_cpu_user_cumulative_seconds_bucket;serverid=myserverid;cmd=dm-CommitSubmit 0.034 1528673409
-p4_cmd_cpu_user_cumulative_seconds_bucket;serverid=myserverid;cmd=user-change 0.010 1528673409
-p4_cmd_user_cumulative_seconds_bucket;serverid=myserverid;user=fred 1.793 1528673409
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1528673408
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1528673409
-p4_prom_cmds_pending_bucket;serverid=myserverid 0 1528673409
-p4_prom_cmds_processed_bucket;serverid=myserverid 0 1528673408
-p4_prom_cmds_processed_bucket;serverid=myserverid 0 1528673409
-p4_prom_cmds_processed_bucket;serverid=myserverid 2 1528673409
-p4_prom_log_lines_read_bucket;serverid=myserverid 17 1528673408
-p4_prom_log_lines_read_bucket;serverid=myserverid 30 1528673409
-p4_prom_log_lines_read_bucket;serverid=myserverid 37 1528673409
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1528673408
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1528673409
-p4_prom_cpu_system_bucket;serverid=myserverid 0.0 1528673409
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1528673408
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1528673409
-p4_prom_cpu_user_bucket;serverid=myserverid 0.0 1528673409
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1528673408
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1528673409
-p4_sync_bytes_added_bucket;serverid=myserverid 0 1528673409
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1528673408
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1528673409
-p4_sync_bytes_updated_bucket;serverid=myserverid 0 1528673409
-p4_sync_files_added_bucket;serverid=myserverid 0 1528673408
-p4_sync_files_added_bucket;serverid=myserverid 0 1528673409
-p4_sync_files_added_bucket;serverid=myserverid 0 1528673409
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1528673408
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1528673409
-p4_sync_files_deleted_bucket;serverid=myserverid 0 1528673409
-p4_sync_files_updated_bucket;serverid=myserverid 0 1528673408
-p4_sync_files_updated_bucket;serverid=myserverid 0 1528673409
-p4_sync_files_updated_bucket;serverid=myserverid 0 1528673409
-p4_total_read_held_seconds_bucket;serverid=myserverid;table=archmap 0.033 1528673409
-p4_total_read_held_seconds_bucket;serverid=myserverid;table=counters 0.000 1528673409
-p4_total_read_held_seconds_bucket;serverid=myserverid;table=integed 0.022 1528673409
-p4_total_read_wait_seconds_bucket;serverid=myserverid;table=archmap 0.032 1528673409
-p4_total_read_wait_seconds_bucket;serverid=myserverid;table=counters 0.000 1528673409
-p4_total_read_wait_seconds_bucket;serverid=myserverid;table=integed 0.012 1528673409
-p4_total_trigger_lapse_seconds_bucket;serverid=myserverid;trigger=swarm.changesave 0.044 1528673409
-p4_total_write_held_seconds_bucket;serverid=myserverid;table=archmap 0.780 1528673409
-p4_total_write_held_seconds_bucket;serverid=myserverid;table=counters 0.000 1528673409
-p4_total_write_held_seconds_bucket;serverid=myserverid;table=integed 0.795 1528673409
-p4_total_write_wait_seconds_bucket;serverid=myserverid;table=archmap 0.034 1528673409
-p4_total_write_wait_seconds_bucket;serverid=myserverid;table=counters 0.000 1528673409
-p4_total_write_wait_seconds_bucket;serverid=myserverid;table=integed 0.024 1528673409`, -1)
+p4_cmd_user_counter;serverid=myserverid;user=fred 2 1528673409
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=dm-CommitSubmit 0.061 1528673409
+p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-change 0.011 1528673409
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=dm-CommitSubmit 0.034 1528673409
+p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-change 0.010 1528673409
+p4_cmd_user_cumulative_seconds;serverid=myserverid;user=fred 1.793 1528673409
+p4_prom_cmds_pending;serverid=myserverid 0 1528673408
+p4_prom_cmds_pending;serverid=myserverid 0 1528673409
+p4_prom_cmds_pending;serverid=myserverid 0 1528673409
+p4_prom_cmds_processed;serverid=myserverid 0 1528673408
+p4_prom_cmds_processed;serverid=myserverid 0 1528673409
+p4_prom_cmds_processed;serverid=myserverid 2 1528673409
+p4_prom_log_lines_read;serverid=myserverid 17 1528673408
+p4_prom_log_lines_read;serverid=myserverid 30 1528673409
+p4_prom_log_lines_read;serverid=myserverid 37 1528673409
+p4_prom_cpu_system;serverid=myserverid 0.0 1528673408
+p4_prom_cpu_system;serverid=myserverid 0.0 1528673409
+p4_prom_cpu_system;serverid=myserverid 0.0 1528673409
+p4_prom_cpu_user;serverid=myserverid 0.0 1528673408
+p4_prom_cpu_user;serverid=myserverid 0.0 1528673409
+p4_prom_cpu_user;serverid=myserverid 0.0 1528673409
+p4_sync_bytes_added;serverid=myserverid 0 1528673408
+p4_sync_bytes_added;serverid=myserverid 0 1528673409
+p4_sync_bytes_added;serverid=myserverid 0 1528673409
+p4_sync_bytes_updated;serverid=myserverid 0 1528673408
+p4_sync_bytes_updated;serverid=myserverid 0 1528673409
+p4_sync_bytes_updated;serverid=myserverid 0 1528673409
+p4_sync_files_added;serverid=myserverid 0 1528673408
+p4_sync_files_added;serverid=myserverid 0 1528673409
+p4_sync_files_added;serverid=myserverid 0 1528673409
+p4_sync_files_deleted;serverid=myserverid 0 1528673408
+p4_sync_files_deleted;serverid=myserverid 0 1528673409
+p4_sync_files_deleted;serverid=myserverid 0 1528673409
+p4_sync_files_updated;serverid=myserverid 0 1528673408
+p4_sync_files_updated;serverid=myserverid 0 1528673409
+p4_sync_files_updated;serverid=myserverid 0 1528673409
+p4_total_read_held_seconds;serverid=myserverid;table=archmap 0.033 1528673409
+p4_total_read_held_seconds;serverid=myserverid;table=counters 0.000 1528673409
+p4_total_read_held_seconds;serverid=myserverid;table=integed 0.022 1528673409
+p4_total_read_wait_seconds;serverid=myserverid;table=archmap 0.032 1528673409
+p4_total_read_wait_seconds;serverid=myserverid;table=counters 0.000 1528673409
+p4_total_read_wait_seconds;serverid=myserverid;table=integed 0.012 1528673409
+p4_total_trigger_lapse_seconds;serverid=myserverid;trigger=swarm.changesave 0.044 1528673409
+p4_total_write_held_seconds;serverid=myserverid;table=archmap 0.780 1528673409
+p4_total_write_held_seconds;serverid=myserverid;table=counters 0.000 1528673409
+p4_total_write_held_seconds;serverid=myserverid;table=integed 0.795 1528673409
+p4_total_write_wait_seconds;serverid=myserverid;table=archmap 0.034 1528673409
+p4_total_write_wait_seconds;serverid=myserverid;table=counters 0.000 1528673409
+p4_total_write_wait_seconds;serverid=myserverid;table=integed 0.024 1528673409`, -1)
 	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
@@ -640,23 +640,23 @@ Perforce server info:
 Perforce server info:
 	2015/09/02 15:23:10 pid 1616 completed .011s
 `
-var multiUserExpected = eol.Split(`p4_cmd_counter_bucket{serverid="myserverid",cmd="user-fstat"} 2
-p4_cmd_cumulative_seconds_bucket{serverid="myserverid",cmd="user-fstat"} 0.022
-p4_cmd_program_counter_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 2
-p4_cmd_program_cumulative_seconds_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
+var multiUserExpected = eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
+p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 2
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
 p4_cmd_running{serverid="myserverid"} 1
-p4_cmd_cpu_system_cumulative_seconds_bucket{serverid="myserverid",cmd="user-fstat"} 0.000
-p4_cmd_cpu_user_cumulative_seconds_bucket{serverid="myserverid",cmd="user-fstat"} 0.000
-p4_prom_cmds_pending_bucket{serverid="myserverid"} 0
-p4_prom_cmds_processed_bucket{serverid="myserverid"} 2
-p4_prom_log_lines_read_bucket{serverid="myserverid"} 11
-p4_prom_cpu_system_bucket{serverid="myserverid"} 0.0
-p4_prom_cpu_user_bucket{serverid="myserverid"} 0.0
-p4_sync_bytes_added_bucket{serverid="myserverid"} 0
-p4_sync_bytes_updated_bucket{serverid="myserverid"} 0
-p4_sync_files_added_bucket{serverid="myserverid"} 0
-p4_sync_files_deleted_bucket{serverid="myserverid"} 0
-p4_sync_files_updated_bucket{serverid="myserverid"} 0`, -1)
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
+p4_prom_cmds_pending{serverid="myserverid"} 0
+p4_prom_cmds_processed{serverid="myserverid"} 2
+p4_prom_log_lines_read{serverid="myserverid"} 11
+p4_prom_cpu_system{serverid="myserverid"} 0.0
+p4_prom_cpu_user{serverid="myserverid"} 0.0
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0`, -1)
 
 func TestP4PromBasicMultiUserCaseSensitive(t *testing.T) {
 	// Case sensitive/insensitive user
@@ -666,10 +666,10 @@ func TestP4PromBasicMultiUserCaseSensitive(t *testing.T) {
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: true}
 	output := basicTest(t, cfg, multiUserInput, false)
-	expected := eol.Split(`p4_cmd_user_counter_bucket{serverid="myserverid",user="ROBERT"} 1
-p4_cmd_user_counter_bucket{serverid="myserverid",user="robert"} 1
-p4_cmd_user_cumulative_seconds_bucket{serverid="myserverid",user="ROBERT"} 0.011
-p4_cmd_user_cumulative_seconds_bucket{serverid="myserverid",user="robert"} 0.011`, -1)
+	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="ROBERT"} 1
+p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
@@ -686,8 +686,8 @@ func TestP4PromBasicMultiUserCaseInsensitive(t *testing.T) {
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: false}
 	output := basicTest(t, cfg, multiUserInput, false)
-	expected := eol.Split(`p4_cmd_user_counter_bucket{serverid="myserverid",user="robert"} 2
-p4_cmd_user_cumulative_seconds_bucket{serverid="myserverid",user="robert"} 0.022`, -1)
+	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="robert"} 2
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.022`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
@@ -705,15 +705,15 @@ func TestP4PromBasicMultiUserDetail(t *testing.T) {
 		OutputCmdsByUserRegex: ".*",
 	}
 	output := basicTest(t, cfg, multiUserInput, false)
-	expected := eol.Split(`p4_cmd_user_counter_bucket{serverid="myserverid",user="ROBERT"} 1
-p4_cmd_user_counter_bucket{serverid="myserverid",user="robert"} 1
-p4_cmd_user_detail_counter_bucket{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 1
-p4_cmd_user_detail_counter_bucket{serverid="myserverid",user="robert",cmd="user-fstat"} 1
-p4_cmd_user_cumulative_seconds_bucket{serverid="myserverid",user="ROBERT"} 0.011
-p4_cmd_user_cumulative_seconds_bucket{serverid="myserverid",user="robert"} 0.011
-p4_cmd_user_detail_cumulative_seconds_bucket{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 0.011
-p4_cmd_user_detail_cumulative_seconds_bucket{serverid="myserverid",user="robert",cmd="user-fstat"} 0.011`, -1)
-	for _, l := range multiUserExpect_bucketed {
+	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="ROBERT"} 1
+p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
+p4_cmd_user_detail_counter{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 1
+p4_cmd_user_detail_counter{serverid="myserverid",user="robert",cmd="user-fstat"} 1
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011
+p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 0.011
+p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="robert",cmd="user-fstat"} 0.011`, -1)
+	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
 	assert.Equal(t, len(expected), len(output))
@@ -732,25 +732,25 @@ Perforce server info:
 Perforce server info:
 	2015/09/02 15:23:10 pid 1616 completed .011s
 `
-var multiIPExpected = eol.Split(`p4_cmd_counter_bucket{serverid="myserverid",cmd="user-fstat"} 2
-p4_cmd_cumulative_seconds_bucket{serverid="myserverid",cmd="user-fstat"} 0.022
-p4_cmd_program_counter_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 2
-p4_cmd_program_cumulative_seconds_bucket{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
-p4_cmd_replica_counter_bucket{serverid="myserverid",replica="127.0.0.1"} 1
-p4_cmd_replica_cumulative_seconds_bucket{serverid="myserverid",replica="127.0.0.1"} 0.011
+var multiIPExpected = eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
+p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 2
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
+p4_cmd_replica_counter{serverid="myserverid",replica="127.0.0.1"} 1
+p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.011
 p4_cmd_running{serverid="myserverid"} 1
-p4_cmd_cpu_system_cumulative_seconds_bucket{serverid="myserverid",cmd="user-fstat"} 0.000
-p4_cmd_cpu_user_cumulative_seconds_bucket{serverid="myserverid",cmd="user-fstat"} 0.000
-p4_prom_cmds_pending_bucket{serverid="myserverid"} 0
-p4_prom_cmds_processed_bucket{serverid="myserverid"} 2
-p4_prom_log_lines_read_bucket{serverid="myserverid"} 11
-p4_prom_cpu_system_bucket{serverid="myserverid"} 0.0
-p4_prom_cpu_user_bucket{serverid="myserverid"} 0.0
-p4_sync_bytes_added_bucket{serverid="myserverid"} 0
-p4_sync_bytes_updated_bucket{serverid="myserverid"} 0
-p4_sync_files_added_bucket{serverid="myserverid"} 0
-p4_sync_files_deleted_bucket{serverid="myserverid"} 0
-p4_sync_files_updated_bucket{serverid="myserverid"} 0`, -1)
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
+p4_prom_cmds_pending{serverid="myserverid"} 0
+p4_prom_cmds_processed{serverid="myserverid"} 2
+p4_prom_log_lines_read{serverid="myserverid"} 11
+p4_prom_cpu_system{serverid="myserverid"} 0.0
+p4_prom_cpu_user{serverid="myserverid"} 0.0
+p4_sync_bytes_added{serverid="myserverid"} 0
+p4_sync_bytes_updated{serverid="myserverid"} 0
+p4_sync_files_added{serverid="myserverid"} 0
+p4_sync_files_deleted{serverid="myserverid"} 0
+p4_sync_files_updated{serverid="myserverid"} 0`, -1)
 
 func TestP4PromBasicMultiIPFalse(t *testing.T) {
 	// No output by IP
@@ -771,10 +771,10 @@ func TestP4PromBasicMultiIPTrue(t *testing.T) {
 		OutputCmdsByIP: true}
 	output := basicTest(t, cfg, multiIPInput, false)
 
-	expected := eol.Split(`p4_cmd_ip_counter_bucket{serverid="myserverid",ip="10.1.2.3"} 1
-p4_cmd_ip_counter_bucket{serverid="myserverid",ip="10.10.4.5"} 1
-p4_cmd_ip_cumulative_seconds_bucket{serverid="myserverid",ip="10.1.2.3"} 0.011
-p4_cmd_ip_cumulative_seconds_bucket{serverid="myserverid",ip="10.10.4.5"} 0.011`, -1)
+	expected := eol.Split(`p4_cmd_ip_counter{serverid="myserverid",ip="10.1.2.3"} 1
+p4_cmd_ip_counter{serverid="myserverid",ip="10.10.4.5"} 1
+p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.1.2.3"} 0.011
+p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.10.4.5"} 0.011`, -1)
 	for _, l := range multiIPExpected {
 		expected = append(expected, l)
 	}
