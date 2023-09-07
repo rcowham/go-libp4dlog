@@ -137,6 +137,8 @@ type Command struct {
 	IpcOut                  int64     `json:"ipcOut"`
 	MaxRss                  int64     `json:"maxRss"`
 	PageFaults              int64     `json:"pageFaults"`
+	MemMB                   int64     `json:"memMB"`
+	MemPeakMB               int64     `json:"memPeakMB"`
 	RPCMsgsIn               int64     `json:"rpcMsgsIn"`
 	RPCMsgsOut              int64     `json:"rpcMsgsOut"`
 	RPCSizeIn               int64     `json:"rpcSizeIn"`
@@ -356,6 +358,11 @@ func (c *Command) setNetworkEstimates(netFilesAdded, netFilesUpdated, netFilesDe
 	c.NetBytesUpdated, _ = strconv.ParseInt(netBytesUpdated, 10, 64)
 }
 
+func (c *Command) setMem(memMB, memPeakMB string) {
+	c.MemMB, _ = strconv.ParseInt(memMB, 10, 64)
+	c.MemPeakMB, _ = strconv.ParseInt(memPeakMB, 10, 64)
+}
+
 func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev, rpcSnd, rpcRcv string) {
 	c.RPCMsgsIn, _ = strconv.ParseInt(rpcMsgsIn, 10, 64)
 	c.RPCMsgsOut, _ = strconv.ParseInt(rpcMsgsOut, 10, 64)
@@ -549,67 +556,67 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		return tables[i].TableName < tables[j].TableName
 	})
 	return json.Marshal(&struct {
-		ProcessKey       string  `json:"processKey"`
-		Cmd              string  `json:"cmd"`
-		Pid              int64   `json:"pid"`
-		LineNo           int64   `json:"lineNo"`
-		User             string  `json:"user"`
-		Workspace        string  `json:"workspace"`
-		ComputeLapse     float32 `json:"computeLapse"`
-		CompletedLapse   float32 `json:"completedLapse"`
-		IP               string  `json:"ip"`
-		App              string  `json:"app"`
-		Args             string  `json:"args"`
-		StartTime        string  `json:"startTime"`
-		EndTime          string  `json:"endTime"`
-		Running          int64   `json:"running"`
-		UCpu             int64   `json:"uCpu"`
-		SCpu             int64   `json:"sCpu"`
-		DiskIn           int64   `json:"diskIn"`
-		DiskOut          int64   `json:"diskOut"`
-		IpcIn            int64   `json:"ipcIn"`
-		IpcOut           int64   `json:"ipcOut"`
-		MaxRss           int64   `json:"maxRss"`
-		PageFaults       int64   `json:"pageFaults"`
-		RPCMsgsIn        int64   `json:"rpcMsgsIn"`
-		RPCMsgsOut       int64   `json:"rpcMsgsOut"`
-		RPCSizeIn        int64   `json:"rpcSizeIn"`
-		RPCSizeOut       int64   `json:"rpcSizeOut"`
-		RPCHimarkFwd     int64   `json:"rpcHimarkFwd"`
-		RPCHimarkRev     int64   `json:"rpcHimarkRev"`
-		RPCSnd           float32 `json:"rpcSnd"`
-		RPCRcv           float32 `json:"rpcRcv"`
-		NetFilesAdded    int64   `json:"netFilesAdded"` // Valid for syncs and network estimates records
-		NetFilesUpdated  int64   `json:"netFilesUpdated"`
-		NetFilesDeleted  int64   `json:"netFilesDeleted"`
-		NetBytesAdded    int64   `json:"netBytesAdded"`
-		NetBytesUpdated  int64   `json:"netBytesUpdated"`
-		LbrRcsOpens      int64   `json:"lbrRcsOpens"` // Required for processing lbr records
-		LbrRcsCloses     int64   `json:"lbrRcsCloses"`
-		LbrRcsCheckins   int64   `json:"lbrRcsCheckins"`
-		LbrRcsExists     int64   `json:"lbrRcsExists"`
-		LbrRcsReads      int64   `json:"lbrRcsReads"`
-		LbrRcsReadBytes  int64   `json:"lbrRcsReadBytes"`
-		LbrRcsWrites     int64   `json:"lbrRcsWrites"`
-		LbrRcsWriteBytes int64   `json:"lbrRcsWriteBytes"`
-		LbrRcsDigests    int64   `json:"lbrRcsDigests"`
-		LbrRcsFileSizes  int64   `json:"lbrRcsFileSizes"`
-		LbrRcsModTimes   int64   `json:"lbrRcsModTimes"`
-		LbrRcsCopies     int64   `json:"lbrRcsCopies"`
-
-		LbrBinaryOpens      int64 `json:"lbrBinaryOpens"`
-		LbrBinaryCloses     int64 `json:"lbrBinaryCloses"`
-		LbrBinaryCheckins   int64 `json:"lbrBinaryCheckins"`
-		LbrBinaryExists     int64 `json:"lbrBinaryExists"`
-		LbrBinaryReads      int64 `json:"lbrBinaryReads"`
-		LbrBinaryReadBytes  int64 `json:"lbrBinaryReadBytes"`
-		LbrBinaryWrites     int64 `json:"lbrBinaryWrites"`
-		LbrBinaryWriteBytes int64 `json:"lbrBinaryWriteBytes"`
-		LbrBinaryDigests    int64 `json:"lbrBinaryDigests"`
-		LbrBinaryFileSizes  int64 `json:"lbrBinaryFileSizes"`
-		LbrBinaryModTimes   int64 `json:"lbrBinaryModTimes"`
-		LbrBinaryCopies     int64 `json:"lbrBinaryCopies"`
-
+		ProcessKey              string  `json:"processKey"`
+		Cmd                     string  `json:"cmd"`
+		Pid                     int64   `json:"pid"`
+		LineNo                  int64   `json:"lineNo"`
+		User                    string  `json:"user"`
+		Workspace               string  `json:"workspace"`
+		ComputeLapse            float32 `json:"computeLapse"`
+		CompletedLapse          float32 `json:"completedLapse"`
+		IP                      string  `json:"ip"`
+		App                     string  `json:"app"`
+		Args                    string  `json:"args"`
+		StartTime               string  `json:"startTime"`
+		EndTime                 string  `json:"endTime"`
+		Running                 int64   `json:"running"`
+		UCpu                    int64   `json:"uCpu"`
+		SCpu                    int64   `json:"sCpu"`
+		DiskIn                  int64   `json:"diskIn"`
+		DiskOut                 int64   `json:"diskOut"`
+		IpcIn                   int64   `json:"ipcIn"`
+		IpcOut                  int64   `json:"ipcOut"`
+		MaxRss                  int64   `json:"maxRss"`
+		PageFaults              int64   `json:"pageFaults"`
+		MemMB                   int64   `json:"memMB"`
+		MemPeakMB               int64   `json:"memPeakMB"`
+		RPCMsgsIn               int64   `json:"rpcMsgsIn"`
+		RPCMsgsOut              int64   `json:"rpcMsgsOut"`
+		RPCSizeIn               int64   `json:"rpcSizeIn"`
+		RPCSizeOut              int64   `json:"rpcSizeOut"`
+		RPCHimarkFwd            int64   `json:"rpcHimarkFwd"`
+		RPCHimarkRev            int64   `json:"rpcHimarkRev"`
+		RPCSnd                  float32 `json:"rpcSnd"`
+		RPCRcv                  float32 `json:"rpcRcv"`
+		NetFilesAdded           int64   `json:"netFilesAdded"` // Valid for syncs and network estimates records
+		NetFilesUpdated         int64   `json:"netFilesUpdated"`
+		NetFilesDeleted         int64   `json:"netFilesDeleted"`
+		NetBytesAdded           int64   `json:"netBytesAdded"`
+		NetBytesUpdated         int64   `json:"netBytesUpdated"`
+		LbrRcsOpens             int64   `json:"lbrRcsOpens"` // Required for processing lbr records
+		LbrRcsCloses            int64   `json:"lbrRcsCloses"`
+		LbrRcsCheckins          int64   `json:"lbrRcsCheckins"`
+		LbrRcsExists            int64   `json:"lbrRcsExists"`
+		LbrRcsReads             int64   `json:"lbrRcsReads"`
+		LbrRcsReadBytes         int64   `json:"lbrRcsReadBytes"`
+		LbrRcsWrites            int64   `json:"lbrRcsWrites"`
+		LbrRcsWriteBytes        int64   `json:"lbrRcsWriteBytes"`
+		LbrRcsDigests           int64   `json:"lbrRcsDigests"`
+		LbrRcsFileSizes         int64   `json:"lbrRcsFileSizes"`
+		LbrRcsModTimes          int64   `json:"lbrRcsModTimes"`
+		LbrRcsCopies            int64   `json:"lbrRcsCopies"`
+		LbrBinaryOpens          int64   `json:"lbrBinaryOpens"`
+		LbrBinaryCloses         int64   `json:"lbrBinaryCloses"`
+		LbrBinaryCheckins       int64   `json:"lbrBinaryCheckins"`
+		LbrBinaryExists         int64   `json:"lbrBinaryExists"`
+		LbrBinaryReads          int64   `json:"lbrBinaryReads"`
+		LbrBinaryReadBytes      int64   `json:"lbrBinaryReadBytes"`
+		LbrBinaryWrites         int64   `json:"lbrBinaryWrites"`
+		LbrBinaryWriteBytes     int64   `json:"lbrBinaryWriteBytes"`
+		LbrBinaryDigests        int64   `json:"lbrBinaryDigests"`
+		LbrBinaryFileSizes      int64   `json:"lbrBinaryFileSizes"`
+		LbrBinaryModTimes       int64   `json:"lbrBinaryModTimes"`
+		LbrBinaryCopies         int64   `json:"lbrBinaryCopies"`
 		LbrCompressOpens        int64   `json:"lbrCompressOpens"`
 		LbrCompressCloses       int64   `json:"lbrCompressCloses"`
 		LbrCompressCheckins     int64   `json:"lbrCompressCheckins"`
@@ -637,67 +644,67 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		CmdError                bool    `json:"cmdError"`
 		Tables                  []Table `json:"tables"`
 	}{
-		ProcessKey:       c.GetKey(),
-		Cmd:              c.Cmd,
-		Pid:              c.Pid,
-		LineNo:           c.LineNo,
-		User:             c.User,
-		Workspace:        c.Workspace,
-		ComputeLapse:     c.ComputeLapse,
-		CompletedLapse:   c.CompletedLapse,
-		IP:               c.IP,
-		App:              c.App,
-		Args:             c.Args,
-		StartTime:        c.StartTime.Format(p4timeformat),
-		EndTime:          c.EndTime.Format(p4timeformat),
-		Running:          c.Running,
-		UCpu:             c.UCpu,
-		SCpu:             c.SCpu,
-		DiskIn:           c.DiskIn,
-		DiskOut:          c.DiskOut,
-		IpcIn:            c.IpcIn,
-		IpcOut:           c.IpcOut,
-		MaxRss:           c.MaxRss,
-		PageFaults:       c.PageFaults,
-		RPCMsgsIn:        c.RPCMsgsIn,
-		RPCMsgsOut:       c.RPCMsgsOut,
-		RPCSizeIn:        c.RPCSizeIn,
-		RPCSizeOut:       c.RPCSizeOut,
-		RPCHimarkFwd:     c.RPCHimarkFwd,
-		RPCHimarkRev:     c.RPCHimarkRev,
-		RPCSnd:           c.RPCSnd,
-		RPCRcv:           c.RPCRcv,
-		NetFilesAdded:    c.NetFilesAdded,
-		NetFilesUpdated:  c.NetFilesUpdated,
-		NetFilesDeleted:  c.NetFilesDeleted,
-		NetBytesAdded:    c.NetBytesAdded,
-		NetBytesUpdated:  c.NetBytesUpdated,
-		LbrRcsOpens:      c.LbrRcsOpens,
-		LbrRcsCloses:     c.LbrRcsCloses,
-		LbrRcsCheckins:   c.LbrRcsCheckins,
-		LbrRcsExists:     c.LbrRcsExists,
-		LbrRcsReads:      c.LbrRcsReads,
-		LbrRcsReadBytes:  c.LbrRcsReadBytes,
-		LbrRcsWrites:     c.LbrRcsWrites,
-		LbrRcsWriteBytes: c.LbrRcsWriteBytes,
-		LbrRcsDigests:    c.LbrRcsDigests,
-		LbrRcsFileSizes:  c.LbrRcsFileSizes,
-		LbrRcsModTimes:   c.LbrRcsModTimes,
-		LbrRcsCopies:     c.LbrRcsCopies,
-
-		LbrBinaryOpens:      c.LbrBinaryOpens,
-		LbrBinaryCloses:     c.LbrBinaryCloses,
-		LbrBinaryCheckins:   c.LbrBinaryCheckins,
-		LbrBinaryExists:     c.LbrBinaryExists,
-		LbrBinaryReads:      c.LbrBinaryReads,
-		LbrBinaryReadBytes:  c.LbrBinaryReadBytes,
-		LbrBinaryWrites:     c.LbrBinaryWrites,
-		LbrBinaryWriteBytes: c.LbrBinaryWriteBytes,
-		LbrBinaryDigests:    c.LbrBinaryDigests,
-		LbrBinaryFileSizes:  c.LbrBinaryFileSizes,
-		LbrBinaryModTimes:   c.LbrBinaryModTimes,
-		LbrBinaryCopies:     c.LbrBinaryCopies,
-
+		ProcessKey:              c.GetKey(),
+		Cmd:                     c.Cmd,
+		Pid:                     c.Pid,
+		LineNo:                  c.LineNo,
+		User:                    c.User,
+		Workspace:               c.Workspace,
+		ComputeLapse:            c.ComputeLapse,
+		CompletedLapse:          c.CompletedLapse,
+		IP:                      c.IP,
+		App:                     c.App,
+		Args:                    c.Args,
+		StartTime:               c.StartTime.Format(p4timeformat),
+		EndTime:                 c.EndTime.Format(p4timeformat),
+		Running:                 c.Running,
+		UCpu:                    c.UCpu,
+		SCpu:                    c.SCpu,
+		DiskIn:                  c.DiskIn,
+		DiskOut:                 c.DiskOut,
+		IpcIn:                   c.IpcIn,
+		IpcOut:                  c.IpcOut,
+		MaxRss:                  c.MaxRss,
+		PageFaults:              c.PageFaults,
+		MemMB:                   c.MemMB,
+		MemPeakMB:               c.MemPeakMB,
+		RPCMsgsIn:               c.RPCMsgsIn,
+		RPCMsgsOut:              c.RPCMsgsOut,
+		RPCSizeIn:               c.RPCSizeIn,
+		RPCSizeOut:              c.RPCSizeOut,
+		RPCHimarkFwd:            c.RPCHimarkFwd,
+		RPCHimarkRev:            c.RPCHimarkRev,
+		RPCSnd:                  c.RPCSnd,
+		RPCRcv:                  c.RPCRcv,
+		NetFilesAdded:           c.NetFilesAdded,
+		NetFilesUpdated:         c.NetFilesUpdated,
+		NetFilesDeleted:         c.NetFilesDeleted,
+		NetBytesAdded:           c.NetBytesAdded,
+		NetBytesUpdated:         c.NetBytesUpdated,
+		LbrRcsOpens:             c.LbrRcsOpens,
+		LbrRcsCloses:            c.LbrRcsCloses,
+		LbrRcsCheckins:          c.LbrRcsCheckins,
+		LbrRcsExists:            c.LbrRcsExists,
+		LbrRcsReads:             c.LbrRcsReads,
+		LbrRcsReadBytes:         c.LbrRcsReadBytes,
+		LbrRcsWrites:            c.LbrRcsWrites,
+		LbrRcsWriteBytes:        c.LbrRcsWriteBytes,
+		LbrRcsDigests:           c.LbrRcsDigests,
+		LbrRcsFileSizes:         c.LbrRcsFileSizes,
+		LbrRcsModTimes:          c.LbrRcsModTimes,
+		LbrRcsCopies:            c.LbrRcsCopies,
+		LbrBinaryOpens:          c.LbrBinaryOpens,
+		LbrBinaryCloses:         c.LbrBinaryCloses,
+		LbrBinaryCheckins:       c.LbrBinaryCheckins,
+		LbrBinaryExists:         c.LbrBinaryExists,
+		LbrBinaryReads:          c.LbrBinaryReads,
+		LbrBinaryReadBytes:      c.LbrBinaryReadBytes,
+		LbrBinaryWrites:         c.LbrBinaryWrites,
+		LbrBinaryWriteBytes:     c.LbrBinaryWriteBytes,
+		LbrBinaryDigests:        c.LbrBinaryDigests,
+		LbrBinaryModTimes:       c.LbrBinaryModTimes,
+		LbrBinaryFileSizes:      c.LbrBinaryFileSizes,
+		LbrBinaryCopies:         c.LbrBinaryCopies,
 		LbrCompressOpens:        c.LbrCompressOpens,
 		LbrCompressCloses:       c.LbrCompressCloses,
 		LbrCompressCheckins:     c.LbrCompressCheckins,
@@ -792,6 +799,12 @@ func (c *Command) updateFrom(other *Command) {
 	}
 	if other.IpcIn > 0 {
 		c.IpcIn = other.IpcIn
+	}
+	if other.MemMB > 0 {
+		c.MemMB = other.MemMB
+	}
+	if other.MemPeakMB > 0 {
+		c.MemPeakMB = other.MemPeakMB
 	}
 	if other.RPCMsgsIn > 0 {
 		c.RPCMsgsIn = other.RPCMsgsIn
@@ -1197,6 +1210,7 @@ var trackLbrCompress = "--- lbr Compress"
 var trackLbrUncompress = "--- lbr Uncompress"
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+\.\d+)s|^lapse (\.\d+)s|^lapse (\d+)s`)
+var prefixTrackCmdMem = "--- memory cmd/proc "
 var prefixTrackRPC = "--- rpc msgs/size in+out "
 var prefixTrackLbr = "---   opens+closes"
 var prefixTrackLbr2 = "---   reads+readbytes"
@@ -1204,6 +1218,7 @@ var prefixTrackLbr3 = "---   digests+filesizes"
 var reTrackLbr = regexp.MustCompile(`^---   opens\+closes\+checkins\+exists +(\d+)\+(\d+)\+(\d+)\+(\d+)`)
 var reTrackLbrReadWrite = regexp.MustCompile(`^---   reads\+readbytes\+writes\+writebytes (\d+)\+([\.0-9KMGTP]+)\+(\d+)\+([\.0-9KMGTP]+)`)
 var reTrackLbrDigestFilesize = regexp.MustCompile(`^---   digests\+filesizes\+modtimes\+copies +(\d+)\+(\d+)\+(\d+)\+(\d+)`)
+var reTrackCmdMem = regexp.MustCompile(`^--- memory cmd/proc (\d+)mb\/(\d+)mb`)
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var prefixTrackUsage = "--- usage"
@@ -1303,6 +1318,13 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackUsage.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setUsage(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+				continue
+			}
+		}
+		if strings.HasPrefix(line, prefixTrackCmdMem) {
+			m = reTrackCmdMem.FindStringSubmatch(line)
+			if len(m) > 0 {
+				cmd.setMem(m[1], m[2])
 				continue
 			}
 		}

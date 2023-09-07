@@ -36,7 +36,8 @@ func writeHeader(f io.Writer) {
 	startTime DATETIME NOT NULL,endTime DATETIME NULL, computedLapse FLOAT NULL,completedLapse FLOAT NULL,
 	user TEXT NOT NULL, workspace TEXT NOT NULL, ip TEXT NOT NULL, app TEXT NOT NULL, cmd TEXT NOT NULL,
 	args TEXT NULL, uCpu INT NULL, sCpu INT NULL, diskIn INT NULL, diskOut INT NULL, ipcIn INT NULL,
-	ipcOut INT NULL, maxRss INT NULL, pageFaults INT NULL, rpcMsgsIn INT NULL, rpcMsgsOut INT NULL,
+	ipcOut INT NULL, maxRss INT NULL, pageFaults INT NULL, memMB INT NULL, memPeakMB INT NULL,
+	rpcMsgsIn INT NULL, rpcMsgsOut INT NULL,
 	rpcSizeIn INT NULL, rpcSizeOut INT NULL, rpcHimarkFwd INT NULL, rpcHimarkRev INT NULL,
 	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, running INT NULL,
 	netSyncFilesAdded INT NULL, netSyncFilesUpdated INT NULL, netSyncFilesDeleted INT NULL,
@@ -98,7 +99,7 @@ func getProcessStatement() string {
 		startTime ,endTime, computedLapse, completedLapse,
 		user, workspace, ip, app, cmd,
 		args, uCpu, sCpu, diskIn, diskOut, ipcIn,
-		ipcOut, maxRss, pageFaults, rpcMsgsIn, rpcMsgsOut,
+		ipcOut, maxRss, pageFaults, memMB, memPeakMB, rpcMsgsIn, rpcMsgsOut,
 		rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev,
 		rpcSnd, rpcRcv, running,
 		netSyncFilesAdded, netSyncFilesUpdated, netSyncFilesDeleted,
@@ -118,7 +119,7 @@ func getProcessStatement() string {
 		lbrUncompressWrites, lbrUncompressWriteBytes,
 		lbrUncompressDigests, lbrUncompressFilesizes, lbrUncompressModtimes, lbrUncompressCopies,
 		error)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
@@ -141,7 +142,7 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 		float64(cmd.ComputeLapse), float64(cmd.CompletedLapse),
 		string(cmd.User), string(cmd.Workspace), string(cmd.IP), string(cmd.App), string(cmd.Cmd), string(cmd.Args),
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
-		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
+		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.MemMB, cmd.MemPeakMB, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
 		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
 		float64(cmd.RPCSnd), float64(cmd.RPCRcv), cmd.Running,
 		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
@@ -183,7 +184,7 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 	rows := 1
 	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,`+
-		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
+		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%.3f,%.3f,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
@@ -196,7 +197,7 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		cmd.ComputeLapse, cmd.CompletedLapse,
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
-		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
+		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.MemMB, cmd.MemPeakMB, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
 		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
 		cmd.RPCSnd, cmd.RPCRcv, cmd.Running,
 		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
