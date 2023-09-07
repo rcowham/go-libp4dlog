@@ -44,6 +44,9 @@ func writeHeader(f io.Writer) {
 	lbrRcsOpens INT NULL, lbrRcsCloses INT NULL, lbrRcsCheckins INT NULL, lbrRcsExists INT NULL,
 	lbrRcsReads INT NULL, lbrRcsReadBytes INT NULL, lbrRcsWrites INT NULL, lbrRcsWriteBytes INT NULL,
     lbrRcsDigests INT NULL, lbrRcsfileSizes INT NULL, lbrRcsModtimes INT NULL, lbrRcsCopies INT NULL,
+	lbrBinaryOpens INT NULL, lbrBinaryCloses INT NULL, lbrBinaryCheckins INT NULL, lbrBinaryExists INT NULL,
+	lbrBinaryReads INT NULL, lbrBinaryReadBytes INT NULL, lbrBinaryWrites INT NULL, lbrBinaryWriteBytes INT NULL,
+    lbrBinaryDigests INT NULL, lbrBinaryfileSizes INT NULL, lbrBinaryModtimes INT NULL, lbrBinaryCopies INT NULL,
 	lbrCompressOpens INT NULL, lbrCompressCloses INT NULL, lbrCompressCheckins INT NULL, lbrCompressExists INT NULL,
 	lbrCompressReads INT NULL, lbrCompressReadBytes INT NULL, lbrCompressWrites INT NULL, lbrCompressWriteBytes INT NULL,
 	lbrCompressDigests INT NULL, lbrCompressFilesizes INT NULL, lbrCompressModtimes INT NULL, lbrCompressCopies INT NULL,
@@ -103,6 +106,9 @@ func getProcessStatement() string {
 		lbrRcsOpens, lbrRcsCloses, lbrRcsCheckins, lbrRcsExists,
 		lbrRcsReads, lbrRcsReadBytes, lbrRcsWrites, lbrRcsWriteBytes,
 		lbrRcsDigests, lbrRcsFilesizes, lbrRcsModtimes, lbrRcsCopies,
+		lbrBinaryOpens, lbrBinaryCloses, lbrBinaryCheckins, lbrBinaryExists,
+		lbrBinaryReads, lbrBinaryReadBytes, lbrBinaryWrites, lbrBinaryWriteBytes,
+		lbrBinaryDigests, lbrBinaryFilesizes, lbrBinaryModtimes, lbrBinaryCopies,
 		lbrCompressOpens, lbrCompressCloses, lbrCompressCheckins,
 		lbrCompressExists, lbrCompressReads, lbrCompressReadBytes,
 		lbrCompressWrites, lbrCompressWriteBytes,
@@ -143,6 +149,9 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
 		cmd.LbrRcsReads, cmd.LbrRcsReadBytes, cmd.LbrRcsWrites, cmd.LbrRcsWriteBytes,
 		cmd.LbrRcsDigests, cmd.LbrRcsFileSizes, cmd.LbrRcsModTimes, cmd.LbrRcsCopies,
+		cmd.LbrBinaryOpens, cmd.LbrBinaryCloses, cmd.LbrBinaryCheckins, cmd.LbrBinaryExists,
+		cmd.LbrBinaryReads, cmd.LbrBinaryReadBytes, cmd.LbrBinaryWrites, cmd.LbrBinaryWriteBytes,
+		cmd.LbrBinaryDigests, cmd.LbrBinaryFileSizes, cmd.LbrBinaryModTimes, cmd.LbrBinaryCopies,
 		cmd.LbrCompressOpens, cmd.LbrCompressCloses, cmd.LbrCompressCheckins, cmd.LbrCompressExists,
 		cmd.LbrCompressReads, cmd.LbrCompressReadBytes, cmd.LbrCompressWrites, cmd.LbrCompressWriteBytes,
 		cmd.LbrCompressDigests, cmd.LbrCompressFileSizes, cmd.LbrCompressModTimes, cmd.LbrCompressCopies,
@@ -180,6 +189,8 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,"%v");`+"\n",
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
 		cmd.ComputeLapse, cmd.CompletedLapse,
@@ -193,6 +204,9 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
 		cmd.LbrRcsReads, cmd.LbrRcsReadBytes, cmd.LbrRcsWrites, cmd.LbrRcsWriteBytes,
 		cmd.LbrRcsDigests, cmd.LbrRcsFileSizes, cmd.LbrRcsModTimes, cmd.LbrRcsCopies,
+		cmd.LbrBinaryOpens, cmd.LbrBinaryCloses, cmd.LbrBinaryCheckins, cmd.LbrBinaryExists,
+		cmd.LbrBinaryReads, cmd.LbrBinaryReadBytes, cmd.LbrBinaryWrites, cmd.LbrBinaryWriteBytes,
+		cmd.LbrBinaryDigests, cmd.LbrBinaryFileSizes, cmd.LbrBinaryModTimes, cmd.LbrBinaryCopies,
 		cmd.LbrCompressOpens, cmd.LbrCompressCloses, cmd.LbrCompressCheckins, cmd.LbrCompressExists,
 		cmd.LbrCompressReads, cmd.LbrCompressReadBytes, cmd.LbrCompressWrites, cmd.LbrCompressWriteBytes,
 		cmd.LbrCompressDigests, cmd.LbrCompressFileSizes, cmd.LbrCompressModTimes, cmd.LbrCompressCopies,
