@@ -180,6 +180,19 @@ func (p4m *P4DMetrics) printMetric(metrics *bytes.Buffer, mname string, labels [
 	fmt.Fprint(metrics, buf)
 }
 
+func (p4m *P4DMetrics) resetToZero() {
+	//for _, t := range cmd.Tables {
+		//p4m.totalReadHeld[t.TableName] = 0
+		//p4m.totalReadWait[t.TableName] = 0
+		//p4m.totalWriteHeld[t.TableName] = 0
+		//p4m.totalWriteWait[t.TableName] = 0
+	//}
+	p4m.syncFilesUpdated = 0
+	p4m.syncFilesDeleted = 0
+	p4m.syncBytesAdded = 0
+	p4m.syncBytesUpdated = 0
+}
+
 // Publish cumulative results - called on a ticker or in historical mode
 func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	fixedLabels := []labelStruct{{name: "serverid", value: p4m.config.ServerID},
@@ -570,6 +583,7 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				}
 				if !p4m.historical {
 					metricsChan <- p4m.getCumulativeMetrics()
+					p4m.resetToZero()
 				}
 			case cmd, ok := <-cmdsInChan:
 				if ok {
