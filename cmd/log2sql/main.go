@@ -30,43 +30,63 @@ import (
 
 const statementsPerTransaction = 50 * 1000
 
+// We use SQL comments which appear if you use ".schema" within Sqlite3 - helpful reminder
 func writeHeader(f io.Writer) {
-	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS process
-	(processkey CHAR(50) NOT NULL, lineNumber INT NOT NULL, pid INT NOT NULL,
-	startTime DATETIME NOT NULL,endTime DATETIME NULL, computedLapse FLOAT NULL,completedLapse FLOAT NULL,
-	user TEXT NOT NULL, workspace TEXT NOT NULL, ip TEXT NOT NULL, app TEXT NOT NULL, cmd TEXT NOT NULL,
-	args TEXT NULL, uCpu INT NULL, sCpu INT NULL, diskIn INT NULL, diskOut INT NULL, ipcIn INT NULL,
-	ipcOut INT NULL, maxRss INT NULL, pageFaults INT NULL, memMB INT NULL, memPeakMB INT NULL,
-	rpcMsgsIn INT NULL, rpcMsgsOut INT NULL,
-	rpcSizeIn INT NULL, rpcSizeOut INT NULL, rpcHimarkFwd INT NULL, rpcHimarkRev INT NULL,
-	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, running INT NULL,
-	netSyncFilesAdded INT NULL, netSyncFilesUpdated INT NULL, netSyncFilesDeleted INT NULL,
-	netSyncBytesAdded INT NULL, netSyncBytesUpdated INT NULL,
+	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS process -- main process table for commands
+	(processkey CHAR(50) NOT NULL, -- prime key (hash of line), used to join with tableUse
+	lineNumber INT NOT NULL, -- Line no for first occurrence of pid for this command
+	pid INT NOT NULL, -- Process ID
+	startTime DATETIME NOT NULL, endTime DATETIME NULL, -- Start/end time of command
+	computedLapse FLOAT NULL, completedLapse FLOAT NULL, -- Lapse time for compute phase and total command
+	user TEXT NOT NULL, workspace TEXT NOT NULL, ip TEXT NOT NULL, -- user/workspace name/IP
+	app TEXT NOT NULL, -- p4api application reported, e.g. p4/p4v etc
+	cmd TEXT NOT NULL, -- command executed, e.g. user-sync
+	args TEXT NULL, -- command args - may be truncated
+	uCpu INT NULL, sCpu INT NULL, -- user and system CPU (milliseconds)
+	diskIn INT NULL, diskOut INT NULL, -- no of 512b disk write/read
+	ipcIn INT NULL, ipcOut INT NULL,  -- IPC msgs received/sent
+	maxRss INT NULL, -- KB of physical memory that processes used simultaneously
+	pageFaults INT NULL, -- number of page faults that were serviced by doing I/O
+	memMB INT NULL, memPeakMB INT NULL, -- Memory per command and max memory (for commands on same pid) - in MB
+	rpcMsgsIn INT NULL, rpcMsgsOut INT NULL, -- Count of RPC messages rcvd/sent
+	rpcSizeIn INT NULL, rpcSizeOut INT NULL, -- Total size of RPC messages rcvd/sent
+	rpcHimarkFwd INT NULL, rpcHimarkRev INT NULL, -- Snd/Rcv Window size for OS
+	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, -- times spent waiting to send RPC requests and waiting to receive RPC responses
+	running INT NULL, -- No of concurrent running commands
+	netSyncFilesAdded INT NULL, netSyncFilesUpdated INT NULL, netSyncFilesDeleted INT NULL, -- estimated counts
+	netSyncBytesAdded INT NULL, netSyncBytesUpdated INT NULL, -- estimated byte counts
+	-- Following are for accessing librarian (lbr) files of different types (RCS/Binary/Compressed/Uncompressed)
 	lbrRcsOpens INT NULL, lbrRcsCloses INT NULL, lbrRcsCheckins INT NULL, lbrRcsExists INT NULL,
 	lbrRcsReads INT NULL, lbrRcsReadBytes INT NULL, lbrRcsWrites INT NULL, lbrRcsWriteBytes INT NULL,
-    lbrRcsDigests INT NULL, lbrRcsfileSizes INT NULL, lbrRcsModtimes INT NULL, lbrRcsCopies INT NULL,
+	lbrRcsDigests INT NULL, lbrRcsFileSizes INT NULL, lbrRcsModtimes INT NULL, lbrRcsCopies INT NULL,
 	lbrBinaryOpens INT NULL, lbrBinaryCloses INT NULL, lbrBinaryCheckins INT NULL, lbrBinaryExists INT NULL,
 	lbrBinaryReads INT NULL, lbrBinaryReadBytes INT NULL, lbrBinaryWrites INT NULL, lbrBinaryWriteBytes INT NULL,
-    lbrBinaryDigests INT NULL, lbrBinaryfileSizes INT NULL, lbrBinaryModtimes INT NULL, lbrBinaryCopies INT NULL,
+	lbrBinaryDigests INT NULL, lbrBinaryFileSizes INT NULL, lbrBinaryModtimes INT NULL, lbrBinaryCopies INT NULL,
 	lbrCompressOpens INT NULL, lbrCompressCloses INT NULL, lbrCompressCheckins INT NULL, lbrCompressExists INT NULL,
 	lbrCompressReads INT NULL, lbrCompressReadBytes INT NULL, lbrCompressWrites INT NULL, lbrCompressWriteBytes INT NULL,
-	lbrCompressDigests INT NULL, lbrCompressFilesizes INT NULL, lbrCompressModtimes INT NULL, lbrCompressCopies INT NULL,
+	lbrCompressDigests INT NULL, lbrCompressFileSizes INT NULL, lbrCompressModtimes INT NULL, lbrCompressCopies INT NULL,
 	lbrUncompressOpens INT NULL, lbrUncompressCloses INT NULL, lbrUncompressCheckins INT NULL, lbrUncompressExists INT NULL,
 	lbrUncompressReads INT NULL, lbrUncompressReadBytes INT NULL, lbrUncompressWrites INT NULL, lbrUncompressWriteBytes INT NULL,
-	lbrUncompressDigests INT NULL, lbrUncompressFilesizes INT NULL, lbrUncompressModtimes INT NULL, lbrUncompressCopies INT NULL,
-	error TEXT NULL,
+	lbrUncompressDigests INT NULL, lbrUncompressFileSizes INT NULL, lbrUncompressModtimes INT NULL, lbrUncompressCopies INT NULL,
+	error TEXT NULL, -- any error text for command
 	PRIMARY KEY (processkey, lineNumber));
 `)
 	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS tableUse
-	(processkey CHAR(50) NOT NULL, lineNumber INT NOT NULL,
-	tableName VARCHAR(255) NOT NULL, pagesIn INT NULL, pagesOut INT NULL, pagesCached INT NULL,
-	pagesSplitInternal INT NULL, pagesSplitLeaf INT NULL,
-	readLocks INT NULL, writeLocks INT NULL, getRows INT NULL, posRows INT NULL, scanRows INT NULL,
-	putRows int NULL, delRows INT NULL, totalReadWait INT NULL, totalReadHeld INT NULL,
-	totalWriteWait INT NULL, totalWriteHeld INT NULL, maxReadWait INT NULL, maxReadHeld INT NULL,
-	maxWriteWait INT NULL, maxWriteHeld INT NULL, peekCount INT NULL,
-	totalPeekWait INT NULL, totalPeekHeld INT NULL, maxPeekWait INT NULL, maxPeekHeld INT NULL,
-	triggerLapse FLOAT NULL,
+	(processkey CHAR(50) NOT NULL, lineNumber INT NOT NULL, -- primary key
+	tableName VARCHAR(255) NOT NULL, -- name of table (or trigger)
+	pagesIn INT NULL, pagesOut INT NULL, pagesCached INT NULL,
+	pagesSplitInternal INT NULL, pagesSplitLeaf INT NULL, -- B-tree split counts
+	readLocks INT NULL, writeLocks INT NULL, -- Count of read/write locks
+	getRows INT NULL, posRows INT NULL, scanRows INT NULL, -- Count of get/position/scan for rows
+	putRows int NULL, delRows INT NULL,  -- Count of put/delete for rows
+	totalReadWait INT NULL, totalReadHeld INT NULL, -- Totals (milliseconds)
+	totalWriteWait INT NULL, totalWriteHeld INT NULL, -- Totals (milliseconds)
+	maxReadWait INT NULL, maxReadHeld INT NULL, -- Max (milliseconds)
+	maxWriteWait INT NULL, maxWriteHeld INT NULL, -- Max (milliseconds)
+	peekCount INT NULL, -- Count of peeks
+	totalPeekWait INT NULL, totalPeekHeld INT NULL, -- Totals (milliseconds)
+	maxPeekWait INT NULL, maxPeekHeld INT NULL, -- Totals (milliseconds)
+	triggerLapse FLOAT NULL, -- lapse time (seconds) for triggers - tableName=trigger name
 	PRIMARY KEY (processkey, lineNumber, tableName));
 `)
 	// Trade security for speed - easy to re-run if a problem (hopefully!)
@@ -106,18 +126,18 @@ func getProcessStatement() string {
 		netSyncBytesAdded, netSyncBytesAdded,
 		lbrRcsOpens, lbrRcsCloses, lbrRcsCheckins, lbrRcsExists,
 		lbrRcsReads, lbrRcsReadBytes, lbrRcsWrites, lbrRcsWriteBytes,
-		lbrRcsDigests, lbrRcsFilesizes, lbrRcsModtimes, lbrRcsCopies,
+		lbrRcsDigests, lbrRcsFileSizes, lbrRcsModtimes, lbrRcsCopies,
 		lbrBinaryOpens, lbrBinaryCloses, lbrBinaryCheckins, lbrBinaryExists,
 		lbrBinaryReads, lbrBinaryReadBytes, lbrBinaryWrites, lbrBinaryWriteBytes,
-		lbrBinaryDigests, lbrBinaryFilesizes, lbrBinaryModtimes, lbrBinaryCopies,
+		lbrBinaryDigests, lbrBinaryFileSizes, lbrBinaryModtimes, lbrBinaryCopies,
 		lbrCompressOpens, lbrCompressCloses, lbrCompressCheckins,
 		lbrCompressExists, lbrCompressReads, lbrCompressReadBytes,
 		lbrCompressWrites, lbrCompressWriteBytes,
-        lbrCompressDigests, lbrCompressFilesizes, lbrCompressModtimes, lbrCompressCopies,
+        lbrCompressDigests, lbrCompressFileSizes, lbrCompressModtimes, lbrCompressCopies,
 		lbrUncompressOpens, lbrUncompressCloses, lbrUncompressCheckins,
 		lbrUncompressExists, lbrUncompressReads, lbrUncompressReadBytes,
 		lbrUncompressWrites, lbrUncompressWriteBytes,
-		lbrUncompressDigests, lbrUncompressFilesizes, lbrUncompressModtimes, lbrUncompressCopies,
+		lbrUncompressDigests, lbrUncompressFileSizes, lbrUncompressModtimes, lbrUncompressCopies,
 		error)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
