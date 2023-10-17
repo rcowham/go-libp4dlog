@@ -37,7 +37,7 @@ func writeHeader(f io.Writer) {
 	lineNumber INT NOT NULL, -- Line no for first occurrence of pid for this command
 	pid INT NOT NULL, -- Process ID
 	startTime DATETIME NOT NULL, endTime DATETIME NULL, -- Start/end time of command
-	computedLapse FLOAT NULL, completedLapse FLOAT NULL, -- Lapse time for compute phase and total command
+	computedLapse FLOAT NULL, completedLapse FLOAT NULL, -- Lapse time for compute phase and total command (secs)
 	user TEXT NOT NULL, workspace TEXT NOT NULL, ip TEXT NOT NULL, -- user/workspace name/IP
 	app TEXT NOT NULL, -- p4api application reported, e.g. p4/p4v etc
 	cmd TEXT NOT NULL, -- command executed, e.g. user-sync
@@ -51,7 +51,7 @@ func writeHeader(f io.Writer) {
 	rpcMsgsIn INT NULL, rpcMsgsOut INT NULL, -- Count of RPC messages rcvd/sent
 	rpcSizeIn INT NULL, rpcSizeOut INT NULL, -- Total size of RPC messages rcvd/sent
 	rpcHimarkFwd INT NULL, rpcHimarkRev INT NULL, -- Snd/Rcv Window size for OS
-	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, -- times spent waiting to send RPC requests and waiting to receive RPC responses
+	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, -- times (secs) spent waiting to send RPC requests and waiting to receive RPC responses
 	running INT NULL, -- No of concurrent running commands
 	netSyncFilesAdded INT NULL, netSyncFilesUpdated INT NULL, netSyncFilesDeleted INT NULL, -- estimated counts
 	netSyncBytesAdded INT NULL, netSyncBytesUpdated INT NULL, -- estimated byte counts
