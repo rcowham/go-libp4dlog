@@ -6,6 +6,8 @@ function bail () { echo "\nError: ${1:-Unknown Error}"; exit ${2:-1}; }
 
 [[ ! -f "$1" ]] && bail "Please specify the <database>.db file as the parameter!"
 
+dbfile="$1"
+
 sqlinput=_sql.in
 sqlreport=_sql.txt
 
@@ -16,71 +18,71 @@ title_query=(
     "Start and end time for this log"
         ".width"
         "
-        select MIN(starttime) as Start, MAX(starttime) as End
-        from process;
+        SELECT MIN(starttime) as Start, MAX(starttime) as End
+        FROM process;
         "
 
     "How many commands of each type (top 20)"
         ".width 20"
         "
-        select cmd, count(cmd) as CountCmds from process
-        group by cmd
-        order by CountCmds desc limit 20;
+        SELECT cmd, count(cmd) as NumCmds FROM process
+        GROUP BY cmd
+        ORDER BY NumCmds DESC LIMIT 20;
         "
 
     "How many commands of each type per user"
         ".width 20 0 20"
         "
-        select cmd, count(cmd) as CountCmds, user 
-        from process
-        group by cmd, user
-        order by CountCmds desc limit 30;
+        SELECT cmd, count(cmd) as NumCmds, user 
+        FROM process
+        GROUP BY cmd, user
+        ORDER BY NumCmds DESC LIMIT 30;
         "
 
     "DB CONTENTION - Average Locks Summary (with total locks > 10 seconds)\\n   NOTE - Does one table have high average or total wait (victims) or held (culprits)?"
         ".width"
         "
-        select * FROM
-        (select
-            tableName,
-            COUNT(readLocks) AS Number,
-            round(AVG(readLocks))  AS 'Avg Read Locks (ms)',
-            round(AVG(writeLocks))  AS 'Avg Write Locks (ms)',
-            round(AVG(totalReadWait))  AS 'Avg totalRead Wait (ms)',
-            round(AVG(totalReadHeld))  AS 'Avg totalRead Held (ms)',
-            round(AVG(totalWriteWait))  AS 'Avg totalWrite Wait (ms)',
-            round(AVG(totalWriteHeld))  AS 'Avg totalWrite Held (ms)',
-            round(SUM(totalReadWait)+SUM(totalWriteWait)) AS 'Total Wait (ms)',
-            round(SUM(totalReadHeld)+SUM(totalWriteHeld)) AS 'Total Held (ms)'
+        SELECT * FROM
+        (SELECT
+        tableName,
+        COUNT(readLocks) AS NumReadLocks,
+        round(AVG(readLocks)) AS 'Avg Read Locks (ms)',
+        round(AVG(writeLocks)) AS 'Avg Write Locks (ms)',
+        round(AVG(totalReadWait)) AS 'Avg totalRead Wait (ms)',
+        round(AVG(totalReadHeld)) AS 'Avg totalRead Held (ms)',
+        round(AVG(totalWriteWait)) AS 'Avg totalWrite Wait (ms)',
+        round(AVG(totalWriteHeld)) AS 'Avg totalWrite Held (ms)',
+        round(SUM(totalReadWait)+SUM(totalWriteWait)) AS 'Total Wait (ms)',
+        round(SUM(totalReadHeld)+SUM(totalWriteHeld)) AS 'Total Held (ms)'
         FROM tableUse
         GROUP BY tableUse.tableName) 
-        WHERE 
-            'Total Wait (ms)' > 10000 
-            AND 'Total Held (ms)' > 10000 ORDER BY 'Total Wait (ms)' DESC;
+        WHERE 'Total Wait (ms)' > 10000 
+        AND 'Total Held (ms)' > 10000
+        ORDER BY 'Total Wait (ms)' DESC;
         "
 
     "Commands over 100s by endTime\\n   NOTE - Do lots of commands finish at the same time after a big command or lock?"
         ".width 0 0 0 20 20 20"
         "
-        select startTime, endTime, pid, user, cmd, args, completedLapse, running 
-        from process 
-        where completedLapse > 100 
-        order by endTime;
+        SELECT startTime, endTime, pid, user, cmd, args, round(completedLapse) as 'lapse (s)', running 
+        FROM process 
+        WHERE completedLapse > 100 
+        ORDER BY endTime;
         "
 
-    "Busiest Running Per Minutes\\n    NOTE - When were the busy times?"
+    "Busiest Running Per Minutes (> 20)\\n    NOTE - When were the busy times?"
         ".width"
         "
-        select substr(startTime,1,16) as Time, MAX(running) as Running
-        from process
-        group by Time HAVING MAX(running) > 20
-        order by Running desc limit 20;
+        SELECT substr(startTime,1,16) as Time, MAX(running) as Running
+        FROM process
+        GROUP BY Time HAVING MAX(running) > 20
+        ORDER BY Running DESC LIMIT 20;
         "
 
     "Highest memory usage commands (top 20)"
         ".width 0 20 20 40"
         "
-        SELECT pid, user, cmd as command, app, round(completedLapse) as 'lapse (s)', round(rpcRcv) as 'rpcReceiveWait (s)', round(rpcSnd) as 'rpcSendWait (s)', uCpu, sCpu, startTime, endTime, maxRss
+        SELECT pid, user, cmd as command, app, round(completedLapse, 2) as 'lapse (s)', round(rpcRcv) as 'rpcReceiveWait (s)', round(rpcSnd) as 'rpcSendWait (s)', uCpu, sCpu, startTime, endTime, maxRss
         FROM process
         ORDER by maxRss DESC LIMIT 20;
         "
@@ -88,16 +90,16 @@ title_query=(
     "Average replication times (on master)"
         ".width"
         "
-        SELECT substr(startTime,1,16), count(cmd), user, cmd, ROUND(MAX(completedLapse)) AS 'Max Time', ROUND(SUM(completedLapse)) AS 'Total Time', ROUND(AVG(completedLapse)) AS 'Average Time', COUNT(completedLapse) AS number 
-        from process 
+        SELECT substr(startTime,1,16), count(cmd), user, cmd, ROUND(MAX(completedLapse), 2) AS 'Max Time', ROUND(SUM(completedLapse), 2) AS 'Total Time', ROUND(AVG(completedLapse), 2) AS 'Average Time', COUNT(completedLapse) AS number 
+        FROM process 
         WHERE cmd = 'rmt-Journal'
-        group by substr(startTime,1,16), user;
+        GROUP BY substr(startTime,1,16), user;
         "
 
     "Average wait time"
         ".width"
         "
-        SELECT AVG(totalreadWait+totalwriteWait) as wait
+        SELECT ROUND(AVG(totalreadWait+totalwriteWait), 2) as wait
         FROM tableUse;
         "
 
@@ -106,7 +108,7 @@ title_query=(
         "
         SELECT user, SUM(maxreadHeld+maxwriteHeld) as 'held (ms)'
         FROM tableUse JOIN process USING (processKey)
-        GROUP BY user ORDER BY 'held {ms)' DESC LIMIT 25;
+        GROUP BY user ORDER BY 'held (ms)' DESC LIMIT 25;
         "
 
     "Blocking Commands - Commands that blocked others (top 30) - totals in ms"
@@ -116,36 +118,36 @@ title_query=(
             maxReadHeld, totalReadHeld, maxWriteHeld, totalWriteHeld, totalReadWait, totalWriteWait
         FROM tableUse JOIN process USING (processKey)
         WHERE (totalReadHeld > 10000 or totalWriteHeld > 10000)
-            AND tablename not like 'meta%'
-            AND tablename not like 'clients%'
-            AND tablename not like 'changes%'
+        AND tablename not like 'meta%'
+        AND tablename not like 'clients%'
+        AND tablename not like 'changes%'
         ORDER BY startTime, endTime
-            limit 30;
+        LIMIT 30;
         "
 
     "Blocking Commands including meta tables - Commands that blocked others including meta_db and clients locks (top 30) - totals in ms"
         ".width 0 0 0 20 20 0 20"
         "
         SELECT startTime, endTime, running, user, cmd, pid, tablename,
-            maxReadHeld, totalReadHeld, maxWriteHeld, totalWriteHeld, totalReadWait, totalWriteWait
+          maxReadHeld, totalReadHeld, maxWriteHeld, totalWriteHeld, totalReadWait, totalWriteWait
         FROM tableUse JOIN process USING (processKey)
         WHERE (totalReadHeld > 10000 or totalWriteHeld > 10000)
         ORDER BY startTime, endTime
-            limit 30;
+        LIMIT 30;
         "
 
     "Blocked commands - victims of the above (top 30)"
         ".width 0 0 0 0 20 20 20"
         "
         SELECT startTime, endTime, computedLapse, running, user, cmd, pid, tablename,
-            maxReadHeld, maxWriteHeld, totalReadWait, totalWriteWait
+          maxReadHeld, maxWriteHeld, totalReadWait, totalWriteWait
         FROM tableUse JOIN process USING (processKey)
         WHERE (totalReadWait > 10000) or (totalWriteWait > 10000)
         ORDER BY startTime, endTime
-        limit 30;
+        LIMIT 30;
         "
 
-    "Longest Compute Phases (top 25)"
+    "Longest Compute Phases (top 25) in ms"
         ".width 0 20 20"
         "
         SELECT process.processKey, user, cmd, startTime,
@@ -173,24 +175,24 @@ title_query=(
         ".width"
         "
         SELECT round(TOTAL(pagesIn) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as readPct,
-            round(TOTAL(pagesOut) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as writePct
+        round(TOTAL(pagesOut) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as writePct
         FROM tableUse;
         "
 
     "System CPU - Top 25 commands"
         ".width 0 20 20"
         "
-        select pid, user, cmd, round(completedLapse, 3) as lapse, rpcRcv, rpcSnd, uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime
-        from process 
-        order by sCpu_ms desc limit 25;
+        SELECT pid, user, cmd, round(completedLapse, 3) as lapse, round(rpcRcv, 3) as 'rpcReceiveWait (s)', round(rpcSnd, 3) as 'rpcSendWait (s)', uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime
+        FROM process 
+        ORDER BY sCpu_ms DESC LIMIT 25;
         "
 
     "User CPU - Top 25 commands"
         ".width 0 20 20"
         "
-        select pid, process.user, process.cmd, round(completedLapse, 3) as lapse, rpcRcv, rpcSnd, uCpu as uCPU_ms, sCpu as SCPU_ms, startTime, endTime 
-        from process 
-        order by uCpu_ms desc limit 25;
+        SELECT pid, process.user, process.cmd, round(completedLapse, 3) as lapse, round(rpcRcv, 3) as 'rpcReceiveWait (s)', round(rpcSnd, 3) as 'rpcSendWait (s)', uCpu as uCPU_ms, sCpu as SCPU_ms, startTime, endTime 
+        FROM process 
+        ORDER BY uCpu_ms DESC LIMIT 25;
         "
 )
 
@@ -222,6 +224,7 @@ done
 cat > $sqlinput <<EOF
 .output $sqlreport
 .mode column
+.print "P4D Log2SQL summary report for database file: $dbfile"
 EOF
 
 # Iterate through keys in order extracting them and their corresponding query
@@ -231,7 +234,7 @@ do
     {
         q="${queries["$k"]}"
         q="${q//[$'\t\r\n']}"   # Strip newlines
-        q="${q//        }"   # Strip starting spaces
+        q="${q//       }"   # Strip 7 starting spaces
         echo ".print \"\\n==============================\""
         echo ".print \"$k\\n\""
         echo ".print \"${q}\\n\""
@@ -240,10 +243,12 @@ do
         echo "${queries["$k"]}"
         echo ".headers off"
         echo ".print  \"\""
-        echo "select 'Date run: ' || strftime('%Y-%m-%d %H:%M:%S', datetime('now'));"
+        echo "SELECT 'Date run: ' || strftime('%Y-%m-%d %H:%M:%S', datetime('now'));"
     } >> $sqlinput
 done
 
-sqlite3 $1 < $sqlinput
+sqlite3 "$dbfile" < $sqlinput
 
 cat $sqlreport
+
+echo "Output has been saved in: $sqlreport"
