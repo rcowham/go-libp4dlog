@@ -123,7 +123,7 @@ func getProcessStatement() string {
 		rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev,
 		rpcSnd, rpcRcv, running,
 		netSyncFilesAdded, netSyncFilesUpdated, netSyncFilesDeleted,
-		netSyncBytesAdded, netSyncBytesAdded,
+		netSyncBytesAdded, netSyncBytesUpdated,
 		lbrRcsOpens, lbrRcsCloses, lbrRcsCheckins, lbrRcsExists,
 		lbrRcsReads, lbrRcsReadBytes, lbrRcsWrites, lbrRcsWriteBytes,
 		lbrRcsDigests, lbrRcsFileSizes, lbrRcsModtimes, lbrRcsCopies,
