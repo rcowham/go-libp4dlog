@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/pkg/profile"
@@ -78,7 +80,7 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 }
 
 // chart header followed by data records
-func writeHeader(f *bufio.Writer) error {
+func writeHeader(f *bufio.Writer, thresholdFilter int64) error {
 	header := `
 <!DOCTYPE html>
 <head>
@@ -100,8 +102,8 @@ func writeHeader(f *bufio.Writer) error {
 	<td>
 	  <div id="programmatic_control_div" style="padding-left: 2em; min-width: 250px"></div>
 	  <div>
-		<button style="margin: 1em 1em 1em 2em" onclick="drawChart();">Change Held/Wait Threshold (ms)</button>
-		<input type="text" name="txtThreshold" id="txtThreshold" value="20000">
+		<button style="margin: 1em 1em 1em 2em" id="btnChangeThreshold" onclick="drawChart();">Change Held/Wait Threshold (ms)</button>
+		<input type="text" name="txtThreshold" id="txtThreshold" value="{{ .threshold }}">
 		<label type="text" name="txtSummary" id="txtSummary">Data Summary</label>
 	  </div>
 	</td>
@@ -117,12 +119,18 @@ func writeHeader(f *bufio.Writer) error {
 	var base_data = [
 `
 
-	_, err := fmt.Fprint(f, header)
+	var buf bytes.Buffer
+	templ := template.Must(template.New("myname").Parse(header))
+	templ.Execute(&buf, map[string]interface{}{
+		"threshold": fmt.Sprintf("%d", thresholdFilter),
+	})
+
+	_, err := fmt.Fprint(f, buf.String())
 	return err
 }
 
 // chart trailer
-func writeTrailer(f *bufio.Writer) error {
+func writeTrailer(f *bufio.Writer, params string) error {
 	trailer := `
 ];
 
@@ -183,6 +191,10 @@ func writeTrailer(f *bufio.Writer) error {
 		"db.storage",
 		"db.storageg",
 		"db.storagesx",
+		"db.storageup_R",
+		"db.storageup_W",
+		"db.storagemasterup_R",
+		"db.storagemasterup_W",
 		"db.revdx",
 		"db.revhx",
 		"db.revpx",
@@ -194,6 +206,7 @@ func writeTrailer(f *bufio.Writer) error {
 		"db.rev",
 		"db.revtx",
 		"db.revstg",
+		"db.revfs",
 		"db.locks",
 		"db.locksg",
 		"db.working",
@@ -277,7 +290,6 @@ func writeTrailer(f *bufio.Writer) error {
 	function toMilliseconds(d) {
 		return d; // null function now - expects to be pass millis
 	}
-
 
 	function humanize (milliseconds) {
 		var seconds = Math.floor(milliseconds / 1000);
@@ -406,7 +418,7 @@ func writeTrailer(f *bufio.Writer) error {
 		var threshold = document.getElementById('txtThreshold').value;
 		data = base_data.filter(item => perforceTableLockOrder.indexOf(item.Table) != -1); 
 		data = data.filter(item => item.MaxLock > threshold); 
-		document.getElementById('txtSummary').innerHTML = 'Records - total: ' + base_data.length + ' filtered: ' + data.length;
+		document.getElementById('txtSummary').innerHTML = 'Records - total: ' + base_data.length + ' filtered: ' + data.length + ' ({{ .params }})';
 		data.sort(function(a, b){
 			var atable = perforceTableLockOrder.indexOf(a.Table);
 			var btable =  perforceTableLockOrder.indexOf(b.Table);			
@@ -420,6 +432,14 @@ func writeTrailer(f *bufio.Writer) error {
 		chart.draw(processLockEvents(data), options);
 	}
 
+	// Pressing Enter key in threshold textbox will cause button to be clicked
+	document.getElementById("txtThreshold").addEventListener("keyup", function(event) {
+		event.preventDefault();
+		if (event.keyCode === 13) {
+			document.getElementById("btnChangeThreshold").click();
+		}
+	});
+
 	google.charts.load("current", {packages:["timeline"]});
 	google.charts.setOnLoadCallback(drawChart);
 
@@ -428,7 +448,13 @@ func writeTrailer(f *bufio.Writer) error {
 </body>
 `
 
-	_, err := fmt.Fprint(f, trailer)
+	var buf bytes.Buffer
+	templ := template.Must(template.New("myname").Parse(trailer))
+	templ.Execute(&buf, map[string]interface{}{
+		"params": params,
+	})
+
+	_, err := fmt.Fprint(f, buf.String())
 	return err
 }
 
@@ -487,17 +513,17 @@ type P4DLocks struct {
 	countOutput         int
 }
 
-// {
-// 	"Table": "db.revsx",
-// 	"Pid": 72052,
-// 	"Command": "user-sync -n //data/...",
-// 	"User": "build",
-// 	"Start": "2022-02-02T15:15:14Z",
-// 	"Read": {
-// 		"Wait": 0,
-// 		"Held": 554000000
-// 	}
-// }
+//	{
+//		"Table": "db.revsx",
+//		"Pid": 72052,
+//		"Command": "user-sync -n //data/...",
+//		"User": "build",
+//		"Start": "2022-02-02T15:15:14Z",
+//		"Read": {
+//			"Wait": 0,
+//			"Held": 554000000
+//		}
+//	}
 func (pl *P4DLocks) writeCmd(f *bufio.Writer, cmd *p4dlog.Command) error {
 	for _, t := range cmd.Tables {
 		if pl.excludeTablesString != "" {
@@ -706,7 +732,7 @@ func main() {
 	var (
 		logfiles = kingpin.Arg(
 			"logfile",
-			"Log files to process.").Strings()
+			"Log files to process (may be gzipped).").Strings()
 		debug = kingpin.Flag(
 			"debug",
 			"Enable debugging level.",
@@ -725,11 +751,21 @@ func main() {
 		).Short('x').String()
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("p4locks")).Author("Robert Cowham")
-	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and outputs an HTML file with a Google Charts timeline with information about locks.\n" +
-		"Locks are listed by table and then pids with read/write wait/held.\n" +
-		"The output file can be opened locally by any browser (although internet access required to download JS).\n\n" +
-		"Examples:\n" +
-		"p4locks -x user log"
+	kingpin.CommandLine.Help = `Parses one or more p4d text log files (which may be gzipped) and outputs an HTML file with a Google Charts timeline with information about locks.
+Locks are listed by table and then pids with read/write wait/held.
+The output file can be opened locally by any browser (although internet access required to download JS).
+
+Usage examples:
+
+Exclude "db.user" table:
+	p4locks -x user log
+
+Use a lower default threshold (ms):
+	p4locks -t 1000 my.log
+
+Process multiple log files (gzipped or not) into single output file:
+	p4locks -o report.html log-2023-*.gz
+`
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
@@ -774,7 +810,7 @@ func main() {
 	startTime := time.Now()
 	logger.Infof("%v", version.Print("p4locks"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
-	logger.Infof("Flags: debug %v, htmlfile %v", *debug, *htmlOutputFile)
+	logger.Infof("Flags: debug %v, htmlfile %v, threshold (ms) %v", *debug, *htmlOutputFile, *threshold)
 
 	linesChan := make(chan string, 10000)
 
@@ -783,8 +819,7 @@ func main() {
 
 	var fHTML *bufio.Writer
 	var fdHTML *os.File
-	var htmlFilename string
-	htmlFilename = getHTMLFilename(*htmlOutputFile, *logfiles)
+	htmlFilename := getHTMLFilename(*htmlOutputFile, *logfiles)
 	fdHTML, fHTML, err = openFile(htmlFilename)
 	if err != nil {
 		logger.Fatal(err)
@@ -818,7 +853,7 @@ func main() {
 		pl.processEvents(*logfiles)
 	}()
 
-	err = writeHeader(fHTML)
+	err = writeHeader(fHTML, thresholdFilter)
 	if err != nil {
 		logger.Errorf("Failed to write header: %v", err)
 	}
@@ -833,12 +868,12 @@ func main() {
 			fHTML.Flush()
 		}
 	}
-	err = writeTrailer(fHTML)
+	err = writeTrailer(fHTML, fmt.Sprintf("extraction threshold (ms): %d, excluded tables: %s", thresholdFilter, pl.excludeTablesString))
 	if err != nil {
 		logger.Errorf("Failed to write trailer: %v", err)
 	}
 
 	wg.Wait()
-	logger.Infof("Completed %s, elapsed %s, cmds total %d",
-		time.Now(), time.Since(startTime), pl.countTotal)
+	logger.Infof("Completed %s, elapsed %s, cmds total %d, filtered output count %d",
+		time.Now(), time.Since(startTime), pl.countTotal, pl.countOutput)
 }
