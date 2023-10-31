@@ -24,7 +24,7 @@ build:
 # Note that this will download and build the latest version of package from github - it won't build the local go
 # repo. So you need to have published everything (and ensure tags are as desired) before doing this.
 dist:
-	~/go/bin/xgo --targets=linux/amd64,windows/amd64,darwin/amd64 ${LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/p4dpending
+	~/go/bin/xgo --targets=linux/amd64,windows/amd64,darwin/amd64 ${LDFLAGS} github.com/RishiMunagala/go-libp4dlog/cmd/p4dpending
 	rm -f p4dpending*amd64*.gz
 	-chmod +x p4dpending*amd64*
 	gzip p4dpending*amd64*

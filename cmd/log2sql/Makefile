@@ -27,8 +27,8 @@ build:
 # Note that this will download and build the latest version of package from github - it won't build the local go
 # repo. So you need to have published everything (and ensure tags are as desired) before doing this.
 dist:
-	~/go/bin/xgo -go latest --targets=windows/amd64,darwin/amd64 ${LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
-	~/go/bin/xgo -go latest --targets=linux/amd64 ${LINUX_LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
+	~/go/bin/xgo -go latest --targets=windows/amd64,darwin/amd64 ${LDFLAGS} github.com/RishiMunagala/go-libp4dlog/cmd/log2sql
+	~/go/bin/xgo -go latest --targets=linux/amd64 ${LINUX_LDFLAGS} github.com/RishiMunagalago-libp4dlog/cmd/log2sql
 	rm -f log2sql*amd64*.gz
 	-chmod +x log2sql*amd64*
 	gzip log2sql*amd64*
