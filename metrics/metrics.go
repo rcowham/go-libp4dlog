@@ -173,6 +173,11 @@ func (p4m *P4DMetrics) SetDebugMode(level int) {
 	p4m.fp.SetDebugMode(level)
 }
 
+// SetNoCompletionRecords() - can be set if log was generated with server=1
+func (p4m *P4DMetrics) SetNoCompletionRecords() {
+	p4m.fp.SetNoCompletionRecords()
+}
+
 // defines metrics label
 type labelStruct struct {
 	name  string

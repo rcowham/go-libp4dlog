@@ -488,6 +488,10 @@ func main() {
 			"case.insensitive.server",
 			"Set if server is case insensitive and usernames may occur in either case.",
 		).Default("false").Bool()
+		noCompletionRecords = kingpin.Flag(
+			"no.completion.records",
+			"Set if log was generated with server=1 and thus no completion records expected.",
+		).Default("false").Bool()
 		debugPID = kingpin.Flag(
 			"debug.pid",
 			"Set for debug output for specified PID - requires debug.cmd to be also specified.",
@@ -499,7 +503,7 @@ func main() {
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("log2sql")).Author("Robert Cowham")
 	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) into a Sqlite3 database and/or JSON or SQL format.\n" +
-		"The output of historical Prometheus compatible metrics is also by default." +
+		"The output of historical Prometheus compatible metrics is also on by default." +
 		"These can be viewed using VictoriaMetrics which is a Prometheus compatible data store, and viewed in Grafana. " +
 		"Where referred to in help <logfile-prefix> is the first logfile specified with any .gz or .log suffix removed."
 	kingpin.HelpFlag.Short('h')
@@ -528,8 +532,8 @@ func main() {
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 	logger.Infof("Flags: debug %v, json/file %v/%v, sql/file %v/%v, dbName %s, noMetrics/file %v/%v",
 		*debug, *jsonOutput, *jsonOutputFile, *sqlOutput, *sqlOutputFile, *dbName, *noMetrics, *metricsOutputFile)
-	logger.Infof("       serverID %v, sdpInstance %v, updateInterval %v, noOutputCmdsByUser %v, outputCmdsByUserRegex %s caseInsensitve %v, debugPID/cmd %v/%s",
-		*serverID, *sdpInstance, *updateInterval, *noOutputCmdsByUser, *outputCmdsByUserRegex, *caseInsensitiveServer, *debugPID, *debugCmd)
+	logger.Infof("       serverID %v, sdpInstance %v, updateInterval %v, noOutputCmdsByUser %v, outputCmdsByUserRegex %s caseInsensitve %v, noCompletionRecords %v, debugPID/cmd %v/%s",
+		*serverID, *sdpInstance, *updateInterval, *noOutputCmdsByUser, *outputCmdsByUserRegex, *caseInsensitiveServer, *noCompletionRecords, *debugPID, *debugCmd)
 
 	linesChan := make(chan string, 10000)
 
@@ -613,6 +617,9 @@ func main() {
 		if *debugPID != 0 && *debugCmd != "" {
 			mp.SetDebugPID(*debugPID, *debugCmd)
 		}
+		if *noCompletionRecords {
+			mp.SetNoCompletionRecords()
+		}
 		cmdChan, metricsChan = mp.ProcessEvents(ctx, linesChan, needCmdChan)
 
 		// Process all metrics - need to consume them even if we ignore them (overhead is minimal)
@@ -631,6 +638,9 @@ func main() {
 		}
 		if *debug > 0 {
 			fp.SetDebugMode(*debug)
+		}
+		if *noCompletionRecords {
+			fp.SetNoCompletionRecords()
 		}
 		cmdChan = fp.LogParser(ctx, linesChan, nil)
 	}

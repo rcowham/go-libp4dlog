@@ -47,6 +47,7 @@ const (
 	DebugDatabase
 	DebugJSON
 	DebugCommands
+	DebugAddCommands
 	DebugTrackRunning
 	DebugUnrecognised
 	DebugPending
@@ -1014,6 +1015,7 @@ type P4dFileParser struct {
 	blockChan            chan *Block
 	currTime             time.Time
 	debug                int
+	noCompletionRecords  bool // Can be set if completion records not expected - e.g. configurable server=1
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
@@ -1048,6 +1050,11 @@ func (fp *P4dFileParser) SetDebugMode(level int) {
 func (fp *P4dFileParser) SetDebugPID(pid int64, cmdName string) {
 	fp.debugPID = pid
 	fp.debugCmd = cmdName
+}
+
+// SetNoCompletionRecords - don't expect completion records
+func (fp *P4dFileParser) SetNoCompletionRecords() {
+	fp.noCompletionRecords = true
 }
 
 func (fp *P4dFileParser) debugLog(cmd *Command) bool {
@@ -1105,7 +1112,7 @@ func (fp *P4dFileParser) trackRunning(msg string, cmd *Command, delta int) {
 }
 
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
-	debugLog := fp.debugLog(newCmd)
+	debugLog := fp.debugLog(newCmd) || FlagSet(fp.debug, DebugAddCommands)
 	if debugLog {
 		fp.logger.Infof("addCommand: hasTrack %v, pid %d lineNo %d cmd %s dup %v", hasTrackInfo, newCmd.Pid, newCmd.LineNo, newCmd.Cmd, newCmd.duplicateKey)
 	}
@@ -1186,7 +1193,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 }
 
 // Special commands which only have start records not completion records
+// This was a thing with older p4d versions but now all commands have them
 func cmdHasNoCompletionRecord(cmdName string) bool {
+	// return false
 	return cmdName == "rmt-FileFetch" ||
 		cmdName == "rmt-FileFetchMulti" ||
 		cmdName == "rmt-Journal" ||
@@ -1658,7 +1667,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 			completed = true
 		}
 		// Handle the special commands which don't receive a completed time - we use StartTime
-		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && cmdHasNoCompletionRecord(cmd.Cmd) {
+		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && (cmdHasNoCompletionRecord(cmd.Cmd) || fp.noCompletionRecords) {
 			if debugLog {
 				fp.logger.Infof("output: r5 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
 			}
