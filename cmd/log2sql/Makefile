@@ -26,12 +26,15 @@ build:
 #    go install github.com/crazy-max/xgo@latest
 # Note that this will download and build the latest version of package from github - it won't build the local go
 # repo. So you need to have published everything (and ensure tags are as desired) before doing this.
+# Temp workaround for problem with xgo docker on M3 not building Linux amd64 - use local version.
+# For details see: https://github.com/crazy-max/xgo/issues/124
 dist:
-	~/go/bin/xgo -docker-image xgo:local -go latest --targets=linux/amd64 ${LINUX_LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
-	~/go/bin/xgo -go latest --targets=windows/amd64,darwin/amd64 ${LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
-	rm -f log2sql*amd64*.gz
-	-chmod +x log2sql*amd64*
-	gzip log2sql*amd64*
+	~/go/bin/xgo -docker-image xgo:local -go latest --targets=linux/amd64,linux/arm64 -out bin/log2sql ${LINUX_LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
+	# ~/go/bin/xgo -docker-image xgo:local -go latest --targets=darwin/arm64 -out bin/log2sql ${LINUX_LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
+	~/go/bin/xgo -go latest --targets=windows/amd64,windows/arm64,darwin/arm64,darwin/amd64 -out bin/log2sql  ${LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/log2sql
+	rm -f bin/log2sql*amd64*.gz bin/log2sql*arm64*.gz
+	-chmod +x bin/log2sql*amd64* bin/log2sql*arm64* 
+	gzip bin/log2sql*amd64* bin/log2sql*arm64*
 
 # Installs our project: copies binaries
 install:
