@@ -36,6 +36,7 @@ const p4timeformat = "2006/01/02 15:04:05"
 // This defines the maximum number of running commands we allow
 // Exceeding this values means either a bug in the parser or something
 // simple like server=1 logging only set (so no completion records)
+// Note a panic is raised telling the user what to do!
 // In future we may allow this to be set by parameter if required.
 const maxRunningCount = 20000
 
@@ -2076,7 +2077,8 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 				if ok {
 					fp.processBlock(b)
 					if fp.running > maxRunningCount {
-						panic(fmt.Sprintf("ERROR: max running command limit (%d) exceeded. Does this server log have completion records configured (configurable server=3)?",
+						panic(fmt.Sprintf("ERROR: max running command limit (%d) exceeded. Does this server log have completion records configured (p4 configure set server=3)? "+
+							"If using log2sql, then you can try to re-run with parameter --no.completion.records - but we strongly recommend you change p4d configurable to get completion records instead and re-analyze the log!",
 							maxRunningCount))
 					}
 				} else {
