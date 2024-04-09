@@ -1714,9 +1714,8 @@ func (fp *P4dFileParser) outputRemainingCommands() {
 
 func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 	if cmd, ok := fp.cmds[pid]; ok {
-		// sum all compute values for same command
 		f, _ := strconv.ParseFloat(string(computeLapse), 32)
-		cmd.ComputeLapse = cmd.ComputeLapse + float32(f)
+		cmd.ComputeLapse = float32(f)
 		if cmd.Cmd == "user-sync" {
 			fp.lastSyncPID = cmd.Pid
 		}

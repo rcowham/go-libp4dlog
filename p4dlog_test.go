@@ -770,7 +770,7 @@ Perforce server info:
 	output := parseLogLines(testInput)
 	assert.Equal(t, 1, len(output))
 	//assert.Equal(t, "", output[0])
-	assert.JSONEq(t, `{"processKey":"026c2d4135085764d23fd21f41d30f77","cmd":"user-sync","pid":145941,"lineNo":2,"user":"builder","workspace":"LON","computeLapse":0.14,"completedLapse":0.111,"ip":"10.10.16.171/10.10.20.195","app":"AutoWorker/1.0.0.0","args":"//assets/level/instances.xml","startTime":"2017/12/07 15:00:01","endTime":"2017/12/07 15:00:01","running":1,"uCpu":77,"sCpu":25,"diskIn":112,"diskOut":3136,"ipcIn":0,"ipcOut":0,"maxRss":4964,"pageFaults":0,"memMB":0,"memPeakMB":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrRcsDigests":0,"lbrRcsFileSizes":0,"lbrRcsModTimes":0,"lbrRcsCopies":0,"lbrBinaryOpens":0,"lbrBinaryCloses":0,"lbrBinaryCheckins":0,"lbrBinaryExists":0,"lbrBinaryReads":0,"lbrBinaryReadBytes":0,"lbrBinaryWrites":0,"lbrBinaryWriteBytes":0,"lbrBinaryDigests":0,"lbrBinaryFileSizes":0,"lbrBinaryModTimes":0,"lbrBinaryCopies":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrCompressDigests":0,"lbrCompressFileSizes":0,"lbrCompressModTimes":0,"lbrCompressCopies":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"lbrUncompressDigests":0,"lbrUncompressFileSizes":0,"lbrUncompressModTimes":0,"lbrUncompressCopies":0,"cmdError":false,"tables":[]}`,
+	assert.JSONEq(t, `{"processKey":"026c2d4135085764d23fd21f41d30f77","cmd":"user-sync","pid":145941,"lineNo":2,"user":"builder","workspace":"LON","computeLapse":0.11,"completedLapse":0.111,"ip":"10.10.16.171/10.10.20.195","app":"AutoWorker/1.0.0.0","args":"//assets/level/instances.xml","startTime":"2017/12/07 15:00:01","endTime":"2017/12/07 15:00:01","running":1,"uCpu":77,"sCpu":25,"diskIn":112,"diskOut":3136,"ipcIn":0,"ipcOut":0,"maxRss":4964,"pageFaults":0,"memMB":0,"memPeakMB":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrRcsDigests":0,"lbrRcsFileSizes":0,"lbrRcsModTimes":0,"lbrRcsCopies":0,"lbrBinaryOpens":0,"lbrBinaryCloses":0,"lbrBinaryCheckins":0,"lbrBinaryExists":0,"lbrBinaryReads":0,"lbrBinaryReadBytes":0,"lbrBinaryWrites":0,"lbrBinaryWriteBytes":0,"lbrBinaryDigests":0,"lbrBinaryFileSizes":0,"lbrBinaryModTimes":0,"lbrBinaryCopies":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrCompressDigests":0,"lbrCompressFileSizes":0,"lbrCompressModTimes":0,"lbrCompressCopies":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"lbrUncompressDigests":0,"lbrUncompressFileSizes":0,"lbrUncompressModTimes":0,"lbrUncompressCopies":0,"cmdError":false,"tables":[]}`,
 		output[0])
 }
 
@@ -1140,4 +1140,42 @@ func TestLbrRegex(t *testing.T) {
 	assert.Equal(t, "3", m[3])
 	assert.Equal(t, "0", m[4])
 
+}
+
+func TestMultiComputes(t *testing.T) {
+	testInput := `
+Perforce server info:
+	2024/04/03 12:20:14 pid 5032 fred@fred-Dinner-dev 10.1.2.212 [UnrealGameSync/v84] 'user-changes -m1 -ssubmitted //fred-Dinner-dev/*.cs@<=764311 //fred-Dinner-dev/Engine/....cs@<=764311 //fred-Dinner-dev/Dinner/....cs@<=764311'
+Perforce server info:
+	2024/04/03 12:20:14 pid 5032 compute end .000s
+Perforce server info:
+	2024/04/03 12:20:15 pid 5032 compute end .547s
+Perforce server info:
+	2024/04/03 12:20:49 pid 5032 compute end 34.9s
+Perforce server info:
+	2024/04/03 12:21:12 pid 5032 compute end 57.5s
+Perforce server info:
+	2024/04/03 12:21:15 pid 5032 compute end 60.9s
+Perforce server info:
+	2024/04/03 12:21:15 pid 5032 completed 60.9s
+Perforce server info:
+	2024/04/03 12:20:14 pid 5032 fred@fred-Dinner-dev 10.1.2.212 [UnrealGameSync/v84] 'user-changes -m1 -ssubmitted //fred-Dinner-dev/*.cs@<=764311 //fred-Dinner-dev/Engine/....cs@<=764311 //fred-Dinner-dev/Dinner/....cs@<=764311'
+--- lapse 60.9s
+--- memory cmd/proc 8mb/442mb
+--- rpc msgs/size in+out 0+12/0mb+0mb himarks 64836/523588 snd/rcv .000s/.000s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb
+--- db.rev
+---   pages in+out+cached 1558725+0+96
+---   locks read/write 0/0 rows get+pos+scan put+del 0+56+22442266 0+0
+---   peek count 21 wait+held total/max 0ms+60953ms/0ms+34390ms
+--- db.change
+---   pages in+out+cached 35+0+10
+---   locks read/write 0/0 rows get+pos+scan put+del 0+12+12 0+0
+---   peek count 21 wait+held total/max 0ms+60953ms/0ms+34390ms
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	// assert.Equal(t, "", output[0])
+	assert.JSONEq(t, `{"processKey":"adb2b3c890b15d59f748c064e2c181b6","cmd":"user-changes","pid":5032,"lineNo":2,"user":"fred","workspace":"fred-Dinner-dev","computeLapse":60.9,"completedLapse":60.9,"ip":"10.1.2.212","app":"UnrealGameSync/v84","args":"-m1 -ssubmitted //fred-Dinner-dev/*.cs@\u003c=764311 //fred-Dinner-dev/Engine/....cs@\u003c=764311 //fred-Dinner-dev/Dinner/....cs@\u003c=764311","startTime":"2024/04/03 12:20:14","endTime":"2024/04/03 12:21:15","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"memMB":8,"memPeakMB":442,"rpcMsgsIn":0,"rpcMsgsOut":12,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":64836,"rpcHimarkRev":523588,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrRcsDigests":0,"lbrRcsFileSizes":0,"lbrRcsModTimes":0,"lbrRcsCopies":0,"lbrBinaryOpens":0,"lbrBinaryCloses":0,"lbrBinaryCheckins":0,"lbrBinaryExists":0,"lbrBinaryReads":0,"lbrBinaryReadBytes":0,"lbrBinaryWrites":0,"lbrBinaryWriteBytes":0,"lbrBinaryDigests":0,"lbrBinaryFileSizes":0,"lbrBinaryModTimes":0,"lbrBinaryCopies":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrCompressDigests":0,"lbrCompressFileSizes":0,"lbrCompressModTimes":0,"lbrCompressCopies":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"lbrUncompressDigests":0,"lbrUncompressFileSizes":0,"lbrUncompressModTimes":0,"lbrUncompressCopies":0,"cmdError":false,"tables":[{"tableName":"change","pagesIn":35,"pagesOut":0,"pagesCached":10,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":0,"getRows":0,"posRows":12,"scanRows":12,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":21,"totalPeekWait":0,"totalPeekHeld":60953,"maxPeekWait":0,"maxPeekHeld":34390,"triggerLapse":0},{"tableName":"rev","pagesIn":1558725,"pagesOut":0,"pagesCached":96,"pagesSplitInternal":0,"pagesSplitLeaf":0,"readLocks":0,"writeLocks":0,"getRows":0,"posRows":56,"scanRows":22442266,"putRows":0,"delRows":0,"totalReadWait":0,"totalReadHeld":0,"totalWriteWait":0,"totalWriteHeld":0,"maxReadWait":0,"maxReadHeld":0,"maxWriteWait":0,"maxWriteHeld":0,"peekCount":21,"totalPeekWait":0,"totalPeekHeld":60953,"maxPeekWait":0,"maxPeekHeld":34390,"triggerLapse":0}]}`,
+		output[0])
 }
