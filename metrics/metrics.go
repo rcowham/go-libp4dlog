@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"runtime/metrics"
 	"strings"
 	"time"
 
@@ -184,6 +185,21 @@ type labelStruct struct {
 	value string
 }
 
+func (p4m *P4DMetrics) getMemoryUsage() uint64 {
+	// An approximation for process memory usage - https://pkg.go.dev/runtime/metrics#pkg-examples
+	const myMetric = "/memory/classes/total:bytes"
+
+	sample := make([]metrics.Sample, 1)
+	sample[0].Name = myMetric
+	metrics.Read(sample)
+	// Check if the metric is actually supported.
+	if sample[0].Value.Kind() == metrics.KindBad {
+		return 0
+	}
+	freeBytes := sample[0].Value.Uint64()
+	return freeBytes
+}
+
 func (p4m *P4DMetrics) printMetricHeader(f io.Writer, name string, help string, metricType string) {
 	if !p4m.historical {
 		fmt.Fprintf(f, "# HELP %s %s\n# TYPE %s %s\n", name, help, name, metricType)
@@ -276,6 +292,11 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	mname = "p4_prom_cpu_system"
 	p4m.printMetricHeader(metrics, mname, "System CPU used by p4prometheus", "counter")
 	metricVal = fmt.Sprintf("%.6f", systemCPU)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+	mname = "p4_prom_memory"
+	p4m.printMetricHeader(metrics, mname, "System memory used by p4prometheus (bytes)", "gauge")
+	metricVal = fmt.Sprintf("%.0f", float64(p4m.getMemoryUsage()))
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_cmd_mem_mb"
