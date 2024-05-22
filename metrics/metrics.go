@@ -187,16 +187,19 @@ type labelStruct struct {
 
 func (p4m *P4DMetrics) getMemoryUsage() uint64 {
 	// An approximation for process memory usage - https://pkg.go.dev/runtime/metrics#pkg-examples
-	const myMetric = "/memory/classes/total:bytes"
+	// https://www.datadoghq.com/blog/go-memory-metrics/ - says (total-released)
+	const metricTotal = "/memory/classes/total:bytes"
+	const metricReleased = "/memory/classes/heap/released:bytes"
 
-	sample := make([]metrics.Sample, 1)
-	sample[0].Name = myMetric
+	sample := make([]metrics.Sample, 2)
+	sample[0].Name = metricTotal
+	sample[1].Name = metricReleased
 	metrics.Read(sample)
 	// Check if the metric is actually supported.
-	if sample[0].Value.Kind() == metrics.KindBad {
+	if sample[0].Value.Kind() == metrics.KindBad || sample[1].Value.Kind() == metrics.KindBad {
 		return 0
 	}
-	freeBytes := sample[0].Value.Uint64()
+	freeBytes := sample[0].Value.Uint64() - sample[1].Value.Uint64()
 	return freeBytes
 }
 
