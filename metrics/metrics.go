@@ -41,9 +41,17 @@ type Config struct {
 	CaseSensitiveServer   bool          `yaml:"case_sensitive_server"`
 }
 
+// P4DMetricsVersion - for version info
+type P4DMetricsVersion struct {
+	GoVersion string
+	Revision  string
+	Version   string
+}
+
 // P4DMetrics structure
 type P4DMetrics struct {
 	config                    *Config
+	version                   *P4DMetricsVersion
 	historical                bool
 	debug                     int
 	fp                        *p4dlog.P4dFileParser
@@ -134,9 +142,10 @@ type P4DMetrics struct {
 }
 
 // NewP4DMetricsLogParser - wraps P4dFileParser
-func NewP4DMetricsLogParser(config *Config, logger *logrus.Logger, historical bool) *P4DMetrics {
+func NewP4DMetricsLogParser(config *Config, version *P4DMetricsVersion, logger *logrus.Logger, historical bool) *P4DMetrics {
 	return &P4DMetrics{
 		config:                    config,
+		version:                   version,
 		logger:                    logger,
 		fp:                        p4dlog.NewP4dFileParser(logger),
 		historical:                historical,
@@ -265,6 +274,14 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 
 	var mname string
 	var metricVal string
+	mname = "p4_prom_build_info"
+	p4m.printMetricHeader(metrics, mname, "Build info for p4prometheus", "counter")
+	metricVal = "1"
+	labels := append(fixedLabels, labelStruct{"goversion", p4m.version.GoVersion})
+	labels = append(labels, labelStruct{"revision", p4m.version.Revision})
+	labels = append(labels, labelStruct{"version", p4m.version.Version})
+	p4m.printMetric(metrics, mname, labels, metricVal)
+
 	mname = "p4_prom_log_lines_read"
 	p4m.printMetricHeader(metrics, mname, "A count of log lines read", "counter")
 	metricVal = fmt.Sprintf("%d", p4m.linesRead)

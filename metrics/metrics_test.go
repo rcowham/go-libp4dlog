@@ -88,7 +88,12 @@ func basicTest(t *testing.T, cfg *Config, input string, historical bool) []strin
 	fp.SetDurations(10*time.Millisecond, 20*time.Millisecond)
 	linesChan := make(chan string, 100)
 
-	p4m := NewP4DMetricsLogParser(cfg, logger, historical)
+	version := &P4DMetricsVersion{
+		Revision:  "testrevision",
+		GoVersion: runtime.Version(),
+		Version:   "test",
+	}
+	p4m := NewP4DMetricsLogParser(cfg, version, logger, historical)
 	p4m.fp = fp
 
 	var wg sync.WaitGroup
@@ -128,7 +133,7 @@ func compareOutput(t *testing.T, expected, actual []string) {
 	nExpected := make([]string, 0)
 	nActual := make([]string, 0)
 	// Ignore these elements as the contents varies per test run
-	ignorePrefixes := []string{"p4_prom_cmds_pending", "p4_prom_cpu_user", "p4_prom_cpu_system", "p4_prom_memory"}
+	ignorePrefixes := []string{"p4_prom_cmds_pending", "p4_prom_cpu_user", "p4_prom_cpu_system", "p4_prom_memory", "p4_prom_build_info"}
 	for _, line := range expected {
 		if !hasPrefix(ignorePrefixes, line) {
 			nExpected = append(nExpected, line)
@@ -141,6 +146,7 @@ func compareOutput(t *testing.T, expected, actual []string) {
 	}
 	sort.Strings(nActual)
 	sort.Strings(nExpected)
+	assert.Equal(t, len(nExpected), len(nActual))
 	assert.Equal(t, nExpected, nActual)
 }
 
@@ -172,12 +178,8 @@ p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.031
-p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 1
 p4_prom_log_lines_read{serverid="myserverid"} 10
-p4_prom_cpu_system{serverid="myserverid"} 0.0
-p4_prom_cpu_user{serverid="myserverid"} 0.0
-p4_prom_memory{serverid="myserverid"} 100000.0
 p4_cmd_mem_mb{serverid="myserverid"} 0
 p4_cmd_mem_peak_mb{serverid="myserverid"} 0
 p4_lbr_binary_checkins{serverid="myserverid"} 0
@@ -233,7 +235,6 @@ p4_sync_bytes_updated{serverid="myserverid"} 456
 p4_sync_files_added{serverid="myserverid"} 1
 p4_sync_files_deleted{serverid="myserverid"} 2
 p4_sync_files_updated{serverid="myserverid"} 3`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 	historical = true
@@ -250,12 +251,8 @@ p4_cmd_user_counter;serverid=myserverid;user=robert 1 1441207389
 p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_user_cumulative_seconds;serverid=myserverid;user=robert 0.031 1441207389
-p4_prom_cmds_pending;serverid=myserverid 0 1441207389
 p4_prom_cmds_processed;serverid=myserverid 1 1441207389
 p4_prom_log_lines_read;serverid=myserverid 10 1441207389
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
-p4_prom_memory;serverid=myserverid 10000.0 1441207389
 p4_cmd_mem_mb;serverid=myserverid 0 1441207389
 p4_cmd_mem_peak_mb;serverid=myserverid 0 1441207389
 p4_lbr_binary_checkins;serverid=myserverid 0 1441207389
@@ -311,7 +308,6 @@ p4_sync_bytes_updated;serverid=myserverid 456 1441207389
 p4_sync_files_added;serverid=myserverid 1 1441207389
 p4_sync_files_deleted;serverid=myserverid 2 1441207389
 p4_sync_files_updated;serverid=myserverid 3 1441207389`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 }
@@ -357,16 +353,8 @@ p4_cmd_running;serverid=myserverid 0 1441210990
 p4_cmd_running;serverid=myserverid 1 1441210990
 p4_cmd_user_counter;serverid=myserverid;user=robert 2 1441210990
 p4_cmd_user_cumulative_seconds;serverid=myserverid;user=robert 0.062 1441210990
-p4_prom_cmds_pending;serverid=myserverid 0 1441210990
-p4_prom_cmds_pending;serverid=myserverid 1 1441210990
 p4_prom_cmds_processed;serverid=myserverid 0 1441210990
 p4_prom_cmds_processed;serverid=myserverid 2 1441210990
-p4_prom_cpu_system;serverid=myserverid 0.007014 1441210990
-p4_prom_cpu_system;serverid=myserverid 0.007993 1441210990
-p4_prom_cpu_user;serverid=myserverid 0.004660 1441210990
-p4_prom_cpu_user;serverid=myserverid 0.006313 1441210990
-p4_prom_memory;serverid=myserverid 10.0 1441210990
-p4_prom_memory;serverid=myserverid 10.0 1441210990
 p4_prom_log_lines_read;serverid=myserverid 12 1441210990
 p4_prom_log_lines_read;serverid=myserverid 19 1441210990
 p4_cmd_mem_mb;serverid=myserverid 0 1441210990
@@ -479,7 +467,6 @@ p4_sync_files_deleted;serverid=myserverid 0 1441210990
 p4_sync_files_deleted;serverid=myserverid 4 1441210990
 p4_sync_files_updated;serverid=myserverid 0 1441210990
 p4_sync_files_updated;serverid=myserverid 6 1441210990`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 }
@@ -510,12 +497,8 @@ p4_cmd_program_cumulative_seconds{serverid="myserverid",program="some_unknown_pr
 p4_cmd_running{serverid="myserverid"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
-p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 1
 p4_prom_log_lines_read{serverid="myserverid"} 8
-p4_prom_cpu_system{serverid="myserverid"} 0.0
-p4_prom_cpu_user{serverid="myserverid"} 0.0
-p4_prom_memory{serverid="myserverid"} 1000.0
 p4_cmd_mem_mb{serverid="myserverid"} 0
 p4_cmd_mem_peak_mb{serverid="myserverid"} 0
 p4_lbr_binary_checkins{serverid="myserverid"} 0
@@ -571,7 +554,6 @@ p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0
 p4_sync_files_deleted{serverid="myserverid"} 0
 p4_sync_files_updated{serverid="myserverid"} 0`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 	historical = true
@@ -586,12 +568,8 @@ p4_cmd_program_cumulative_seconds;serverid=myserverid;program=some_unknown_prog_
 p4_cmd_running;serverid=myserverid 1 1441207389
 p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_prom_cmds_pending;serverid=myserverid 0 1441207389
 p4_prom_cmds_processed;serverid=myserverid 1 1441207389
 p4_prom_log_lines_read;serverid=myserverid 8 1441207389
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
-p4_prom_memory;serverid=myserverid 1000.0 1441207389
 p4_cmd_mem_mb;serverid=myserverid 0 1441207389
 p4_cmd_mem_peak_mb;serverid=myserverid 0 1441207389
 p4_lbr_binary_checkins;serverid=myserverid 0 1441207389
@@ -647,7 +625,6 @@ p4_sync_bytes_updated;serverid=myserverid 0 1441207389
 p4_sync_files_added;serverid=myserverid 0 1441207389
 p4_sync_files_deleted;serverid=myserverid 0 1441207389
 p4_sync_files_updated;serverid=myserverid 0 1441207389`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
 
@@ -679,12 +656,8 @@ p4_cmd_program_cumulative_seconds;serverid=myserverid;program=c:\\jenkins\\works
 p4_cmd_running;serverid=myserverid 1 1441207389
 p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
-p4_prom_cmds_pending;serverid=myserverid 0 1441207389
 p4_prom_cmds_processed;serverid=myserverid 1 1441207389
 p4_prom_log_lines_read;serverid=myserverid 8 1441207389
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207389
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207389
-p4_prom_memory;serverid=myserverid 1000.0 1441207389
 p4_sync_bytes_added;serverid=myserverid 0 1441207389
 p4_sync_bytes_updated;serverid=myserverid 0 1441207389
 p4_sync_files_added;serverid=myserverid 0 1441207389
@@ -740,7 +713,6 @@ p4_lbr_uncompress_digests;serverid=myserverid 0 1441207389
 p4_lbr_uncompress_filesizes;serverid=myserverid 0 1441207389
 p4_lbr_uncompress_modtimes;serverid=myserverid 0 1441207389
 p4_lbr_uncompress_copies;serverid=myserverid 0 1441207389`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
 
@@ -789,24 +761,12 @@ p4_cmd_running;serverid=myserverid 0 1441207511
 p4_cmd_running;serverid=myserverid 1 1441207511
 p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207511
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207511
-p4_prom_cmds_pending;serverid=myserverid 0 1441207450
-p4_prom_cmds_pending;serverid=myserverid 0 1441207511
-p4_prom_cmds_pending;serverid=myserverid 0 1441207511
 p4_prom_cmds_processed;serverid=myserverid 0 1441207450
 p4_prom_cmds_processed;serverid=myserverid 0 1441207511
 p4_prom_cmds_processed;serverid=myserverid 3 1441207511
 p4_prom_log_lines_read;serverid=myserverid 10 1441207450
 p4_prom_log_lines_read;serverid=myserverid 17 1441207511
 p4_prom_log_lines_read;serverid=myserverid 22 1441207511
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207450
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207511
-p4_prom_cpu_system;serverid=myserverid 0.0 1441207511
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207450
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207511
-p4_prom_cpu_user;serverid=myserverid 0.0 1441207511
-p4_prom_memory;serverid=myserverid 120.0 1441207450
-p4_prom_memory;serverid=myserverid 120.0 1441207511
-p4_prom_memory;serverid=myserverid 120.0 1441207511
 p4_sync_bytes_added;serverid=myserverid 0 1441207450
 p4_sync_bytes_added;serverid=myserverid 0 1441207511
 p4_sync_bytes_added;serverid=myserverid 0 1441207511
@@ -972,7 +932,6 @@ p4_lbr_uncompress_modtimes;serverid=myserverid 0 1441207511
 p4_lbr_uncompress_copies;serverid=myserverid 0 1441207450
 p4_lbr_uncompress_copies;serverid=myserverid 0 1441207511
 p4_lbr_uncompress_copies;serverid=myserverid 0 1441207511`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
 
@@ -1040,12 +999,8 @@ p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 0.034
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-change"} 0.010
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="fred"} 1.793
-p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
 p4_prom_log_lines_read{serverid="myserverid"} 37
-p4_prom_cpu_system{serverid="myserverid"} 0.0
-p4_prom_cpu_user{serverid="myserverid"} 0.0
-p4_prom_memory{serverid="myserverid"} 100000.0
 p4_sync_bytes_added{serverid="myserverid"} 0
 p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0
@@ -1114,7 +1069,6 @@ p4_total_write_held_seconds{serverid="myserverid",table="integed"} 0.795
 p4_total_write_wait_seconds{serverid="myserverid",table="archmap"} 0.034
 p4_total_write_wait_seconds{serverid="myserverid",table="counters"} 0.000
 p4_total_write_wait_seconds{serverid="myserverid",table="integed"} 0.024`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 	historical = true
@@ -1142,24 +1096,12 @@ p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-change 0.011 1
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=dm-CommitSubmit 0.034 1528673409
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-change 0.010 1528673409
 p4_cmd_user_cumulative_seconds;serverid=myserverid;user=fred 1.793 1528673409
-p4_prom_cmds_pending;serverid=myserverid 0 1528673408
-p4_prom_cmds_pending;serverid=myserverid 0 1528673409
-p4_prom_cmds_pending;serverid=myserverid 0 1528673409
 p4_prom_cmds_processed;serverid=myserverid 0 1528673408
 p4_prom_cmds_processed;serverid=myserverid 0 1528673409
 p4_prom_cmds_processed;serverid=myserverid 2 1528673409
 p4_prom_log_lines_read;serverid=myserverid 17 1528673408
 p4_prom_log_lines_read;serverid=myserverid 30 1528673409
 p4_prom_log_lines_read;serverid=myserverid 37 1528673409
-p4_prom_cpu_system;serverid=myserverid 0.0 1528673408
-p4_prom_cpu_system;serverid=myserverid 0.0 1528673409
-p4_prom_cpu_system;serverid=myserverid 0.0 1528673409
-p4_prom_cpu_user;serverid=myserverid 0.0 1528673408
-p4_prom_cpu_user;serverid=myserverid 0.0 1528673409
-p4_prom_cpu_user;serverid=myserverid 0.0 1528673409
-p4_prom_memory;serverid=myserverid 100000.0 1528673408
-p4_prom_memory;serverid=myserverid 100000.0 1528673409
-p4_prom_memory;serverid=myserverid 100000.0 1528673409
 p4_cmd_mem_mb;serverid=myserverid 0 1528673408
 p4_cmd_mem_mb;serverid=myserverid 0 1528673409
 p4_cmd_mem_mb;serverid=myserverid 0 1528673409
@@ -1338,7 +1280,6 @@ p4_total_write_held_seconds;serverid=myserverid;table=integed 0.795 1528673409
 p4_total_write_wait_seconds;serverid=myserverid;table=archmap 0.034 1528673409
 p4_total_write_wait_seconds;serverid=myserverid;table=counters 0.000 1528673409
 p4_total_write_wait_seconds;serverid=myserverid;table=integed 0.024 1528673409`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 }
@@ -1361,12 +1302,8 @@ p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX
 p4_cmd_running{serverid="myserverid"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
-p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
 p4_prom_log_lines_read{serverid="myserverid"} 11
-p4_prom_cpu_system{serverid="myserverid"} 0.0
-p4_prom_cpu_user{serverid="myserverid"} 0.0
-p4_prom_memory{serverid="myserverid"} 100000.0
 p4_sync_bytes_added{serverid="myserverid"} 0
 p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0
@@ -1438,7 +1375,6 @@ p4_lbr_uncompress_copies{serverid="myserverid"} 0`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 }
@@ -1506,7 +1442,6 @@ p4_lbr_uncompress_copies{serverid="myserverid"} 0`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
 
@@ -1581,7 +1516,6 @@ p4_lbr_uncompress_copies{serverid="myserverid"} 0`, -1)
 	for _, l := range multiUserExpected {
 		expected = append(expected, l)
 	}
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 
 }
@@ -1606,11 +1540,8 @@ p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.0
 p4_cmd_running{serverid="myserverid"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
-p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
 p4_prom_log_lines_read{serverid="myserverid"} 11
-p4_prom_cpu_system{serverid="myserverid"} 0.0
-p4_prom_cpu_user{serverid="myserverid"} 0.0
 p4_sync_bytes_added{serverid="myserverid"} 0
 p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0
@@ -1634,12 +1565,8 @@ p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX
 p4_cmd_replica_counter{serverid="myserverid",replica="127.0.0.1"} 1
 p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.011
 p4_cmd_running{serverid="myserverid"} 1
-p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 2
-p4_prom_cpu_system{serverid="myserverid"} 0.005965
-p4_prom_cpu_user{serverid="myserverid"} 0.004574
 p4_prom_log_lines_read{serverid="myserverid"} 11
-p4_prom_memory{serverid="myserverid"} 100000.0
 p4_cmd_mem_mb{serverid="myserverid"} 0
 p4_cmd_mem_peak_mb{serverid="myserverid"} 0
 p4_lbr_binary_checkins{serverid="myserverid"} 0
@@ -1695,7 +1622,6 @@ p4_sync_bytes_updated{serverid="myserverid"} 0
 p4_sync_files_added{serverid="myserverid"} 0
 p4_sync_files_deleted{serverid="myserverid"} 0
 p4_sync_files_updated{serverid="myserverid"} 0`, -1)
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
 
@@ -1760,12 +1686,10 @@ p4_lbr_uncompress_writes{serverid="myserverid"} 0
 p4_lbr_uncompress_digests{serverid="myserverid"} 0
 p4_lbr_uncompress_filesizes{serverid="myserverid"} 0
 p4_lbr_uncompress_modtimes{serverid="myserverid"} 0
-p4_lbr_uncompress_copies{serverid="myserverid"} 0
-p4_prom_memory{serverid="myserverid"} 100000.0`, -1)
+p4_lbr_uncompress_copies{serverid="myserverid"} 0`, -1)
 	for _, l := range multiIPExpected {
 		expected = append(expected, l)
 	}
-	assert.Equal(t, len(expected), len(output))
 	compareOutput(t, expected, output)
 }
 
@@ -1855,11 +1779,7 @@ p4_cmd_user_counter{serverid="myserverid",user="build"} 1
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="build"} 0.011
 p4_cmd_mem_mb{serverid="myserverid"} 27
 p4_cmd_mem_peak_mb{serverid="myserverid"} 27
-p4_prom_cmds_pending{serverid="myserverid"} 0
 p4_prom_cmds_processed{serverid="myserverid"} 1
-p4_prom_cpu_system{serverid="myserverid"} 0.007865
-p4_prom_cpu_user{serverid="myserverid"} 0.008348
-p4_prom_memory{serverid="myserverid"} 100000.0
 p4_prom_log_lines_read{serverid="myserverid"} 34
 p4_lbr_binary_checkins{serverid="myserverid"} 0
 p4_lbr_binary_closes{serverid="myserverid"} 0
@@ -1922,7 +1842,6 @@ p4_total_write_held_seconds{serverid="myserverid",table="monitor"} 0.000
 p4_total_write_held_seconds{serverid="myserverid",table="topology"} 0.000
 p4_total_write_wait_seconds{serverid="myserverid",table="monitor"} 0.001
 p4_total_write_wait_seconds{serverid="myserverid",table="topology"} 0.000`, -1)
-	assert.Equal(t, len(expected), len(output))
 	//assert.Equal(t, "", output[0])
 	compareOutput(t, expected, output)
 }
