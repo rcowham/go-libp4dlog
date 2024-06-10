@@ -25,7 +25,7 @@ import (
 
 	"github.com/perforce/p4prometheus/version"
 	p4dlog "github.com/rcowham/go-libp4dlog"
-	"github.com/rcowham/go-libp4dlog/metrics"
+	metrics "github.com/rcowham/go-libp4dlog/metrics"
 )
 
 const statementsPerTransaction = 50 * 1000
@@ -610,7 +610,12 @@ func main() {
 	if writeMetrics {
 		wg.Add(1)
 		logger.Debugf("Main: creating metrics")
-		mp = metrics.NewP4DMetricsLogParser(mconfig, logger, true)
+		mver := &metrics.P4DMetricsVersion{
+			Revision:  version.Revision,
+			GoVersion: version.GoVersion,
+			Version:   version.Version,
+		}
+		mp = metrics.NewP4DMetricsLogParser(mconfig, mver, logger, true)
 		if *debug != 0 {
 			mp.SetDebugMode(*debug)
 		}

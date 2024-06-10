@@ -1,4 +1,4 @@
-
+# Build file for p4dpending - useful debugging tool for the library
 
 BINARY=p4dpending
 
@@ -19,15 +19,20 @@ LDFLAGS=-ldflags="-w -s -X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/ver
 build:
 	go build ${LOCAL_LDFLAGS}
 
-# Builds distribution - uses xgo and the docker container for cross platform builds
-# See: https://github.com/karalabe/xgo
-# Note that this will download and build the latest version of package from github - it won't build the local go
-# repo. So you need to have published everything (and ensure tags are as desired) before doing this.
+test:
+	go test
+
+# Builds distribution - for all supported platforms
 dist:
-	~/go/bin/xgo --targets=linux/amd64,windows/amd64,darwin/amd64 ${LDFLAGS} github.com/rcowham/go-libp4dlog/cmd/p4dpending
-	rm -f p4dpending*amd64*.gz
-	-chmod +x p4dpending*amd64*
-	gzip p4dpending*amd64*
+	GOOS=darwin GOARCH=amd64 go build ${LDFLAGS} -o bin/${BINARY}-darwin-amd64 main.go
+	GOOS=darwin GOARCH=arm64 go build ${LDFLAGS} -o bin/${BINARY}-darwin-arm64 main.go
+	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o bin/${BINARY}-linux-amd64 main.go
+	GOOS=linux GOARCH=arm64 go build ${LDFLAGS} -o bin/${BINARY}-linux-arm64 main.go
+	GOOS=windows GOARCH=amd64 go build ${LDFLAGS} -o bin/${BINARY}-windows-amd64.exe main.go
+	GOOS=windows GOARCH=arm64 go build ${LDFLAGS} -o bin/${BINARY}-windows-arm64.exe main.go
+	rm -f bin/${BINARY}*-a*64*.gz
+	-chmod +x bin/${BINARY}*-a*64*
+	gzip bin/${BINARY}*a*64*
 
 # Installs our project: copies binaries
 install:
@@ -37,4 +42,4 @@ install:
 clean:
 	if [ -f ${BINARY} ] ; then rm ${BINARY} ; fi
 
-.PHONY: clean install
+.PHONY: clean install test

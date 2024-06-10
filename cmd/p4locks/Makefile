@@ -1,3 +1,5 @@
+# Makefile for p4locks - to show lock status in a log file.
+
 BINARY=p4locks
 
 # These are the values we want to pass for VERSION and BUILD
@@ -17,14 +19,17 @@ LDFLAGS=-ldflags="-w -s -X ${MODULE}/version.Version=${VERSION} -X ${MODULE}/ver
 build:
 	go build ${LOCAL_LDFLAGS}
 
-# Builds distributions
+# Builds distribution for other platforms
 dist:
 	GOOS=darwin GOARCH=amd64 go build ${LDFLAGS} -o bin/${BINARY}-darwin-amd64 main.go
+	GOOS=darwin GOARCH=arm64 go build ${LDFLAGS} -o bin/${BINARY}-darwin-arm64 main.go
 	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o bin/${BINARY}-linux-amd64 main.go
+	GOOS=linux GOARCH=arm64 go build ${LDFLAGS} -o bin/${BINARY}-linux-arm64 main.go
 	GOOS=windows GOARCH=amd64 go build ${LDFLAGS} -o bin/${BINARY}-windows-amd64.exe main.go
-	rm -f bin/${BINARY}*amd64*.gz
-	-chmod +x bin/${BINARY}*amd64*
-	gzip bin/${BINARY}*amd64*
+	GOOS=windows GOARCH=arm64 go build ${LDFLAGS} -o bin/${BINARY}-windows-arm64.exe main.go
+	rm -f bin/${BINARY}*-a*64*.gz
+	-chmod +x bin/${BINARY}*-a*64*
+	gzip bin/${BINARY}*a*64*
 
 # Cleans our project: deletes binaries
 clean:
