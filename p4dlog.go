@@ -1196,7 +1196,6 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 // Special commands which only have start records not completion records
 // This was a thing with older p4d versions but now all commands have them
 func cmdHasNoCompletionRecord(cmdName string) bool {
-	// return false
 	return cmdName == "rmt-FileFetch" ||
 		cmdName == "rmt-FileFetchMulti" ||
 		cmdName == "rmt-Journal" ||
@@ -1837,11 +1836,19 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				}
 				line = line[:i+1] // Strip from the line
 			}
-			// Detect slightly strange IDLE commands
+			// Detect slightly strange IDLE, Init() commands
 			if i := strings.Index(line, "' exited unexpectedly, removed from monitor table."); i >= 0 {
-				if cmd.Cmd == "IDLE" {
-					return
+				if fcmd, ok := fp.cmds[cmd.Pid]; ok {
+					fcmd.CmdError = true
+					fcmd.completed = true
+					if fcmd.EndTime.IsZero() {
+						fcmd.EndTime = fcmd.StartTime
+					}
+					if !cmdHasNoCompletionRecord(fcmd.Cmd) {
+						fp.trackRunning("t06", fcmd, -1)
+					}
 				}
+				return
 			}
 			h := md5.Sum([]byte(line))
 			cmd.ProcessKey = hex.EncodeToString(h[:])
