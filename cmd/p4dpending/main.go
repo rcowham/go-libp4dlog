@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/profile"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/machinebox/progress"
@@ -243,10 +242,10 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	if *debug > 0 {
-		// CPU profiling by default
-		defer profile.Start().Stop()
-	}
+	// if *debug > 0 {
+	// 	// CPU profiling by default
+	// 	// defer profile.Start().Stop()
+	// }
 	logger := logrus.New()
 	logger.Level = logrus.InfoLevel
 	if *debug > 0 {
@@ -287,6 +286,9 @@ func main() {
 	}
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
+	}
+	if *debug >= int(p4dlog.DebugCommands) {
+		logger.Level = logrus.TraceLevel
 	}
 	if *debugPID != 0 && *debugCmd != "" {
 		fp.SetDebugPID(*debugPID, *debugCmd)
