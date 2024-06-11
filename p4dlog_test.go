@@ -891,8 +891,6 @@ locks acquired by blocking after 3 non-blocking attempts
 	//assert.Equal(t, "", output[0])
 	assert.JSONEq(t, cleanJSON(`{"processKey":"f7d483631e94d16adde6c5306be15fbe","cmd":"user-revert","pid":22245,"lineNo":2,"user":"auto","workspace":"archive_auto","completedLapse":6.92,"ip":"127.0.0.1","app":"archive/v60","args":"/usr/local/arch/datastore/...","startTime":"2018/09/06 06:00:02","endTime":"2018/09/06 06:00:02","running":1,"uCpu":6901,"sCpu":4,"diskIn":32,"diskOut":8,"maxRss":19996,"cmdError":false,"tables":[{"tableName":"protect","totalReadWait":4,"totalReadHeld":6875,"totalWriteWait":5,"totalWriteHeld":6},{"tableName":"resolve","totalReadWait":23792,"totalReadHeld":3,"totalWriteWait":2,"totalWriteHeld":1,"maxReadWait":23792,"maxReadHeld":3,"maxWriteWait":2,"maxWriteHeld":1}]}`),
 		cleanJSON(output[0]))
-	assert.JSONEq(t, cleanJSON(`{"processKey":"f7d483631e94d16adde6c5306be15fbe","cmd":"user-revert","pid":22245,"lineNo":2,"user":"auto","workspace":"archive_auto","completedLapse":6.92,"ip":"127.0.0.1","app":"archive/v60","args":"/usr/local/arch/datastore/...","startTime":"2018/09/06 06:00:02","endTime":"2018/09/06 06:00:02","running":1,"uCpu":6901,"sCpu":4,"diskIn":32,"diskOut":8,"maxRss":19996,"cmdError":false,"tables":[{"tableName":"protect","totalReadWait":4,"totalReadHeld":6875,"totalWriteWait":5,"totalWriteHeld":6},{"tableName":"resolve","totalReadWait":23792,"totalReadHeld":3,"totalWriteWait":2,"totalWriteHeld":1,"maxReadWait":23792,"maxReadHeld":3,"maxWriteWait":2,"maxWriteHeld":1}]}`),
-		cleanJSON(output[0]))
 }
 
 func TestTriggers(t *testing.T) {
@@ -1270,5 +1268,41 @@ Perforce server info:
 	assert.Equal(t, 1, len(output))
 	// assert.Equal(t, "", output[0])
 	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":true, "completedLapse":0.002, "diskOut":8, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":2, "maxRss":13876, "memMB":30, "memPeakMB":30, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a", "rpcHimarkFwd":97604, "rpcHimarkRev":318788, "rpcMsgsOut":1, "running":1, "sCpu":1, "startTime":"2024/06/10 06:12:03", "uCpu":1, "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4","tables":[]}`),
+		cleanJSON(output[0]))
+}
+
+func TestTriggerLapse(t *testing.T) {
+	testInput := `
+Perforce server info:
+	2024/06/09 22:16:38 pid 485300 p4dtguser@p4dtgprod20 127.0.0.1/10.5.53.61 [p4jobdt/v93 (brokered)] 'user-job -i'
+
+Perforce server info:
+	2024/06/09 22:16:38 pid 485300 p4dtguser@p4dtgprod20 127.0.0.1/10.5.53.61 [p4jobdt/v93 (brokered)] 'user-job -i' trigger JIRAUpdater
+lapse .149s
+
+Perforce server info:
+	2024/06/09 22:16:38 pid 485300 p4dtguser@p4dtgprod20 127.0.0.1/10.5.53.61 [p4jobdt/v93 (brokered)] 'user-job -i' trigger swarm
+lapse .044s
+Perforce server info:
+	2024/06/09 22:16:38 pid 485300 p4dtguser@p4dtgprod20 127.0.0.1/10.5.53.61 [p4jobdt/v93 (brokered)] 'user-job -i'
+--- storageup/storageup(R)
+---   total lock wait+held read/write 0ms+60ms/0ms+0ms
+
+Perforce server info:
+	2024/06/09 22:16:38 pid 485300 p4dtguser@p4dtgprod20 127.0.0.1/10.5.53.61 [p4jobdt/v93 (brokered)] 'user-job -i'
+--- storageup/storagemasterup(R)
+---   total lock wait+held read/write 0ms+60ms/0ms+0ms
+
+Perforce server info:
+	2024/06/09 22:16:38 pid 485300 completed .216s 38+10us 288+704io 0+0net 18476k 0pf
+Perforce server info:
+	2024/06/09 22:16:38 pid 485300 p4dtguser@p4dtgprod20 127.0.0.1/10.5.53.61 [p4jobdt/v93 (brokered)] 'user-job -i'
+--- lapse .216s
+--- usage 38+10us 288+712io 0+0net 18476k 0pf
+--- memory cmd/proc 31mb/32mb`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	// assert.Equal(t, "", output[0])
+	assert.JSONEq(t, cleanJSON(`{"app":"p4jobdt/v93 (brokered)", "args":"-i", "cmd":"user-job", "cmdError":false, "completedLapse":0.216, "diskIn":288, "diskOut":712, "endTime":"2024/06/09 22:16:38", "ip":"127.0.0.1/10.5.53.61", "lineNo":2, "maxRss":18476, "memMB":31, "memPeakMB":32, "pid":485300, "processKey":"f59cacda1499ad10dd54d6fae994530b", "running":1, "sCpu":10, "startTime":"2024/06/09 22:16:38", "tables":[{"tableName":"storagemasterup_R", "totalReadHeld":60}, {"tableName":"storageup_R", "totalReadHeld":60}, {"tableName":"trigger_JIRAUpdater", "triggerLapse":0.149}, {"tableName":"trigger_swarm", "triggerLapse":0.044}], "uCpu":38, "user":"p4dtguser", "workspace":"p4dtgprod20"}`),
 		cleanJSON(output[0]))
 }

@@ -1948,12 +1948,20 @@ func blankLine(line string) bool {
 	return len(line) == 0
 }
 
+// Basic strings which start/end a block
 var blockEnds = []string{
 	"Perforce server info:",
 	"Perforce server error:",
-	"locks acquired by blocking after",
+}
+
+// Various line prefixes that both can end a block, and should be ignored - see ignoreLine
+var BlockEndPrefixes = []string{
 	"Rpc himark:",
-	"server to client"}
+	"server to client",
+	"server to inter",
+	"Forwarder set trusted client address",
+	"NetSslTransport::SendOrReceive", // Optional configurable
+}
 
 var msgActiveThreads = " active threads."
 var reServerThreads = regexp.MustCompile(`^\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d \d+ pid (\d+): Server is now using (\d+) active threads.`)
@@ -1967,8 +1975,23 @@ func blockEnd(line string) bool {
 			return true
 		}
 	}
+	for _, str := range BlockEndPrefixes {
+		if strings.HasPrefix(line, str) {
+			return true
+		}
+	}
 	if strings.HasSuffix(line, msgActiveThreads) { // OK to do a regex as does occur frequently
 		if m := reServerThreads.FindStringSubmatch(line); len(m) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// Lines to be ignored and not added to blocks
+func ignoreLine(line string) bool {
+	for _, str := range BlockEndPrefixes {
+		if strings.HasPrefix(line, str) {
 			return true
 		}
 	}
@@ -2050,9 +2073,13 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 							}
 						}
 						block = new(Block)
-						block.addLine(line, fp.lineNo)
+						if !ignoreLine(line) {
+							block.addLine(line, fp.lineNo)
+						}
 					} else {
-						block.addLine(line, fp.lineNo)
+						if !ignoreLine(line) {
+							block.addLine(line, fp.lineNo)
+						}
 					}
 					fp.lineNo++
 				} else {
