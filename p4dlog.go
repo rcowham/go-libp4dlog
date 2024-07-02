@@ -127,6 +127,7 @@ type Command struct {
 	EndTime                 time.Time `json:"endTime"`
 	ComputeLapse            float32   `json:"computeLapse"`
 	CompletedLapse          float32   `json:"completedLapse"`
+	Paused                  float32   `json:"paused"` // How long command was paused
 	IP                      string    `json:"ip"`
 	App                     string    `json:"app"`
 	Args                    string    `json:"args"`
@@ -566,6 +567,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Workspace               string  `json:"workspace"`
 		ComputeLapse            float32 `json:"computeLapse"`
 		CompletedLapse          float32 `json:"completedLapse"`
+		Paused                  float32 `json:"paused"`
 		IP                      string  `json:"ip"`
 		App                     string  `json:"app"`
 		Args                    string  `json:"args"`
@@ -654,6 +656,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Workspace:               c.Workspace,
 		ComputeLapse:            c.ComputeLapse,
 		CompletedLapse:          c.CompletedLapse,
+		Paused:                  c.Paused,
 		IP:                      c.IP,
 		App:                     c.App,
 		Args:                    c.Args,
@@ -775,6 +778,9 @@ func (c *Command) updateFrom(other *Command) {
 	if other.CompletedLapse > 0 {
 		c.CompletedLapse = other.CompletedLapse
 	}
+	if other.Paused > 0 {
+		c.Paused = other.Paused
+	}
 	if other.UCpu > 0 {
 		c.UCpu = other.UCpu
 	}
@@ -849,6 +855,9 @@ func (c *Command) updateFrom(other *Command) {
 	}
 	if other.NetBytesUpdated > 0 {
 		c.NetBytesUpdated = other.NetBytesUpdated
+	}
+	if other.CmdError {
+		c.CmdError = other.CmdError
 	}
 	if len(other.Tables) > 0 {
 		for k, t := range other.Tables {
@@ -1205,6 +1214,8 @@ func cmdHasNoCompletionRecord(cmdName string) bool {
 
 var trackStart = "---"
 var trackLapse = "--- lapse "
+var trackPaused = "--- paused "
+var trackFatalError = "--- exited on fatal server error"
 var trackDB = "--- db."
 var trackRdbLbr = "--- rdb.lbr"
 var trackMeta = "--- meta"
@@ -1269,6 +1280,22 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 				f, _ := strconv.ParseFloat(string(val[:j]), 32)
 				cmd.CompletedLapse = float32(f)
 			}
+			hasTrackInfo = true
+			continue
+		}
+		if strings.HasPrefix(line, trackPaused) {
+			val := line[len(trackPaused):]
+			j := strings.Index(val, "s")
+			if j > 0 {
+				f, _ := strconv.ParseFloat(string(val[:j]), 32)
+				cmd.Paused = float32(f)
+			}
+			hasTrackInfo = true
+			continue
+		}
+		if strings.HasPrefix(line, trackFatalError) {
+			cmd.CmdError = true
+			hasTrackInfo = true
 			continue
 		}
 		if strings.HasPrefix(line, trackDB) {

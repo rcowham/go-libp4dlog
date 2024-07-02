@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,8 @@ func parseLogLines(input string) []string {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cmdChan := fp.LogParser(ctx, inchan, nil)
+	timeChan := make(chan time.Time, 1)
+	cmdChan := fp.LogParser(ctx, inchan, timeChan)
 
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	for scanner.Scan() {
@@ -1265,10 +1267,12 @@ Perforce server info:
 Perforce server info:
 	2024/06/10 06:13:02 pid 1837049 git-fusion-user@git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4 10.5.40.30 [Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)] 'IDLE' exited unexpectedly, removed from monitor table.`
 	output := parseLogLines(testInput)
-	assert.Equal(t, 1, len(output))
+	assert.Equal(t, 2, len(output))
 	// assert.Equal(t, "", output[0])
-	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":true, "completedLapse":0.002, "diskOut":8, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":2, "maxRss":13876, "memMB":30, "memPeakMB":30, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a", "rpcHimarkFwd":97604, "rpcHimarkRev":318788, "rpcMsgsOut":1, "running":1, "sCpu":1, "startTime":"2024/06/10 06:12:03", "uCpu":1, "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4","tables":[]}`),
+	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":false, "completedLapse":0.002, "diskOut":8, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":2, "maxRss":13876, "memMB":30, "memPeakMB":30, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a", "rpcHimarkFwd":97604, "rpcHimarkRev":318788, "rpcMsgsOut":1, "running":1, "sCpu":1, "startTime":"2024/06/10 06:12:03", "uCpu":1, "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4","tables":[]}`),
 		cleanJSON(output[0]))
+	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":true, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":14, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a.14", "running":1, "startTime":"2024/06/10 06:12:03", "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4", "tables":[]}`),
+		cleanJSON(output[1]))
 }
 
 func TestTriggerLapse(t *testing.T) {
@@ -1304,5 +1308,47 @@ Perforce server info:
 	assert.Equal(t, 1, len(output))
 	// assert.Equal(t, "", output[0])
 	assert.JSONEq(t, cleanJSON(`{"app":"p4jobdt/v93 (brokered)", "args":"-i", "cmd":"user-job", "cmdError":false, "completedLapse":0.216, "diskIn":288, "diskOut":712, "endTime":"2024/06/09 22:16:38", "ip":"127.0.0.1/10.5.53.61", "lineNo":2, "maxRss":18476, "memMB":31, "memPeakMB":32, "pid":485300, "processKey":"f59cacda1499ad10dd54d6fae994530b", "running":1, "sCpu":10, "startTime":"2024/06/09 22:16:38", "tables":[{"tableName":"storagemasterup_R", "totalReadHeld":60}, {"tableName":"storageup_R", "totalReadHeld":60}, {"tableName":"trigger_JIRAUpdater", "triggerLapse":0.149}, {"tableName":"trigger_swarm", "triggerLapse":0.044}], "uCpu":38, "user":"p4dtguser", "workspace":"p4dtgprod20"}`),
+		cleanJSON(output[0]))
+}
+
+func TestPausedPid(t *testing.T) {
+	testInput := `
+Perforce server info:
+	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+Perforce server info:
+	2024/06/19 12:25:39 pid 1056864 completed 8.39s 598+67us 304+0io 0+0net 68864k 0pf
+Perforce server info:
+	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+--- lapse 8.39s
+--- paused 1.20s
+--- usage 598+67us 304+0io 0+0net 68864k 0pf
+--- memory cmd/proc 74mb/74mb
+--- rpc msgs/size in+out 2+84225/0mb+45mb himarks 795416/795272 snd/rcv 5.64s/.002s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	// assert.Equal(t, "", output[0])
+	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120", "args":"-Ob //...", "cmd":"user-fstat", "cmdError":false, "completedLapse":8.39, "diskIn":304, "endTime":"2024/06/19 12:25:39", "ip":"127.0.0.1", "lineNo":2, "maxRss":68864, "memMB":74, "memPeakMB":74, "paused":1.2, "pid":1.056864e+06, "processKey":"861c79f6f864bc6cfd2aa3d0ba35952e", "rpcHimarkFwd":795416, "rpcHimarkRev":795272, "rpcMsgsIn":2, "rpcMsgsOut":84225, "rpcRcv":0.002, "rpcSizeOut":45, "rpcSnd":5.64, "running":1, "sCpu":67, "startTime":"2024/06/19 12:25:31", "tables":[], "uCpu":598, "user":"perforce", "workspace":"ip-10-0-0-106"}`),
+		cleanJSON(output[0]))
+}
+
+func TestPauseError(t *testing.T) {
+	testInput := `
+Perforce server info:
+	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+Perforce server info:
+	2024/06/19 12:25:39 pid 1056864 completed 8.39s 598+67us 304+0io 0+0net 68864k 0pf
+Perforce server info:
+	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+--- exited on fatal server error
+--- lapse 8.39s
+--- usage 598+67us 304+0io 0+0net 68864k 0pf
+--- memory cmd/proc 74mb/74mb
+--- rpc msgs/size in+out 2+84225/0mb+45mb himarks 795416/795272 snd/rcv 5.64s/.002s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	// assert.Equal(t, "", output[0])
+	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120", "args":"-Ob //...", "cmd":"user-fstat", "cmdError":true, "completedLapse":8.39, "diskIn":304, "endTime":"2024/06/19 12:25:39", "ip":"127.0.0.1", "lineNo":2, "maxRss":68864, "memMB":74, "memPeakMB":74, "pid":1.056864e+06, "processKey":"861c79f6f864bc6cfd2aa3d0ba35952e", "rpcHimarkFwd":795416, "rpcHimarkRev":795272, "rpcMsgsIn":2, "rpcMsgsOut":84225, "rpcRcv":0.002, "rpcSizeOut":45, "rpcSnd":5.64, "running":1, "sCpu":67, "startTime":"2024/06/19 12:25:31", "tables":[], "uCpu":598, "user":"perforce", "workspace":"ip-10-0-0-106"}`),
 		cleanJSON(output[0]))
 }
