@@ -1075,8 +1075,12 @@ type P4dFileParser struct {
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
-	running              int64           // No of currently running threads
-	paused               int64           // No of paused threads
+	cmdsRunning          int64           // No of currently running threads
+	cmdsPaused           int64           // No of paused threads
+	pauseRateCPU         int64           // Resource pressure
+	pauseRateMem         int64           // ditto
+	cpuPressureState     int64           // ditto
+	memPressureState     int64           // ditto
 	runningPids          map[int64]int64 // Maps pids to line nos
 	hadServerThreadsMsg  bool
 	debugPID             int64 // Set if in debug mode for a conflict
@@ -1129,14 +1133,14 @@ func (fp *P4dFileParser) trackRunning(msg string, cmd *Command, delta int) {
 	if delta > 0 {
 		if !cmd.countedInRunning {
 			recorded = true
-			fp.running++
-			cmd.Running = fp.running
+			fp.cmdsRunning++
+			cmd.Running = fp.cmdsRunning
 			cmd.countedInRunning = true
 		}
 	} else {
 		if cmd.countedInRunning {
 			recorded = true
-			fp.running--
+			fp.cmdsRunning--
 			cmd.countedInRunning = false
 		}
 	}
@@ -1164,7 +1168,7 @@ func (fp *P4dFileParser) trackRunning(msg string, cmd *Command, delta int) {
 		}
 	}
 	if FlagSet(fp.debug, DebugTrackRunning) {
-		fp.logger.Debugf("running: %d delta %d recorded %v %s cmd %s pid %d line %d", fp.running, delta, recorded, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
+		fp.logger.Debugf("running: %d delta %d recorded %v %s cmd %s pid %d line %d", fp.cmdsRunning, delta, recorded, msg, cmd.Cmd, cmd.Pid, cmd.LineNo)
 	}
 }
 
@@ -1176,7 +1180,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	if fp.currTime.IsZero() || newCmd.StartTime.After(fp.currTime) {
 		fp.currTime = newCmd.StartTime
 	}
-	newCmd.Running = fp.running
+	newCmd.Running = fp.cmdsRunning
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
 		fp.currStartTime = newCmd.StartTime
 		fp.pidsSeenThisSecond = make(map[int64]bool)
@@ -1665,8 +1669,18 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 }
 
 // Output a server event to appropriate channel
-func (fp *P4dFileParser) outputSvrEvent(svrEvent *ServerEvent) {
-	fp.cmdChan <- *svrEvent
+func (fp *P4dFileParser) outputSvrEvent(timeStr string) {
+	eventTime, _ := time.Parse(p4timeformat, timeStr)
+	svrEvent := ServerEvent{
+		EventTime:        eventTime,
+		ActiveThreads:    fp.cmdsRunning,
+		PausedThreads:    fp.cmdsPaused,
+		PauseRateCPU:     fp.pauseRateCPU,
+		PauseRateMem:     fp.pauseRateMem,
+		CPUPressureState: fp.cpuPressureState,
+		MemPressureState: fp.memPressureState,
+	}
+	fp.cmdChan <- svrEvent
 	fp.ServerEventsCount++
 }
 
@@ -2005,13 +2019,9 @@ func (fp *P4dFileParser) processServerThreadsBlock(block *Block) {
 	if len(m) > 0 {
 		i, err := strconv.ParseInt(m[3], 10, 64)
 		if err == nil {
-			fp.running = i
+			fp.cmdsRunning = i
 			fp.logger.Infof("Encountered server running threads (%d) message", i)
-			eventTime, _ := time.Parse(p4timeformat, m[1])
-			fp.outputSvrEvent(&ServerEvent{
-				EventTime:     eventTime,
-				ActiveThreads: i,
-			})
+			fp.outputSvrEvent(m[1])
 		}
 	}
 }
@@ -2022,13 +2032,9 @@ func (fp *P4dFileParser) processPausedThreadsBlock(block *Block) {
 	if len(m) > 0 {
 		i, err := strconv.ParseInt(m[3], 10, 64)
 		if err == nil {
-			fp.paused = i
+			fp.cmdsPaused = i
 			fp.logger.Infof("Encountered server paused threads (%d) message", i)
-			eventTime, _ := time.Parse(p4timeformat, m[1])
-			fp.outputSvrEvent(&ServerEvent{
-				EventTime:     eventTime,
-				PausedThreads: i,
-			})
+			fp.outputSvrEvent(m[1])
 		}
 	}
 }
@@ -2039,14 +2045,11 @@ func (fp *P4dFileParser) processResourcePressureBlock(block *Block) {
 	m := reResourcePressure.FindStringSubmatch(line)
 	if len(m) > 0 {
 		fp.logger.Infof("Encountered server resource pressure message")
-		eventTime, _ := time.Parse(p4timeformat, m[1])
-		fp.outputSvrEvent(&ServerEvent{
-			EventTime:        eventTime,
-			PauseRateCPU:     toInt64(m[3]),
-			PauseRateMem:     toInt64(m[4]),
-			CPUPressureState: toInt64(m[5]),
-			MemPressureState: toInt64(m[6]),
-		})
+		fp.pauseRateCPU = toInt64(m[3])
+		fp.pauseRateMem = toInt64(m[4])
+		fp.cpuPressureState = toInt64(m[5])
+		fp.memPressureState = toInt64(m[6])
+		fp.outputSvrEvent(m[1])
 	}
 }
 
@@ -2247,7 +2250,7 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 			case b, ok := <-fp.blockChan:
 				if ok {
 					fp.processBlock(b)
-					if fp.running > maxRunningCount {
+					if fp.cmdsRunning > maxRunningCount {
 						panic(fmt.Sprintf("ERROR: max running command limit (%d) exceeded. Does this server log have completion records configured (p4 configure set server=3)? "+
 							"If using log2sql, then you can try to re-run with parameter --no.completion.records - but we strongly recommend you change p4d configurable to get completion records instead and re-analyze the log!",
 							maxRunningCount))

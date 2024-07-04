@@ -60,11 +60,11 @@ type P4DMetrics struct {
 	logger                    *logrus.Logger
 	metricWriter              io.Writer
 	timeChan                  chan time.Time
-	cmdRunning                int64
-	cmdPaused                 int64 // Server Events
-	pauseRateCPU              int64
-	pauseRateMem              int64
-	cpuPressureState          int64
+	cmdsRunning               int64
+	cmdsPaused                int64 // Server Events
+	pauseRateCPU              int64 // ditto
+	pauseRateMem              int64 // ditto
+	cpuPressureState          int64 // ditto
 	memPressureState          int64 // ditto
 	cmdCounter                map[string]int64
 	cmdErrorCounter           map[string]int64
@@ -310,12 +310,12 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 
 	mname = "p4_cmd_running"
 	p4m.printMetricHeader(metrics, mname, "The number of running commands at any one time", "gauge")
-	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
+	metricVal = fmt.Sprintf("%d", p4m.cmdsRunning)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_cmd_paused"
 	p4m.printMetricHeader(metrics, mname, "The number of (resource pressure) paused commands at any one time", "gauge")
-	metricVal = fmt.Sprintf("%d", p4m.cmdPaused)
+	metricVal = fmt.Sprintf("%d", p4m.cmdsPaused)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	mname = "p4_pause_rate_cpu"
@@ -796,8 +796,8 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 }
 
 func (p4m *P4DMetrics) publishSvrEvent(evt p4dlog.ServerEvent) {
-	p4m.cmdRunning = evt.ActiveThreads
-	p4m.cmdPaused = evt.PausedThreads
+	p4m.cmdsRunning = evt.ActiveThreads
+	p4m.cmdsPaused = evt.PausedThreads
 	p4m.pauseRateCPU = evt.PauseRateCPU
 	p4m.pauseRateMem = evt.PauseRateMem
 	p4m.cpuPressureState = evt.CPUPressureState
@@ -812,7 +812,7 @@ func (p4m *P4DMetrics) publishCmdEvent(cmd p4dlog.Command) {
 	if cmd.CmdError {
 		p4m.cmdErrorCounter[cmd.Cmd]++
 	}
-	p4m.cmdRunning = cmd.Running
+	p4m.cmdsRunning = cmd.Running
 	p4m.memMB += cmd.MemMB
 	p4m.memPeakMB += cmd.MemPeakMB
 	p4m.syncFilesAdded += cmd.NetFilesAdded

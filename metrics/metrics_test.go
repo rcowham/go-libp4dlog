@@ -817,14 +817,16 @@ func TestServerEvents(t *testing.T) {
 	input := `
 2024/06/19 12:25:31 560465376 pid 1056102: Server is now using 55 active threads.
 2024/06/19 12:25:31 560486548 pid 1056102: Server now has 10 paused threads.
-2024/06/19 12:25:38 004246895 pid 1056103: Server under resource pressure.  Pause rate CPU 59%, mem 10%, CPU pressure 2, mem pressure 1
+2024/06/19 12:25:38 004246895 pid 1056103: Server under resource pressure.  Pause rate CPU 59%, mem 20%, CPU pressure 2, mem pressure 1
 `
 	historical := false
 	output := basicTest(t, cfg, input, historical)
 
 	expected := eol.Split(`p4_prom_log_lines_read{serverid="myserverid"} 5
+p4_cmd_paused{serverid="myserverid"} 10
+p4_cmd_running{serverid="myserverid"} 55
 p4_pause_rate_cpu{serverid="myserverid"} 59
-p4_pause_rate_mem{serverid="myserverid"} 10
+p4_pause_rate_mem{serverid="myserverid"} 20
 p4_pause_state_cpu{serverid="myserverid"} 2
 p4_pause_state_mem{serverid="myserverid"} 1
 p4_prom_svr_events_processed{serverid="myserverid"} 3`, -1)
