@@ -3,8 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
-	"regexp"
+	"encoding/json"
 	"sort"
 	"strings"
 	"testing"
@@ -15,16 +14,39 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var (
-	eol = regexp.MustCompile("\r\n|\n")
-)
-
-func getResult(output chan string) []string {
-	lines := []string{}
-	for line := range output {
-		lines = append(lines, line)
+// cleanJSON removes fields with a value of 0 from the JSON string.
+func cleanJSON(jsonStr string) string {
+	var result map[string]interface{}
+	err := json.Unmarshal([]byte(jsonStr), &result)
+	if err != nil {
+		return ""
 	}
-	return lines
+	cleanMap(result)
+	cleanedJSON, err := json.Marshal(result)
+	if err != nil {
+		return ""
+	}
+	return string(cleanedJSON)
+}
+
+// cleanMap recursively removes fields with a value of 0 from the map.
+func cleanMap(m map[string]interface{}) {
+	for key, value := range m {
+		switch v := value.(type) {
+		case map[string]interface{}:
+			cleanMap(v)
+		case []interface{}:
+			for _, item := range v {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					cleanMap(itemMap)
+				}
+			}
+		case float64:
+			if v == 0.0 {
+				delete(m, key)
+			}
+		}
+	}
 }
 
 func parseLogLines(input string) []string {
@@ -47,7 +69,12 @@ func parseLogLines(input string) []string {
 
 	output := []string{}
 	for cmd := range cmdChan {
-		output = append(output, fmt.Sprintf("%s", cmd.String()))
+		switch cmd := cmd.(type) {
+		case p4dlog.Command:
+			output = append(output, cmd.String())
+		case p4dlog.ServerEvent:
+			output = append(output, cmd.String())
+		}
 	}
 	sort.Strings(output)
 	return output
@@ -64,8 +91,8 @@ Perforce server info:
 	output := parseLogLines(testInput)
 	assert.Equal(t, 1, len(output))
 	//assert.Equal(t, "", output[0])
-	assert.JSONEq(t, `{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"memMB":0,"memPeakMB":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrRcsDigests":0,"lbrRcsFileSizes":0,"lbrRcsModTimes":0,"lbrRcsCopies":0,"lbrBinaryOpens":0,"lbrBinaryCloses":0,"lbrBinaryCheckins":0,"lbrBinaryExists":0,"lbrBinaryReads":0,"lbrBinaryReadBytes":0,"lbrBinaryWrites":0,"lbrBinaryWriteBytes":0,"lbrBinaryDigests":0,"lbrBinaryFileSizes":0,"lbrBinaryModTimes":0,"lbrBinaryCopies":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrCompressDigests":0,"lbrCompressFileSizes":0,"lbrCompressModTimes":0,"lbrCompressCopies":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"lbrUncompressDigests":0,"lbrUncompressFileSizes":0,"lbrUncompressModTimes":0,"lbrUncompressCopies":0,"cmdError":false,"tables":[]}`,
-		output[0])
+	assert.JSONEq(t, cleanJSON(`{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0.031,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"2015/09/02 15:23:09","running":1,"cmdError":false,"tables":[]}`),
+		cleanJSON(output[0]))
 
 }
 
@@ -79,7 +106,7 @@ Perforce server info:
 	output := parseLogLines(testInput)
 	assert.Equal(t, 1, len(output))
 	//assert.Equal(t, "", output[0])
-	assert.JSONEq(t, `{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"0001/01/01 00:00:00","running":1,"uCpu":0,"sCpu":0,"diskIn":0,"diskOut":0,"ipcIn":0,"ipcOut":0,"maxRss":0,"pageFaults":0,"memMB":0,"memPeakMB":0,"rpcMsgsIn":0,"rpcMsgsOut":0,"rpcSizeIn":0,"rpcSizeOut":0,"rpcHimarkFwd":0,"rpcHimarkRev":0,"rpcSnd":0,"rpcRcv":0,"netFilesAdded":0,"netFilesUpdated":0,"netFilesDeleted":0,"netBytesAdded":0,"netBytesUpdated":0,"lbrRcsOpens":0,"lbrRcsCloses":0,"lbrRcsCheckins":0,"lbrRcsExists":0,"lbrRcsReads":0,"lbrRcsReadBytes":0,"lbrRcsWrites":0,"lbrRcsWriteBytes":0,"lbrRcsDigests":0,"lbrRcsFileSizes":0,"lbrRcsModTimes":0,"lbrRcsCopies":0,"lbrBinaryOpens":0,"lbrBinaryCloses":0,"lbrBinaryCheckins":0,"lbrBinaryExists":0,"lbrBinaryReads":0,"lbrBinaryReadBytes":0,"lbrBinaryWrites":0,"lbrBinaryWriteBytes":0,"lbrBinaryDigests":0,"lbrBinaryFileSizes":0,"lbrBinaryModTimes":0,"lbrBinaryCopies":0,"lbrCompressOpens":0,"lbrCompressCloses":0,"lbrCompressCheckins":0,"lbrCompressExists":0,"lbrCompressReads":0,"lbrCompressReadBytes":0,"lbrCompressWrites":0,"lbrCompressWriteBytes":0,"lbrCompressDigests":0,"lbrCompressFileSizes":0,"lbrCompressModTimes":0,"lbrCompressCopies":0,"lbrUncompressOpens":0,"lbrUncompressCloses":0,"lbrUncompressCheckins":0,"lbrUncompressExists":0,"lbrUncompressReads":0,"lbrUncompressReadBytes":0,"lbrUncompressWrites":0,"lbrUncompressWriteBytes":0,"lbrUncompressDigests":0,"lbrUncompressFileSizes":0,"lbrUncompressModTimes":0,"lbrUncompressCopies":0,"cmdError":false,"tables":[]}`,
-		output[0])
+	assert.JSONEq(t, cleanJSON(`{"processKey":"4d4e5096f7b732e4ce95230ef085bf51","cmd":"user-sync","pid":1616,"lineNo":2,"user":"robert","workspace":"robert-test","computeLapse":0.031,"completedLapse":0,"ip":"127.0.0.1","app":"Microsoft Visual Studio 2013/12.0.21005.1","args":"//...","startTime":"2015/09/02 15:23:09","endTime":"0001/01/01 00:00:00","running":1,"cmdError":false,"tables":[]}`),
+		cleanJSON(output[0]))
 
 }

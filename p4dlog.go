@@ -125,13 +125,14 @@ func (block *Block) addLine(line string, lineNo int64) {
 
 // ServerEvent
 type ServerEvent struct {
-	EventTime        time.Time `json:eventTime`
-	ActiveThreads    int64     `json:activeThreads`
-	PausedThreads    int64     `json:pausedThreads`
-	PauseRateCPU     int64     `json:pauseRateCPU`     // Percentage 1-100
-	PauseRateMem     int64     `json:pauseRateMem`     // Percentage 1-100
-	CPUPressureState int64     `json:cpuPressureState` // 0-2
-	MemPressureState int64     `json:memPressureState` // 0-2
+	EventTime        time.Time `json:"eventTime"`
+	LineNo           int64     `json:"lineNo"`
+	ActiveThreads    int64     `json:"activeThreads"`
+	PausedThreads    int64     `json:"pausedThreads"`
+	PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
+	PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
+	CPUPressureState int64     `json:"cpuPressureState"` // 0-2
+	MemPressureState int64     `json:"memPressureState"` // 0-2
 }
 
 func (s *ServerEvent) String() string {
@@ -575,6 +576,7 @@ func (c *Command) setLbrUncompressDigestFilesizes(digests, filesizez, modtimes, 
 func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		EventTime        time.Time `json:"eventTime"`
+		LineNo           int64     `json:"lineNo"`
 		ActiveThreads    int64     `json:"activeThreads"`
 		PausedThreads    int64     `json:"pausedThreads"`
 		PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
@@ -583,6 +585,7 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		MemPressureState int64     `json:"memPressureState"` // 0-2
 	}{
 		EventTime:        s.EventTime,
+		LineNo:           s.LineNo,
 		ActiveThreads:    s.ActiveThreads,
 		PausedThreads:    s.PausedThreads,
 		PauseRateCPU:     s.PauseRateCPU,
@@ -1669,10 +1672,11 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 }
 
 // Output a server event to appropriate channel
-func (fp *P4dFileParser) outputSvrEvent(timeStr string) {
+func (fp *P4dFileParser) outputSvrEvent(timeStr string, lineNo int64) {
 	eventTime, _ := time.Parse(p4timeformat, timeStr)
 	svrEvent := ServerEvent{
 		EventTime:        eventTime,
+		LineNo:           lineNo,
 		ActiveThreads:    fp.cmdsRunning,
 		PausedThreads:    fp.cmdsPaused,
 		PauseRateCPU:     fp.pauseRateCPU,
@@ -2021,7 +2025,7 @@ func (fp *P4dFileParser) processServerThreadsBlock(block *Block) {
 		if err == nil {
 			fp.cmdsRunning = i
 			fp.logger.Infof("Encountered server running threads (%d) message", i)
-			fp.outputSvrEvent(m[1])
+			fp.outputSvrEvent(m[1], block.lineNo)
 		}
 	}
 }
@@ -2034,7 +2038,7 @@ func (fp *P4dFileParser) processPausedThreadsBlock(block *Block) {
 		if err == nil {
 			fp.cmdsPaused = i
 			fp.logger.Infof("Encountered server paused threads (%d) message", i)
-			fp.outputSvrEvent(m[1])
+			fp.outputSvrEvent(m[1], block.lineNo)
 		}
 	}
 }
@@ -2049,7 +2053,7 @@ func (fp *P4dFileParser) processResourcePressureBlock(block *Block) {
 		fp.pauseRateMem = toInt64(m[4])
 		fp.cpuPressureState = toInt64(m[5])
 		fp.memPressureState = toInt64(m[6])
-		fp.outputSvrEvent(m[1])
+		fp.outputSvrEvent(m[1], block.lineNo)
 	}
 }
 

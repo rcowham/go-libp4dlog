@@ -89,6 +89,17 @@ func writeHeader(f io.Writer) {
 	triggerLapse FLOAT NULL, -- lapse time (seconds) for triggers - tableName=trigger name
 	PRIMARY KEY (processkey, lineNumber, tableName));
 `)
+	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS events
+	(lineNumber INT NOT NULL, -- primary key
+	eventTime DATETIME NOT NULL, -- Time of server event
+	activeThreads int NULL, -- Active threads
+	pausedThreads int NULL, -- Paused threads
+	pauseRateCPU int NULL, -- Pause rate CPU (percentage 0-100)
+	pauseRateMem int NULL, -- Pause rate Mem (percentage 0-100)
+	cpuPressureState int NULL, -- CPU pressure (0 low, 1 med, 2 high)
+	memPressureState int NULL, -- Mem pressure (0 low, 1 med, 2 high)
+	PRIMARY KEY (lineNumber));
+`)
 	// Trade security for speed - easy to re-run if a problem (hopefully!)
 	fmt.Fprintf(f, "PRAGMA journal_mode = OFF;\nPRAGMA synchronous = OFF;\n")
 }
@@ -140,6 +151,15 @@ func getProcessStatement() string {
 		lbrUncompressDigests, lbrUncompressFileSizes, lbrUncompressModtimes, lbrUncompressCopies,
 		error)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+}
+
+func getEventsStatement() string {
+	return `INSERT INTO events
+		(lineNumber, eventTime,
+		activeThreads, pausedThreads,
+		pauseRateCPU, pauseRateMem,
+		cpuPressureState, memPressureState)
+		VALUES (?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
@@ -198,6 +218,26 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 				err, cmd.Pid, cmd.LineNo, cmd.GetKey(), string(cmd.Cmd), string(cmd.Args))
 		}
 	}
+	return int64(rows)
+}
+
+func preparedInsertServerEvents(logger *logrus.Logger, stmtEvents *sqlite3.Stmt, evt *p4dlog.ServerEvent) int64 {
+	rows := 1
+	err := stmtEvents.Exec(
+		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.PausedThreads,
+		evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
+	if err != nil {
+		logger.Errorf("Events insert: %v lineNo %d, %s",
+			err, evt.LineNo, dateStr(evt.EventTime))
+	}
+	return int64(rows)
+}
+
+func writeSQLServerEvents(f io.Writer, evt *p4dlog.ServerEvent) int64 {
+	rows := 1
+	fmt.Fprintf(f, `INSERT INTO events VALUES (%d,"%s",%d,%d,%d,%d,%d,%d);`+"\n",
+		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.PausedThreads,
+		evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
 	return int64(rows)
 }
 
@@ -602,7 +642,7 @@ func main() {
 	var mp *metrics.P4DMetrics
 	var fp *p4dlog.P4dFileParser
 	var metricsChan chan string
-	var cmdChan chan p4dlog.Command
+	var cmdChan chan interface{}
 	needCmdChan := writeDB || *sqlOutput || *jsonOutput
 
 	logger.Debugf("Metrics: %v, needCmdChan: %v", writeMetrics, needCmdChan)
@@ -664,7 +704,7 @@ func main() {
 	}()
 
 	if needCmdChan {
-		var stmtProcess, stmtTableuse *sqlite3.Stmt
+		var stmtProcess, stmtTableuse, stmtEvents *sqlite3.Stmt
 		if *sqlOutput {
 			writeHeader(fSQL)
 			startTransaction(fSQL)
@@ -686,6 +726,10 @@ func main() {
 			if err != nil {
 				logger.Fatalf("Error preparing statement: %v", err)
 			}
+			stmtEvents, err = db.Prepare(getEventsStatement())
+			if err != nil {
+				logger.Fatalf("Error preparing statement: %v", err)
+			}
 			err = db.Begin()
 			if err != nil {
 				fmt.Println(err)
@@ -694,45 +738,70 @@ func main() {
 
 		i := int64(1)
 		for cmd := range cmdChan {
-			if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
-				logger.Debugf("Main processing cmd: %v", cmd.String())
-			}
-			if *jsonOutput {
-				if p4dlog.FlagSet(*debug, p4dlog.DebugJSON) {
-					logger.Debugf("outputting JSON")
-				}
-				fmt.Fprintf(fJSON, "%s\n", cmd.String())
-			}
-			if *sqlOutput {
+			switch cmd := cmd.(type) {
+			case p4dlog.Command:
 				if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
-					logger.Debugf("writing SQL")
+					logger.Debugf("Main processing cmd: %v", cmd.String())
 				}
-				i += writeSQL(fSQL, &cmd)
-			}
-			if writeDB {
-				if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
-					logger.Debugf("writing to DB")
+				if *jsonOutput {
+					if p4dlog.FlagSet(*debug, p4dlog.DebugJSON) {
+						logger.Debugf("outputting JSON")
+					}
+					fmt.Fprintf(fJSON, "%s\n", cmd.String())
 				}
-				j := preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
-				if !*sqlOutput { // Avoid double counting
-					i += j
-				}
-			}
-			if i >= statementsPerTransaction && (*sqlOutput || writeDB) {
 				if *sqlOutput {
-					writeTransaction(fSQL)
+					if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
+						logger.Debugf("writing SQL")
+					}
+					i += writeSQL(fSQL, &cmd)
 				}
 				if writeDB {
-					err = db.Commit()
-					if err != nil {
-						logger.Errorf("commit error: %v", err)
+					if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
+						logger.Debugf("writing to DB")
 					}
-					err = db.Begin()
-					if err != nil {
-						fmt.Println(err)
+					j := preparedInsert(logger, stmtProcess, stmtTableuse, &cmd)
+					if !*sqlOutput { // Avoid double counting
+						i += j
 					}
 				}
-				i = 1
+				if i >= statementsPerTransaction && (*sqlOutput || writeDB) {
+					if *sqlOutput {
+						writeTransaction(fSQL)
+					}
+					if writeDB {
+						err = db.Commit()
+						if err != nil {
+							logger.Errorf("commit error: %v", err)
+						}
+						err = db.Begin()
+						if err != nil {
+							fmt.Println(err)
+						}
+					}
+					i = 1
+				}
+			case p4dlog.ServerEvent:
+				if *jsonOutput {
+					if p4dlog.FlagSet(*debug, p4dlog.DebugJSON) {
+						logger.Debugf("outputting JSON")
+					}
+					fmt.Fprintf(fJSON, "%s\n", cmd.String())
+				}
+				if *sqlOutput {
+					if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
+						logger.Debugf("writing SQL")
+					}
+					i += writeSQLServerEvents(fSQL, &cmd)
+				}
+				if writeDB {
+					if p4dlog.FlagSet(*debug, p4dlog.DebugDatabase) {
+						logger.Debugf("writing to DB")
+					}
+					j := preparedInsertServerEvents(logger, stmtEvents, &cmd)
+					if !*sqlOutput { // Avoid double counting
+						i += j
+					}
+				}
 			}
 		}
 		if *sqlOutput {

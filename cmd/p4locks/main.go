@@ -31,14 +31,6 @@ import (
 // Threshold in milliseconds below which we filter out commands - for at least one of read/write wait/held
 var thresholdFilter int64 = 10000
 
-func dateStr(t time.Time) string {
-	var blankTime time.Time
-	if t == blankTime {
-		return ""
-	}
-	return t.Format("2006/01/02 15:04:05")
-}
-
 func byteCountDecimal(b int64) string {
 	const unit = 1000
 	if b < unit {
@@ -830,7 +822,7 @@ Process multiple log files (gzipped or not) into single output file:
 
 	var wg sync.WaitGroup
 	var fp *p4dlog.P4dFileParser
-	var cmdChan chan p4dlog.Command
+	var cmdChan chan interface{}
 
 	fp = p4dlog.NewP4dFileParser(logger)
 	pl := &P4DLocks{
@@ -859,13 +851,16 @@ Process multiple log files (gzipped or not) into single output file:
 	}
 	// Process all commands, filtering only those greater than a threshold of read/write wait/held
 	for cmd := range cmdChan {
-		pl.countTotal += 1
-		err := pl.writeCmd(fHTML, &cmd)
-		if err != nil {
-			logger.Errorf("Failed to write cmd: %v", err)
-		}
-		if pl.countTotal%1000 == 0 {
-			fHTML.Flush()
+		switch cmd := cmd.(type) {
+		case p4dlog.Command:
+			pl.countTotal += 1
+			err := pl.writeCmd(fHTML, &cmd)
+			if err != nil {
+				logger.Errorf("Failed to write cmd: %v", err)
+			}
+			if pl.countTotal%1000 == 0 {
+				fHTML.Flush()
+			}
 		}
 	}
 	err = writeTrailer(fHTML, fmt.Sprintf("extraction threshold (ms): %d, excluded tables: %s", thresholdFilter, pl.excludeTablesString))

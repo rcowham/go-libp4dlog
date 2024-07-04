@@ -23,14 +23,6 @@ import (
 	p4dlog "github.com/rcowham/go-libp4dlog"
 )
 
-func dateStr(t time.Time) string {
-	var blankTime time.Time
-	if t == blankTime {
-		return ""
-	}
-	return t.Format("2006/01/02 15:04:05")
-}
-
 func byteCountDecimal(b int64) string {
 	const unit = 1000
 	if b < unit {
@@ -73,14 +65,12 @@ func readerFromFile(file *os.File) (io.Reader, int64, error) {
 
 // P4Pending structure
 type P4Pending struct {
-	debug              int
-	fp                 *p4dlog.P4dFileParser
-	timeLatestStartCmd time.Time
-	latestStartCmdBuf  string
-	logger             *logrus.Logger
-	linesChan          chan string
-	totalCount         int
-	pendingCount       int
+	debug        int
+	fp           *p4dlog.P4dFileParser
+	logger       *logrus.Logger
+	linesChan    chan string
+	totalCount   int
+	pendingCount int
 }
 
 // Parse single log file - output is sent via linesChan channel
@@ -263,8 +253,7 @@ func main() {
 
 	var fJSON *bufio.Writer
 	var fdJSON *os.File
-	var jsonFilename string
-	jsonFilename = getJSONFilename(*jsonOutputFile, *logfiles)
+	jsonFilename := getJSONFilename(*jsonOutputFile, *logfiles)
 	fdJSON, fJSON, err = openFile(jsonFilename)
 	if err != nil {
 		logger.Fatal(err)
@@ -275,7 +264,7 @@ func main() {
 
 	var wg sync.WaitGroup
 	var fp *p4dlog.P4dFileParser
-	var cmdChan chan p4dlog.Command
+	var cmdChan chan interface{}
 
 	fp = p4dlog.NewP4dFileParser(logger)
 	p4p := &P4Pending{
@@ -306,14 +295,21 @@ func main() {
 	// Process all commands, but discarding those with completion records
 	// When we close the linesChan above, we will force the output of "pending" commands.
 	for cmd := range cmdChan {
-		p4p.totalCount += 1
-		if cmd.EndTime.IsZero() {
+		switch cmd := cmd.(type) {
+		case p4dlog.Command:
+			p4p.totalCount += 1
+			if cmd.EndTime.IsZero() {
+				p4p.pendingCount += 1
+				fmt.Fprintf(fJSON, "%s\n", cmd.String())
+			} else {
+				if p4p.totalCount%100000 == 0 {
+					fJSON.Flush()
+				}
+			}
+		case p4dlog.ServerEvent:
+			p4p.totalCount += 1
 			p4p.pendingCount += 1
 			fmt.Fprintf(fJSON, "%s\n", cmd.String())
-		} else {
-			if p4p.totalCount%100000 == 0 {
-				fJSON.Flush()
-			}
 		}
 	}
 
