@@ -58,7 +58,6 @@ type P4DMetrics struct {
 	timeLatestStartCmd        time.Time
 	latestStartCmdBuf         string
 	logger                    *logrus.Logger
-	metricWriter              io.Writer
 	timeChan                  chan time.Time
 	cmdsRunning               int64
 	cmdsPaused                int64 // Server Events
@@ -245,7 +244,7 @@ func (p4m *P4DMetrics) formatLabels(mname string, labels []labelStruct) string {
 		if len(labelStr) > 0 {
 			return fmt.Sprintf("%s;%s", mname, labelStr)
 		}
-		return fmt.Sprintf("%s", mname)
+		return mname
 	}
 	labelStr := strings.Join(vals, ",")
 	return fmt.Sprintf("%s{%s}", mname, labelStr)

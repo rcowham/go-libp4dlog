@@ -66,7 +66,7 @@ func getOutput(testchan chan string, historical bool) []string {
 	return result
 }
 
-func basicTest(t *testing.T, cfg *Config, input string, historical bool) []string {
+func basicTest(cfg *Config, input string, historical bool) []string {
 	logrus.SetFormatter(&logrus.TextFormatter{TimestampFormat: "15:04:05.000", FullTimestamp: true})
 	logger.SetReportCaller(true)
 	logger.Debugf("Function: %s", funcName())
@@ -162,7 +162,7 @@ Perforce server info:
 `
 	cmdTime, _ := time.Parse(p4timeformat, "2015/09/02 15:23:09")
 	historical := false
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
@@ -183,7 +183,7 @@ p4_sync_files_updated{serverid="myserverid"} 3`, -1)
 	compareOutput(t, expected, output)
 
 	historical = true
-	output = basicTest(t, cfg, input, historical)
+	output = basicTest(cfg, input, historical)
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
@@ -234,7 +234,7 @@ Perforce server info:
 `
 	cmdTime, _ := time.Parse(p4timeformat, "2015/09/02 16:23:10")
 	historical := true
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
@@ -283,7 +283,7 @@ Perforce server info:
 
 	cmdTime, _ := time.Parse(p4timeformat, "2015/09/02 15:23:09")
 	historical := false
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-sync"} 1
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
@@ -297,7 +297,7 @@ p4_prom_log_lines_read{serverid="myserverid"} 8`, -1)
 	compareOutput(t, expected, output)
 
 	historical = true
-	output = basicTest(t, cfg, input, historical)
+	output = basicTest(cfg, input, historical)
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
@@ -330,7 +330,7 @@ Perforce server info:
 
 	cmdTime, _ := time.Parse(p4timeformat, "2015/09/02 15:23:09")
 	historical := true
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
@@ -378,7 +378,7 @@ Perforce server info:
 
 	cmdTime, _ := time.Parse(p4timeformat, "2015/09/02 15:25:11")
 	historical := true
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	// Cross check appropriate time is being produced for historical runs
 	assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime.Unix()))
@@ -445,7 +445,7 @@ Perforce server info:
 	// cmdTime1, _ := time.Parse(p4timeformat, "2017/12/07 15:00:21")
 	cmdTime2, _ := time.Parse(p4timeformat, "2018/06/10 23:30:09")
 	historical := false
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="dm-CommitSubmit"} 1
 p4_cmd_counter{serverid="myserverid",cmd="user-change"} 1
@@ -482,7 +482,7 @@ p4_total_write_wait_seconds{serverid="myserverid",table="integed"} 0.024`, -1)
 	compareOutput(t, expected, output)
 
 	historical = true
-	output = basicTest(t, cfg, input, historical)
+	output = basicTest(cfg, input, historical)
 
 	// Cross check appropriate time is being produced for historical runs
 	// assert.Contains(t, output[0], fmt.Sprintf("%d", cmdTime1.Unix()))
@@ -557,14 +557,12 @@ func TestP4PromBasicMultiUserCaseSensitive(t *testing.T) {
 		UpdateInterval:      10 * time.Millisecond,
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: true}
-	output := basicTest(t, cfg, multiUserInput, false)
+	output := basicTest(cfg, multiUserInput, false)
 	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="ROBERT"} 1
 p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011`, -1)
-	for _, l := range multiUserExpected {
-		expected = append(expected, l)
-	}
+	expected = append(expected, multiUserExpected...)
 	compareOutput(t, expected, output)
 
 }
@@ -576,12 +574,10 @@ func TestP4PromBasicMultiUserCaseInsensitive(t *testing.T) {
 		UpdateInterval:      10 * time.Millisecond,
 		OutputCmdsByUser:    true,
 		CaseSensitiveServer: false}
-	output := basicTest(t, cfg, multiUserInput, false)
+	output := basicTest(cfg, multiUserInput, false)
 	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="robert"} 2
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.022`, -1)
-	for _, l := range multiUserExpected {
-		expected = append(expected, l)
-	}
+	expected = append(expected, multiUserExpected...)
 	compareOutput(t, expected, output)
 }
 
@@ -594,7 +590,7 @@ func TestP4PromBasicMultiUserDetail(t *testing.T) {
 		CaseSensitiveServer:   true,
 		OutputCmdsByUserRegex: ".*",
 	}
-	output := basicTest(t, cfg, multiUserInput, false)
+	output := basicTest(cfg, multiUserInput, false)
 	expected := eol.Split(`p4_cmd_user_counter{serverid="myserverid",user="ROBERT"} 1
 p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
 p4_cmd_user_detail_counter{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 1
@@ -603,9 +599,7 @@ p4_cmd_user_cumulative_seconds{serverid="myserverid",user="ROBERT"} 0.011
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="robert"} 0.011
 p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="ROBERT",cmd="user-fstat"} 0.011
 p4_cmd_user_detail_cumulative_seconds{serverid="myserverid",user="robert",cmd="user-fstat"} 0.011`, -1)
-	for _, l := range multiUserExpected {
-		expected = append(expected, l)
-	}
+	expected = append(expected, multiUserExpected...)
 	compareOutput(t, expected, output)
 
 }
@@ -639,7 +633,7 @@ func TestP4PromBasicMultiIPFalse(t *testing.T) {
 		ServerID:       "myserverid",
 		UpdateInterval: 10 * time.Millisecond,
 		OutputCmdsByIP: false}
-	output := basicTest(t, cfg, multiIPInput, false)
+	output := basicTest(cfg, multiIPInput, false)
 
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 2
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
@@ -661,15 +655,13 @@ func TestP4PromBasicMultiIPTrue(t *testing.T) {
 		ServerID:       "myserverid",
 		UpdateInterval: 10 * time.Millisecond,
 		OutputCmdsByIP: true}
-	output := basicTest(t, cfg, multiIPInput, false)
+	output := basicTest(cfg, multiIPInput, false)
 
 	expected := eol.Split(`p4_cmd_ip_counter{serverid="myserverid",ip="10.1.2.3"} 1
 p4_cmd_ip_counter{serverid="myserverid",ip="10.10.4.5"} 1
 p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.1.2.3"} 0.011
 p4_cmd_ip_cumulative_seconds{serverid="myserverid",ip="10.10.4.5"} 0.011`, -1)
-	for _, l := range multiIPExpected {
-		expected = append(expected, l)
-	}
+	expected = append(expected, multiUserExpected...)
 	compareOutput(t, expected, output)
 }
 
@@ -744,7 +736,7 @@ Perforce server info:
 	// cmdTime1, _ := time.Parse(p4timeformat, "2017/12/07 15:00:21")
 	//cmdTime2, _ := time.Parse(p4timeformat, "2018/06/10 23:30:09")
 	historical := false
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-transmit"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-transmit"} 0.004
@@ -820,7 +812,7 @@ func TestServerEvents(t *testing.T) {
 2024/06/19 12:25:38 004246895 pid 1056103: Server under resource pressure.  Pause rate CPU 59%, mem 20%, CPU pressure 2, mem pressure 1
 `
 	historical := false
-	output := basicTest(t, cfg, input, historical)
+	output := basicTest(cfg, input, historical)
 
 	expected := eol.Split(`p4_prom_log_lines_read{serverid="myserverid"} 5
 p4_cmd_paused{serverid="myserverid"} 10
