@@ -85,6 +85,8 @@ const (
 	infoType
 	errorType
 	activeThreadsType
+	pausedThreadsType
+	resourcePressureType
 )
 
 // Block is a block of lines parsed from a file
@@ -107,12 +109,34 @@ func (block *Block) addLine(line string, lineNo int64) {
 		} else if strings.HasSuffix(line, msgActiveThreads) {
 			block.btype = activeThreadsType
 			block.lines = append(block.lines, line)
+		} else if strings.HasSuffix(line, msgPausedThreads) {
+			block.btype = pausedThreadsType
+			block.lines = append(block.lines, line)
+		} else if strings.Contains(line, msgResourcePressure) {
+			block.btype = resourcePressureType
+			block.lines = append(block.lines, line)
 		} else {
 			block.btype = errorType
 		}
 		return
 	}
 	block.lines = append(block.lines, line)
+}
+
+// ServerEvent
+type ServerEvent struct {
+	EventTime        time.Time `json:eventTime`
+	ActiveThreads    int64     `json:activeThreads`
+	PausedThreads    int64     `json:pausedThreads`
+	PauseRateCPU     int64     `json:pauseRateCPU`     // Percentage 1-100
+	PauseRateMem     int64     `json:pauseRateMem`     // Percentage 1-100
+	CPUPressureState int64     `json:cpuPressureState` // 0-2
+	MemPressureState int64     `json:memPressureState` // 0-2
+}
+
+func (s *ServerEvent) String() string {
+	j, _ := json.Marshal(s)
+	return string(j)
 }
 
 // Command is a command found in the block
@@ -545,6 +569,27 @@ func (c *Command) setLbrUncompressDigestFilesizes(digests, filesizez, modtimes, 
 	if copies != "" {
 		c.LbrUncompressCopies, _ = strconv.ParseInt(copies, 10, 64)
 	}
+}
+
+// MarshalJSON - handle formatting
+func (s *ServerEvent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		EventTime        time.Time `json:"eventTime"`
+		ActiveThreads    int64     `json:"activeThreads"`
+		PausedThreads    int64     `json:"pausedThreads"`
+		PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
+		PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
+		CPUPressureState int64     `json:"cpuPressureState"` // 0-2
+		MemPressureState int64     `json:"memPressureState"` // 0-2
+	}{
+		EventTime:        s.EventTime,
+		ActiveThreads:    s.ActiveThreads,
+		PausedThreads:    s.PausedThreads,
+		PauseRateCPU:     s.PauseRateCPU,
+		PauseRateMem:     s.PauseRateMem,
+		CPUPressureState: s.CPUPressureState,
+		MemPressureState: s.MemPressureState,
+	})
 }
 
 // MarshalJSON - handle time formatting
@@ -1018,8 +1063,9 @@ type P4dFileParser struct {
 	lineNo               int64
 	m                    sync.Mutex
 	cmds                 map[int64]*Command
-	CmdsProcessed        int
-	cmdChan              chan Command
+	CmdsCount            int //Count of commands processed
+	ServerEventsCount    int // Count of server event records processed
+	cmdChan              chan interface{}
 	timeChan             chan time.Time
 	linesChan            *<-chan string
 	blockChan            chan *Block
@@ -1029,7 +1075,8 @@ type P4dFileParser struct {
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
 	pidsSeenThisSecond   map[int64]bool
-	running              int64
+	running              int64           // No of currently running threads
+	paused               int64           // No of paused threads
 	runningPids          map[int64]int64 // Maps pids to line nos
 	hadServerThreadsMsg  bool
 	debugPID             int64 // Set if in debug mode for a conflict
@@ -1614,7 +1661,13 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 			cmdcopy.CompletedLapse, cmdcopy.EndTime)
 	}
 	fp.cmdChan <- cmdcopy
-	fp.CmdsProcessed++
+	fp.CmdsCount++
+}
+
+// Output a server event to appropriate channel
+func (fp *P4dFileParser) outputSvrEvent(svrEvent *ServerEvent) {
+	fp.cmdChan <- *svrEvent
+	fp.ServerEventsCount++
 }
 
 // Output pending commands on debug channel if set - for debug purposes
@@ -1946,18 +1999,54 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 }
 
 func (fp *P4dFileParser) processServerThreadsBlock(block *Block) {
-	if fp.hadServerThreadsMsg { // Only do once
-		return
-	}
 	fp.hadServerThreadsMsg = true
 	line := block.lines[0]
 	m := reServerThreads.FindStringSubmatch(line)
 	if len(m) > 0 {
-		i, err := strconv.ParseInt(m[2], 10, 64)
+		i, err := strconv.ParseInt(m[3], 10, 64)
 		if err == nil {
 			fp.running = i
-			fp.logger.Infof("Resetting running to %d as encountered server threads message", i)
+			fp.logger.Infof("Encountered server running threads (%d) message", i)
+			eventTime, _ := time.Parse(p4timeformat, m[1])
+			fp.outputSvrEvent(&ServerEvent{
+				EventTime:     eventTime,
+				ActiveThreads: i,
+			})
 		}
+	}
+}
+
+func (fp *P4dFileParser) processPausedThreadsBlock(block *Block) {
+	line := block.lines[0]
+	m := rePausedThreads.FindStringSubmatch(line)
+	if len(m) > 0 {
+		i, err := strconv.ParseInt(m[3], 10, 64)
+		if err == nil {
+			fp.paused = i
+			fp.logger.Infof("Encountered server paused threads (%d) message", i)
+			eventTime, _ := time.Parse(p4timeformat, m[1])
+			fp.outputSvrEvent(&ServerEvent{
+				EventTime:     eventTime,
+				PausedThreads: i,
+			})
+		}
+	}
+}
+
+func (fp *P4dFileParser) processResourcePressureBlock(block *Block) {
+	fp.hadServerThreadsMsg = true
+	line := block.lines[0]
+	m := reResourcePressure.FindStringSubmatch(line)
+	if len(m) > 0 {
+		fp.logger.Infof("Encountered server resource pressure message")
+		eventTime, _ := time.Parse(p4timeformat, m[1])
+		fp.outputSvrEvent(&ServerEvent{
+			EventTime:        eventTime,
+			PauseRateCPU:     toInt64(m[3]),
+			PauseRateMem:     toInt64(m[4]),
+			CPUPressureState: toInt64(m[5]),
+			MemPressureState: toInt64(m[6]),
+		})
 	}
 }
 
@@ -1966,6 +2055,10 @@ func (fp *P4dFileParser) processBlock(block *Block) {
 		fp.processInfoBlock(block)
 	} else if block.btype == activeThreadsType {
 		fp.processServerThreadsBlock(block)
+	} else if block.btype == pausedThreadsType {
+		fp.processPausedThreadsBlock(block)
+	} else if block.btype == resourcePressureType {
+		fp.processResourcePressureBlock(block)
 	} else if block.btype == errorType {
 		fp.processErrorBlock(block)
 	} //TODO: output unrecognised block if wanted
@@ -1990,8 +2083,16 @@ var BlockEndPrefixes = []string{
 	"NetSslTransport::SendOrReceive", // Optional configurable
 }
 
+// 2024/06/19 12:25:31 560465376 pid 1056102: Server is now using 55 active threads.
+// 2024/06/19 12:25:31 560486548 pid 1056102: Server now has 10 paused threads.
+// 2024/06/19 12:25:38 004246895 pid 1056103: Server under resource pressure.  Pause rate CPU 59%, mem 0%, CPU pressure 2, mem pressure 0
+
 var msgActiveThreads = " active threads."
-var reServerThreads = regexp.MustCompile(`^\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d \d+ pid (\d+): Server is now using (\d+) active threads.`)
+var msgPausedThreads = " paused threads."
+var msgResourcePressure = " Server under resource pressure.  Pause rate CPU"
+var reServerThreads = regexp.MustCompile(`^(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) \d+ pid (\d+): Server is now using (\d+) active threads.`)
+var rePausedThreads = regexp.MustCompile(`^(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) \d+ pid (\d+): Server now has (\d+) paused threads.`)
+var reResourcePressure = regexp.MustCompile(`^(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) \d+ pid (\d+): Server under resource pressure.  Pause rate CPU (\d+)%, mem (\d+)%, CPU pressure (\d+), mem pressure (\d+)`)
 
 func blockEnd(line string) bool {
 	if blankLine(line) {
@@ -2009,6 +2110,16 @@ func blockEnd(line string) bool {
 	}
 	if strings.HasSuffix(line, msgActiveThreads) { // OK to do a regex as does occur frequently
 		if m := reServerThreads.FindStringSubmatch(line); len(m) > 0 {
+			return true
+		}
+	}
+	if strings.HasSuffix(line, msgPausedThreads) {
+		if m := rePausedThreads.FindStringSubmatch(line); len(m) > 0 {
+			return true
+		}
+	}
+	if strings.Contains(line, msgResourcePressure) {
+		if m := reResourcePressure.FindStringSubmatch(line); len(m) > 0 {
 			return true
 		}
 	}
@@ -2033,10 +2144,10 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string, timeChan <-chan time.Time) chan Command {
+func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string, timeChan <-chan time.Time) chan interface{} {
 	fp.lineNo = 1
 
-	fp.cmdChan = make(chan Command, 10000)
+	fp.cmdChan = make(chan interface{}, 10000)
 	fp.linesChan = &linesChan
 	fp.blockChan = make(chan *Block, 1000)
 

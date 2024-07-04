@@ -42,7 +42,12 @@ func parseLogLines(input string) []string {
 
 	output := []string{}
 	for cmd := range cmdChan {
-		output = append(output, cmd.String())
+		switch cmd := cmd.(type) {
+		case Command:
+			output = append(output, cmd.String())
+		case ServerEvent:
+			output = append(output, cmd.String())
+		}
 	}
 	sort.Strings(output)
 	return output
@@ -1336,6 +1341,14 @@ func TestPauseError(t *testing.T) {
 	testInput := `
 Perforce server info:
 	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+
+Perforce server error:
+	Date 2024/06/19 12:25:31:
+	Pid 1056860
+	Operation: user-fstat
+	Operation 'user-fstat' failed.
+	Too many commands paused;  terminated.
+
 Perforce server info:
 	2024/06/19 12:25:39 pid 1056864 completed 8.39s 598+67us 304+0io 0+0net 68864k 0pf
 Perforce server info:

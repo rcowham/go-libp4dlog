@@ -61,6 +61,11 @@ type P4DMetrics struct {
 	metricWriter              io.Writer
 	timeChan                  chan time.Time
 	cmdRunning                int64
+	cmdPaused                 int64 // Server Events
+	pauseRateCPU              int64
+	pauseRateMem              int64
+	cpuPressureState          int64
+	memPressureState          int64 // ditto
 	cmdCounter                map[string]int64
 	cmdErrorCounter           map[string]int64
 	cmdCumulative             map[string]float64
@@ -89,6 +94,7 @@ type P4DMetrics struct {
 	syncBytesAdded            int64
 	syncBytesUpdated          int64
 	cmdsProcessed             int64
+	svrEventsProcessed        int64
 	linesRead                 int64
 	lbrRcsOpens               int64
 	lbrRcsCloses              int64
@@ -292,6 +298,11 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	metricVal = fmt.Sprintf("%d", p4m.cmdsProcessed)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
+	mname = "p4_prom_svr_events_processed"
+	p4m.printMetricHeader(metrics, mname, "A count of all server events processed", "counter")
+	metricVal = fmt.Sprintf("%d", p4m.svrEventsProcessed)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
 	mname = "p4_prom_cmds_pending"
 	p4m.printMetricHeader(metrics, mname, "A count of all current cmds (not completed)", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.fp.CmdsPendingCount())
@@ -300,6 +311,31 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	mname = "p4_cmd_running"
 	p4m.printMetricHeader(metrics, mname, "The number of running commands at any one time", "gauge")
 	metricVal = fmt.Sprintf("%d", p4m.cmdRunning)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+	mname = "p4_cmd_paused"
+	p4m.printMetricHeader(metrics, mname, "The number of (resource pressure) paused commands at any one time", "gauge")
+	metricVal = fmt.Sprintf("%d", p4m.cmdPaused)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+	mname = "p4_pause_rate_cpu"
+	p4m.printMetricHeader(metrics, mname, "The (resource pressure) pause rate for CPU", "gauge")
+	metricVal = fmt.Sprintf("%d", p4m.pauseRateCPU)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+	mname = "p4_pause_rate_mem"
+	p4m.printMetricHeader(metrics, mname, "The (resource pressure) pause rate for Mem", "gauge")
+	metricVal = fmt.Sprintf("%d", p4m.pauseRateMem)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+	mname = "p4_pause_state_cpu"
+	p4m.printMetricHeader(metrics, mname, "The (resource pressure) pause state for CPU (0-2)", "gauge")
+	metricVal = fmt.Sprintf("%d", p4m.cpuPressureState)
+	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
+
+	mname = "p4_pause_state_mem"
+	p4m.printMetricHeader(metrics, mname, "The (resource pressure) pause state for Mem (0-2)", "gauge")
+	metricVal = fmt.Sprintf("%d", p4m.memPressureState)
 	p4m.printMetric(metrics, mname, fixedLabels, metricVal)
 
 	// Cross platform call - eventually when Windows implemented
@@ -759,9 +795,16 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	return metrics.String()
 }
 
-func (p4m *P4DMetrics) publishEvent(cmd p4dlog.Command) {
-	// p4m.logger.Debugf("publish cmd: %s\n", cmd.String())
+func (p4m *P4DMetrics) publishSvrEvent(evt p4dlog.ServerEvent) {
+	p4m.cmdRunning = evt.ActiveThreads
+	p4m.cmdPaused = evt.PausedThreads
+	p4m.pauseRateCPU = evt.PauseRateCPU
+	p4m.pauseRateMem = evt.PauseRateMem
+	p4m.cpuPressureState = evt.CPUPressureState
+	p4m.memPressureState = evt.MemPressureState
+}
 
+func (p4m *P4DMetrics) publishCmdEvent(cmd p4dlog.Command) {
 	p4m.cmdCounter[cmd.Cmd]++
 	p4m.cmdCumulative[cmd.Cmd] += float64(cmd.CompletedLapse)
 	p4m.cmduCPUCumulative[cmd.Cmd] += float64(cmd.UCpu) / 1000
@@ -930,7 +973,7 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line string) bool {
 // ProcessEvents - main event loop for P4Prometheus - reads lines and outputs metrics
 // Wraps p4dlog.LogParser event loop
 func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan string, needCmdChan bool) (
-	chan p4dlog.Command, chan string) {
+	chan interface{}, chan string) {
 	ticker := time.NewTicker(p4m.config.UpdateInterval)
 
 	if p4m.config.Debug > 0 {
@@ -943,9 +986,9 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 	}
 
 	metricsChan := make(chan string, 1000)
-	var cmdsOutChan chan p4dlog.Command
+	var cmdsOutChan chan interface{}
 	if needCmdChan {
-		cmdsOutChan = make(chan p4dlog.Command, 10000)
+		cmdsOutChan = make(chan interface{}, 10000)
 	}
 	cmdsInChan := p4m.fp.LogParser(ctx, fpLinesChan, p4m.timeChan)
 
@@ -969,13 +1012,25 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 				}
 			case cmd, ok := <-cmdsInChan:
 				if ok {
-					if p4m.logger.Level > logrus.DebugLevel && p4dlog.FlagSet(p4m.debug, p4dlog.DebugCommands) {
-						p4m.logger.Tracef("Publishing cmd: %s", cmd.String())
-					}
-					p4m.cmdsProcessed++
-					p4m.publishEvent(cmd)
-					if needCmdChan {
-						cmdsOutChan <- cmd
+					switch cmd := cmd.(type) {
+					case p4dlog.Command:
+						if p4m.logger.Level > logrus.DebugLevel && p4dlog.FlagSet(p4m.debug, p4dlog.DebugCommands) {
+							p4m.logger.Tracef("Publishing cmd: %s", cmd.String())
+						}
+						p4m.cmdsProcessed++
+						p4m.publishCmdEvent(cmd)
+						if needCmdChan {
+							cmdsOutChan <- cmd
+						}
+					case p4dlog.ServerEvent:
+						if p4m.logger.Level > logrus.DebugLevel && p4dlog.FlagSet(p4m.debug, p4dlog.DebugCommands) {
+							p4m.logger.Tracef("Publishing svrEvent: %s", cmd.String())
+						}
+						p4m.svrEventsProcessed++
+						p4m.publishSvrEvent(cmd)
+						if needCmdChan {
+							cmdsOutChan <- cmd
+						}
 					}
 				} else {
 					p4m.logger.Debugf("FP Cmd closed")
