@@ -168,6 +168,7 @@ Perforce server info:
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
 p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1
 p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.031
+p4_cmd_running{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_cmd_user_counter{serverid="myserverid",user="robert"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
@@ -191,6 +192,7 @@ p4_sync_files_updated{serverid="myserverid"} 3`, -1)
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
 p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1 1441207389
 p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.031 1441207389
+p4_cmd_running;serverid=myserverid 1 1441207389
 p4_cmds_running;serverid=myserverid 1 1441207389
 p4_cmd_user_counter;serverid=myserverid;user=robert 1 1441207389
 p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
@@ -244,6 +246,8 @@ p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 14412
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.062 1441210990
 p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 2 1441210990
 p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.062 1441210990
+p4_cmd_running;serverid=myserverid 0 1441210990
+p4_cmd_running;serverid=myserverid 1 1441210990
 p4_cmds_running;serverid=myserverid 0 1441210990
 p4_cmds_running;serverid=myserverid 1 1441210990
 p4_cmd_user_counter;serverid=myserverid;user=robert 2 1441210990
@@ -289,6 +293,7 @@ Perforce server info:
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.031
 p4_cmd_program_counter{serverid="myserverid",program="some_unknown_prog_p4python_v2"} 1
 p4_cmd_program_cumulative_seconds{serverid="myserverid",program="some_unknown_prog_p4python_v2"} 0.031
+p4_cmd_running{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-sync"} 0.000
@@ -305,6 +310,7 @@ p4_prom_log_lines_read{serverid="myserverid"} 8`, -1)
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
 p4_cmd_program_counter;serverid=myserverid;program=some_unknown_prog_p4python_v2 1 1441207389
 p4_cmd_program_cumulative_seconds;serverid=myserverid;program=some_unknown_prog_p4python_v2 0.031 1441207389
+p4_cmd_running;serverid=myserverid 1 1441207389
 p4_cmds_running;serverid=myserverid 1 1441207389
 p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
@@ -338,6 +344,7 @@ Perforce server info:
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.031 1441207389
 p4_cmd_program_counter;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 1 1441207389
 p4_cmd_program_cumulative_seconds;serverid=myserverid;program=c:\\jenkins\\workspacegen_stubs.py_[PY2.7.9+/P4PY2020.1/API2020.1/2051818]/v88 0.031 1441207389
+p4_cmd_running;serverid=myserverid 1 1441207389
 p4_cmds_running;serverid=myserverid 1 1441207389
 p4_cmd_cpu_system_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
 p4_cmd_cpu_user_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.000 1441207389
@@ -386,6 +393,9 @@ Perforce server info:
 p4_cmd_cumulative_seconds;serverid=myserverid;cmd=user-sync 0.096 1441207511
 p4_cmd_program_counter;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 3 1441207511
 p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 0.096 1441207511
+p4_cmd_running;serverid=myserverid 0 1441207450
+p4_cmd_running;serverid=myserverid 0 1441207511
+p4_cmd_running;serverid=myserverid 1 1441207511
 p4_cmds_running;serverid=myserverid 0 1441207450
 p4_cmds_running;serverid=myserverid 0 1441207511
 p4_cmds_running;serverid=myserverid 1 1441207511
@@ -457,6 +467,7 @@ p4_cmd_program_cumulative_seconds{serverid="myserverid",program="3DSMax/1.0.0.0"
 p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 1.380
 p4_cmd_replica_counter{serverid="myserverid",replica="10.40.16.14"} 1
 p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="10.40.16.14"} 0.413
+p4_cmd_running{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_cmd_user_counter{serverid="myserverid",user="fred"} 2
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="dm-CommitSubmit"} 0.061
@@ -497,6 +508,9 @@ p4_cmd_program_cumulative_seconds;serverid=myserverid;program=3DSMax/1.0.0.0 0.4
 p4_cmd_program_cumulative_seconds;serverid=myserverid;program=p4/2016.2/LINUX26X86_64/1598668 1.380 1528673409
 p4_cmd_replica_counter;serverid=myserverid;replica=10.40.16.14 1 1528673409
 p4_cmd_replica_cumulative_seconds;serverid=myserverid;replica=10.40.16.14 0.413 1528673409
+p4_cmd_running;serverid=myserverid 0 1528673408
+p4_cmd_running;serverid=myserverid 0 1528673409
+p4_cmd_running;serverid=myserverid 1 1528673409
 p4_cmds_running;serverid=myserverid 0 1528673408
 p4_cmds_running;serverid=myserverid 0 1528673409
 p4_cmds_running;serverid=myserverid 1 1528673409
@@ -544,6 +558,7 @@ var multiUserExpected = eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="use
 p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.022
 p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 2
 p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
+p4_cmd_running{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
@@ -621,6 +636,7 @@ p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/15
 p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
 p4_cmd_replica_counter{serverid="myserverid",replica="127.0.0.1"} 1
 p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.011
+p4_cmd_running{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
 p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.000
@@ -643,6 +659,7 @@ p4_cmd_program_counter{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/15
 p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2016.2/LINUX26X86_64/1598668"} 0.022
 p4_cmd_replica_counter{serverid="myserverid",replica="127.0.0.1"} 1
 p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.011
+p4_cmd_running{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_prom_cmds_processed{serverid="myserverid"} 2
 p4_prom_log_lines_read{serverid="myserverid"} 11`, -1)
@@ -748,6 +765,7 @@ p4_cmd_program_counter{serverid="myserverid",program="p4/2018.1/LINUX26X86_64/19
 p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2018.1/LINUX26X86_64/1957529"} 0.011
 p4_cmd_replica_counter{serverid="myserverid",replica="127.0.0.1"} 1
 p4_cmd_replica_cumulative_seconds{serverid="myserverid",replica="127.0.0.1"} 0.011
+p4_cmd_running{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_cmd_user_counter{serverid="myserverid",user="build"} 1
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="build"} 0.011
@@ -819,6 +837,7 @@ func TestServerEvents(t *testing.T) {
 	expected := eol.Split(`p4_prom_log_lines_read{serverid="myserverid"} 5
 p4_cmds_paused{serverid="myserverid"} 10
 p4_cmds_paused_max{serverid="myserverid"} 10
+p4_cmd_running{serverid="myserverid"} 55
 p4_cmds_running{serverid="myserverid"} 55
 p4_cmds_running_max{serverid="myserverid"} 55
 p4_pause_rate_cpu{serverid="myserverid"} 59
