@@ -93,7 +93,9 @@ func writeHeader(f io.Writer) {
 	(lineNumber INT NOT NULL, -- primary key
 	eventTime DATETIME NOT NULL, -- Time of server event
 	activeThreads int NULL, -- Active threads
+	activeThreadsMax int NULL, -- Active threads (max in last 10 secs)
 	pausedThreads int NULL, -- Paused threads
+	pausedThreadsMax int NULL, -- Paused threads (max in last 10 secs)
 	pauseRateCPU int NULL, -- Pause rate CPU (percentage 0-100)
 	pauseRateMem int NULL, -- Pause rate Mem (percentage 0-100)
 	cpuPressureState int NULL, -- CPU pressure (0 low, 1 med, 2 high)
@@ -156,10 +158,10 @@ func getProcessStatement() string {
 func getEventsStatement() string {
 	return `INSERT INTO events
 		(lineNumber, eventTime,
-		activeThreads, pausedThreads,
+		activeThreads, activeThreadsMax, pausedThreads, pausedThreadsMax,
 		pauseRateCPU, pauseRateMem,
 		cpuPressureState, memPressureState)
-		VALUES (?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
@@ -224,7 +226,7 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 func preparedInsertServerEvents(logger *logrus.Logger, stmtEvents *sqlite3.Stmt, evt *p4dlog.ServerEvent) int64 {
 	rows := 1
 	err := stmtEvents.Exec(
-		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.PausedThreads,
+		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.ActiveThreadsMax, evt.PausedThreads, evt.PausedThreadsMax,
 		evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
 	if err != nil {
 		logger.Errorf("Events insert: %v lineNo %d, %s",
@@ -235,8 +237,8 @@ func preparedInsertServerEvents(logger *logrus.Logger, stmtEvents *sqlite3.Stmt,
 
 func writeSQLServerEvents(f io.Writer, evt *p4dlog.ServerEvent) int64 {
 	rows := 1
-	fmt.Fprintf(f, `INSERT INTO events VALUES (%d,"%s",%d,%d,%d,%d,%d,%d);`+"\n",
-		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.PausedThreads,
+	fmt.Fprintf(f, `INSERT INTO events VALUES (%d,"%s",%d,%d,%d,%d,%d,%d,%d,%d);`+"\n",
+		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.ActiveThreadsMax, evt.PausedThreads, evt.PausedThreadsMax,
 		evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
 	return int64(rows)
 }
