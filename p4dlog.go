@@ -53,6 +53,7 @@ const (
 	DebugUnrecognised
 	DebugPending
 	DebugPendingCounts
+	DebugTrackPaused
 	DebugMetricStats
 	DebugLines
 )
@@ -128,7 +129,9 @@ type ServerEvent struct {
 	EventTime        time.Time `json:"eventTime"`
 	LineNo           int64     `json:"lineNo"`
 	ActiveThreads    int64     `json:"activeThreads"`
+	ActiveThreadsMax int64     `json:"activeThreadsMax"`
 	PausedThreads    int64     `json:"pausedThreads"`
+	PausedThreadsMax int64     `json:"pausedThreadsMax"`
 	PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
 	PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
 	CPUPressureState int64     `json:"cpuPressureState"` // 0-2
@@ -578,7 +581,9 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		EventTime        time.Time `json:"eventTime"`
 		LineNo           int64     `json:"lineNo"`
 		ActiveThreads    int64     `json:"activeThreads"`
+		ActiveThreadsMax int64     `json:"activeThreadsMax"`
 		PausedThreads    int64     `json:"pausedThreads"`
+		PausedThreadsMax int64     `json:"pausedThreadsMax"`
 		PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
 		PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
 		CPUPressureState int64     `json:"cpuPressureState"` // 0-2
@@ -587,7 +592,9 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		EventTime:        s.EventTime,
 		LineNo:           s.LineNo,
 		ActiveThreads:    s.ActiveThreads,
+		ActiveThreadsMax: s.ActiveThreadsMax,
 		PausedThreads:    s.PausedThreads,
+		PausedThreadsMax: s.PausedThreadsMax,
 		PauseRateCPU:     s.PauseRateCPU,
 		PauseRateMem:     s.PauseRateMem,
 		CPUPressureState: s.CPUPressureState,
@@ -1063,6 +1070,7 @@ type P4dFileParser struct {
 	logger               *logrus.Logger
 	outputDuration       time.Duration
 	debugDuration        time.Duration
+	cmdsMaxResetDuration time.Duration // Window after which CmdsRunningMax/CmdsPausedMax are reset
 	lineNo               int64
 	m                    sync.Mutex
 	cmds                 map[int64]*Command
@@ -1077,9 +1085,12 @@ type P4dFileParser struct {
 	noCompletionRecords  bool // Can be set if completion records not expected - e.g. configurable server=1
 	currStartTime        time.Time
 	timeLastCmdProcessed time.Time
+	timeLastSvrEvent     time.Time
 	pidsSeenThisSecond   map[int64]bool
 	cmdsRunning          int64           // No of currently running threads
+	cmdsRunningMax       int64           // Max No of currently running threads
 	cmdsPaused           int64           // No of paused threads
+	cmdsPausedMax        int64           // Max no of paused threads
 	pauseRateCPU         int64           // Resource pressure
 	pauseRateMem         int64           // ditto
 	cpuPressureState     int64           // ditto
@@ -1102,6 +1113,7 @@ func NewP4dFileParser(logger *logrus.Logger) *P4dFileParser {
 	fp.logger = logger
 	fp.outputDuration = time.Second * 1
 	fp.debugDuration = time.Second * 30
+	fp.cmdsMaxResetDuration = time.Second * 10
 	return &fp
 }
 
@@ -1343,6 +1355,9 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			if j > 0 {
 				f, _ := strconv.ParseFloat(string(val[:j]), 32)
 				cmd.Paused = float32(f)
+			}
+			if fp.cmdsPaused > 0 {
+				fp.cmdsPaused -= 1 // Decrement count (may be reset by a future paused block - but those are not always reliable)
 			}
 			hasTrackInfo = true
 			continue
@@ -1674,11 +1689,29 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 // Output a server event to appropriate channel
 func (fp *P4dFileParser) outputSvrEvent(timeStr string, lineNo int64) {
 	eventTime, _ := time.Parse(p4timeformat, timeStr)
+	// Record the values when we last output a server event - means we can update if things change.
+	if FlagSet(fp.debug, DebugTrackPaused) {
+		fp.logger.Debugf("paused: line %d running/max: %d/%d paused/max %d/%d window %.2f s",
+			lineNo, fp.cmdsRunning, fp.cmdsRunningMax, fp.cmdsPaused, fp.cmdsPausedMax, fp.currTime.Sub(fp.timeLastSvrEvent).Seconds())
+	}
+	if fp.cmdsPaused > fp.cmdsPausedMax {
+		fp.cmdsPausedMax = fp.cmdsPaused
+	}
+	if fp.cmdsRunning > fp.cmdsRunningMax {
+		fp.cmdsRunningMax = fp.cmdsRunning
+	}
+	if fp.currTime.Sub(fp.timeLastSvrEvent) > fp.cmdsMaxResetDuration {
+		fp.cmdsPausedMax = fp.cmdsPaused
+		fp.cmdsRunningMax = fp.cmdsRunning
+		fp.timeLastSvrEvent = fp.currTime
+	}
 	svrEvent := ServerEvent{
 		EventTime:        eventTime,
 		LineNo:           lineNo,
 		ActiveThreads:    fp.cmdsRunning,
+		ActiveThreadsMax: fp.cmdsRunningMax,
 		PausedThreads:    fp.cmdsPaused,
+		PausedThreadsMax: fp.cmdsPausedMax,
 		PauseRateCPU:     fp.pauseRateCPU,
 		PauseRateMem:     fp.pauseRateMem,
 		CPUPressureState: fp.cpuPressureState,

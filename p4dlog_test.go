@@ -704,12 +704,14 @@ Perforce server info:
 ---   locks read/write 4/5 rows get+pos+scan put+del 6+7+8 9+10
 `
 	output := parseLogLines(testInput)
-	assert.Equal(t, 2, len(output))
-	//assert.Equal(t, "", output[1])
-	assert.JSONEq(t, cleanJSON(`{"processKey":"33ac9675a65f8c437998987e55c11f9f","cmd":"pull","pid":6170,"lineNo":7,"user":"svc_wok","workspace":"unknown","ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2020/01/11 02:00:06","endTime":"2020/01/11 02:00:06","running":148,"cmdError":false,"tables":[{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"readLocks":4,"writeLocks":5,"getRows":6,"posRows":7,"scanRows":8,"putRows":9,"delRows":10}]}`),
+	assert.Equal(t, 3, len(output))
+	// assert.Equal(t, "", output[0])
+	assert.JSONEq(t, cleanJSON(`{"activeThreads":148, "activeThreadsMax":148, "eventTime":"2020-01-11T02:00:05Z", "lineNo":6}`),
 		cleanJSON(output[0]))
-	assert.JSONEq(t, cleanJSON(`{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","completedLapse":0.008,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"diskOut":8,"maxRss":7632,"cmdError":false,"tables":[]}`),
+	assert.JSONEq(t, cleanJSON(`{"processKey":"33ac9675a65f8c437998987e55c11f9f","cmd":"pull","pid":6170,"lineNo":7,"user":"svc_wok","workspace":"unknown","ip":"background","app":"p4d/2019.2/LINUX26X86_64/1891638","args":"-i 1","startTime":"2020/01/11 02:00:06","endTime":"2020/01/11 02:00:06","running":148,"cmdError":false,"tables":[{"tableName":"view","pagesIn":2,"pagesOut":3,"pagesCached":96,"readLocks":4,"writeLocks":5,"getRows":6,"posRows":7,"scanRows":8,"putRows":9,"delRows":10}]}`),
 		cleanJSON(output[1]))
+	assert.JSONEq(t, cleanJSON(`{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","completedLapse":0.008,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"diskOut":8,"maxRss":7632,"cmdError":false,"tables":[]}`),
+		cleanJSON(output[2]))
 }
 
 func TestDuplicatePulls(t *testing.T) {
@@ -1320,6 +1322,7 @@ func TestPausedPid(t *testing.T) {
 	testInput := `
 Perforce server info:
 	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+2024/06/19 12:25:31 731966731 pid 24961: Server now has 10 paused threads.
 Perforce server info:
 	2024/06/19 12:25:39 pid 1056864 completed 8.39s 598+67us 304+0io 0+0net 68864k 0pf
 Perforce server info:
@@ -1331,10 +1334,12 @@ Perforce server info:
 --- rpc msgs/size in+out 2+84225/0mb+45mb himarks 795416/795272 snd/rcv 5.64s/.002s
 --- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb`
 	output := parseLogLines(testInput)
-	assert.Equal(t, 1, len(output))
+	assert.Equal(t, 2, len(output))
 	// assert.Equal(t, "", output[0])
-	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120", "args":"-Ob //...", "cmd":"user-fstat", "cmdError":false, "completedLapse":8.39, "diskIn":304, "endTime":"2024/06/19 12:25:39", "ip":"127.0.0.1", "lineNo":2, "maxRss":68864, "memMB":74, "memPeakMB":74, "paused":1.2, "pid":1.056864e+06, "processKey":"861c79f6f864bc6cfd2aa3d0ba35952e", "rpcHimarkFwd":795416, "rpcHimarkRev":795272, "rpcMsgsIn":2, "rpcMsgsOut":84225, "rpcRcv":0.002, "rpcSizeOut":45, "rpcSnd":5.64, "running":1, "sCpu":67, "startTime":"2024/06/19 12:25:31", "tables":[], "uCpu":598, "user":"perforce", "workspace":"ip-10-0-0-106"}`),
+	assert.JSONEq(t, cleanJSON(`{"activeThreads":1, "activeThreadsMax":1, "eventTime":"2024-06-19T12:25:31Z", "lineNo":4, "pausedThreads":10, "pausedThreadsMax":10}`),
 		cleanJSON(output[0]))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120", "args":"-Ob //...", "cmd":"user-fstat", "cmdError":false, "completedLapse":8.39, "diskIn":304, "endTime":"2024/06/19 12:25:39", "ip":"127.0.0.1", "lineNo":2, "maxRss":68864, "memMB":74, "memPeakMB":74, "paused":1.2, "pid":1.056864e+06, "processKey":"861c79f6f864bc6cfd2aa3d0ba35952e", "rpcHimarkFwd":795416, "rpcHimarkRev":795272, "rpcMsgsIn":2, "rpcMsgsOut":84225, "rpcRcv":0.002, "rpcSizeOut":45, "rpcSnd":5.64, "running":1, "sCpu":67, "startTime":"2024/06/19 12:25:31", "tables":[], "uCpu":598, "user":"perforce", "workspace":"ip-10-0-0-106"}`),
+		cleanJSON(output[1]))
 }
 
 func TestPauseError(t *testing.T) {
