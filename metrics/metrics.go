@@ -63,6 +63,7 @@ type P4DMetrics struct {
 	cmdsRunningMax            int64
 	cmdsPaused                int64 // Server Events
 	cmdsPausedMax             int64 // Server Events
+	cmdsPausedErrorCount      int64 // ditto
 	pauseRateCPU              int64 // ditto
 	pauseRateMem              int64 // ditto
 	cpuPressureState          int64 // ditto
@@ -301,6 +302,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.outputMetric(metrics, "p4_cmds_running_max", "The max number of running commands at any one time since last metric", "gauge", fmt.Sprintf("%d", p4m.cmdsRunningMax), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_paused", "The number of (resource pressure) paused commands at any one time", "gauge", fmt.Sprintf("%d", p4m.cmdsPaused), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_paused_max", "The max number of (resource pressure) paused commands since last metric", "gauge", fmt.Sprintf("%d", p4m.cmdsPausedMax), fixedLabels)
+	p4m.outputMetric(metrics, "p4_cmds_paused_errors", "The number of commands exited with error due to resource pressure thresholds being exceeded", "counter", fmt.Sprintf("%d", p4m.cmdsPausedErrorCount), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_rate_cpu", "The (resource pressure) pause rate for CPU", "gauge", fmt.Sprintf("%d", p4m.pauseRateCPU), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_rate_mem", "The (resource pressure) pause rate for Mem", "gauge", fmt.Sprintf("%d", p4m.pauseRateMem), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_state_cpu", "The (resource pressure) pause state for CPU (0-2)", "gauge", fmt.Sprintf("%d", p4m.cpuPressureState), fixedLabels)
@@ -518,6 +520,7 @@ func (p4m *P4DMetrics) publishSvrEvent(evt p4dlog.ServerEvent) {
 	p4m.cmdsRunningMax = evt.ActiveThreadsMax
 	p4m.cmdsPaused = evt.PausedThreads
 	p4m.cmdsPausedMax = evt.PausedThreadsMax
+	p4m.cmdsPausedErrorCount = evt.PausedErrorCount
 	p4m.pauseRateCPU = evt.PauseRateCPU
 	p4m.pauseRateMem = evt.PauseRateMem
 	p4m.cpuPressureState = evt.CPUPressureState

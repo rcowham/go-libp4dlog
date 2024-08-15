@@ -847,3 +847,58 @@ p4_pause_state_mem{serverid="myserverid"} 1
 p4_prom_svr_events_processed{serverid="myserverid"} 3`, -1)
 	compareOutput(t, expected, output)
 }
+
+func TestServerEventsPauseErrors(t *testing.T) {
+	cfg := &Config{
+		ServerID:         "myserverid",
+		UpdateInterval:   10 * time.Millisecond,
+		OutputCmdsByUser: true}
+	input := `
+Perforce server info:
+	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+
+Perforce server error:
+	Date 2024/06/19 12:25:31:
+	Pid 1056860
+	Operation: user-fstat
+	Operation 'user-fstat' failed.
+	Too many commands paused;  terminated.
+
+Perforce server info:
+	2024/06/19 12:25:39 pid 1056864 completed 8.39s 598+67us 304+0io 0+0net 68864k 0pf
+Perforce server info:
+	2024/06/19 12:25:31 pid 1056864 perforce@ip-10-0-0-106 127.0.0.1 [p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120] 'user-fstat -Ob //...'
+--- exited on fatal server error
+--- lapse 8.39s
+--- usage 598+67us 304+0io 0+0net 68864k 0pf
+--- memory cmd/proc 74mb/74mb
+--- rpc msgs/size in+out 2+84225/0mb+45mb himarks 795416/795272 snd/rcv 5.64s/.002s
+
+2024/06/19 12:25:39 004246895 pid 1056103: Server under resource pressure.  Pause rate CPU 59%, mem 20%, CPU pressure 2, mem pressure 1
+`
+	historical := false
+	output := basicTest(cfg, input, historical)
+
+	expected := eol.Split(`p4_cmd_counter{serverid="myserverid",cmd="user-fstat"} 1
+p4_cmd_cpu_system_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.067
+p4_cmd_cpu_user_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 0.598
+p4_cmd_cumulative_seconds{serverid="myserverid",cmd="user-fstat"} 8.390
+p4_cmd_error_counter{serverid="myserverid",cmd="user-fstat"} 1
+p4_cmd_mem_mb{serverid="myserverid"} 74
+p4_cmd_mem_peak_mb{serverid="myserverid"} 74
+p4_cmd_program_counter{serverid="myserverid",program="p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120"} 1
+p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120"} 8.390
+p4_cmd_running{serverid="myserverid"} 1
+p4_cmd_user_counter{serverid="myserverid",user="perforce"} 1
+p4_cmd_user_cumulative_seconds{serverid="myserverid",user="perforce"} 8.390
+p4_cmds_paused_errors{serverid="myserverid"} 1
+p4_cmds_running{serverid="myserverid"} 1
+p4_pause_rate_cpu{serverid="myserverid"} 59
+p4_pause_rate_mem{serverid="myserverid"} 20
+p4_pause_state_cpu{serverid="myserverid"} 2
+p4_pause_state_mem{serverid="myserverid"} 1
+p4_prom_cmds_processed{serverid="myserverid"} 1
+p4_prom_log_lines_read{serverid="myserverid"} 23
+p4_prom_svr_events_processed{serverid="myserverid"} 1`, -1)
+	compareOutput(t, expected, output)
+}

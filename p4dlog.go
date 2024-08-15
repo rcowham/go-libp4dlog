@@ -132,6 +132,7 @@ type ServerEvent struct {
 	ActiveThreadsMax int64     `json:"activeThreadsMax"`
 	PausedThreads    int64     `json:"pausedThreads"`
 	PausedThreadsMax int64     `json:"pausedThreadsMax"`
+	PausedErrorCount int64     `json:"pausedErrorCount"`
 	PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
 	PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
 	CPUPressureState int64     `json:"cpuPressureState"` // 0-2
@@ -584,6 +585,7 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		ActiveThreadsMax int64     `json:"activeThreadsMax"`
 		PausedThreads    int64     `json:"pausedThreads"`
 		PausedThreadsMax int64     `json:"pausedThreadsMax"`
+		PausedErrorCount int64     `json:"pausedErrorCount"`
 		PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
 		PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
 		CPUPressureState int64     `json:"cpuPressureState"` // 0-2
@@ -595,6 +597,7 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		ActiveThreadsMax: s.ActiveThreadsMax,
 		PausedThreads:    s.PausedThreads,
 		PausedThreadsMax: s.PausedThreadsMax,
+		PausedErrorCount: s.PausedErrorCount,
 		PauseRateCPU:     s.PauseRateCPU,
 		PauseRateMem:     s.PauseRateMem,
 		CPUPressureState: s.CPUPressureState,
@@ -1091,6 +1094,7 @@ type P4dFileParser struct {
 	cmdsRunningMax       int64           // Max No of currently running threads
 	cmdsPaused           int64           // No of paused threads
 	cmdsPausedMax        int64           // Max no of paused threads
+	cmdsPausedErrorCount int64           // Count of commands paused due to resource pressure errors
 	pauseRateCPU         int64           // Resource pressure
 	pauseRateMem         int64           // ditto
 	cpuPressureState     int64           // ditto
@@ -1365,6 +1369,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 		if strings.HasPrefix(line, trackFatalError) {
 			cmd.CmdError = true
 			hasTrackInfo = true
+			fp.cmdsPausedErrorCount += 1
 			continue
 		}
 		if strings.HasPrefix(line, trackDB) {
@@ -1712,6 +1717,7 @@ func (fp *P4dFileParser) outputSvrEvent(timeStr string, lineNo int64) {
 		ActiveThreadsMax: fp.cmdsRunningMax,
 		PausedThreads:    fp.cmdsPaused,
 		PausedThreadsMax: fp.cmdsPausedMax,
+		PausedErrorCount: fp.cmdsPausedErrorCount,
 		PauseRateCPU:     fp.pauseRateCPU,
 		PauseRateMem:     fp.pauseRateMem,
 		CPUPressureState: fp.cpuPressureState,
