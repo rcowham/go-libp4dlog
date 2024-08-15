@@ -296,6 +296,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.outputMetric(metrics, "p4_prom_cmds_processed", "A count of all cmds processed", "counter", fmt.Sprintf("%d", p4m.cmdsProcessed), fixedLabels)
 	p4m.outputMetric(metrics, "p4_prom_svr_events_processed", "A count of all server events processed", "counter", fmt.Sprintf("%d", p4m.svrEventsProcessed), fixedLabels)
 	p4m.outputMetric(metrics, "p4_prom_cmds_pending", "A count of all current cmds (not completed)", "gauge", fmt.Sprintf("%d", p4m.fp.CmdsPendingCount()), fixedLabels)
+	p4m.outputMetric(metrics, "p4_cmd_running", "The number of running commands at any one time (deprecated use p4_cms_running instead)", "gauge", fmt.Sprintf("%d", p4m.cmdsRunning), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_running", "The number of running commands at any one time", "gauge", fmt.Sprintf("%d", p4m.cmdsRunning), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_running_max", "The max number of running commands at any one time since last metric", "gauge", fmt.Sprintf("%d", p4m.cmdsRunningMax), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_paused", "The number of (resource pressure) paused commands at any one time", "gauge", fmt.Sprintf("%d", p4m.cmdsPaused), fixedLabels)
