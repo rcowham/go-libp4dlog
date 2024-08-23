@@ -1277,7 +1277,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 func cmdHasNoCompletionRecord(cmdName string) bool {
 	return cmdName == "rmt-FileFetch" ||
 		cmdName == "rmt-FileFetchMulti" ||
-		cmdName == "rmt-Journal" ||
+		// cmdName == "rmt-Journal" ||
 		cmdName == "rmt-JournalPos" ||
 		cmdName == "pull"
 }
