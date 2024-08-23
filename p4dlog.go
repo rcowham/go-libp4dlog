@@ -179,6 +179,10 @@ type Command struct {
 	RPCHimarkRev            int64     `json:"rpcHimarkRev"`
 	RPCSnd                  float32   `json:"rpcSnd"`
 	RPCRcv                  float32   `json:"rpcRcv"`
+	FileTotalsSnd           int64     `json:"fileTotalsSnd`
+	FileTotalsRcv           int64     `json:"fileTotalsRcv`
+	FileTotalsSndMBytes     int64     `json:"fileTotalsSndMBytes`
+	FileTotalsRcvMBytes     int64     `json:"fileTotalsRcvMBytes`
 	NetFilesAdded           int64     `json:"netFilesAdded"` // Valid for syncs and network estimates records
 	NetFilesUpdated         int64     `json:"netFilesUpdated"`
 	NetFilesDeleted         int64     `json:"netFilesDeleted"`
@@ -410,6 +414,13 @@ func (c *Command) setRPC(rpcMsgsIn, rpcMsgsOut, rpcSizeIn, rpcSizeOut, rpcHimark
 		f, _ := strconv.ParseFloat(rpcRcv, 32)
 		c.RPCRcv = float32(f)
 	}
+}
+
+func (c *Command) setFileTotals(fileTotalsSnd, fileTotalsSndMBytes, fileTotalsRcv, fileTotalsRcvMBytes string) {
+	c.FileTotalsSnd, _ = strconv.ParseInt(fileTotalsSnd, 10, 64)
+	c.FileTotalsSndMBytes, _ = strconv.ParseInt(fileTotalsSndMBytes, 10, 64)
+	c.FileTotalsRcv, _ = strconv.ParseInt(fileTotalsRcv, 10, 64)
+	c.FileTotalsRcvMBytes, _ = strconv.ParseInt(fileTotalsRcvMBytes, 10, 64)
 }
 
 func (c *Command) setLbrRcsOpensCloses(lbrOpens, lbrCloses, lbrCheckins, lbrExists string) {
@@ -650,7 +661,11 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		RPCHimarkRev            int64   `json:"rpcHimarkRev"`
 		RPCSnd                  float32 `json:"rpcSnd"`
 		RPCRcv                  float32 `json:"rpcRcv"`
-		NetFilesAdded           int64   `json:"netFilesAdded"` // Valid for syncs and network estimates records
+		FileTotalsSnd           int64   `json:"fileTotalsSnd"`       // Valid for syncs
+		FileTotalsRcv           int64   `json:"fileTotalsRcv"`       // Valid for syncs
+		FileTotalsSndMBytes     int64   `json:"fileTotalsSndMBytes"` // Valid for syncs
+		FileTotalsRcvMBytes     int64   `json:"fileTotalsRcvMBytes"` // Valid for syncs
+		NetFilesAdded           int64   `json:"netFilesAdded"`       // Valid for syncs and network estimates records
 		NetFilesUpdated         int64   `json:"netFilesUpdated"`
 		NetFilesDeleted         int64   `json:"netFilesDeleted"`
 		NetBytesAdded           int64   `json:"netBytesAdded"`
@@ -739,6 +754,10 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		RPCHimarkRev:            c.RPCHimarkRev,
 		RPCSnd:                  c.RPCSnd,
 		RPCRcv:                  c.RPCRcv,
+		FileTotalsSnd:           c.FileTotalsSnd,
+		FileTotalsRcv:           c.FileTotalsRcv,
+		FileTotalsSndMBytes:     c.FileTotalsSndMBytes,
+		FileTotalsRcvMBytes:     c.FileTotalsRcvMBytes,
 		NetFilesAdded:           c.NetFilesAdded,
 		NetFilesUpdated:         c.NetFilesUpdated,
 		NetFilesDeleted:         c.NetFilesDeleted,
@@ -898,6 +917,18 @@ func (c *Command) updateFrom(other *Command) {
 	}
 	if other.RPCRcv > 0 {
 		c.RPCRcv = other.RPCRcv
+	}
+	if other.FileTotalsSnd > 0 {
+		c.FileTotalsSnd = other.FileTotalsSnd
+	}
+	if other.FileTotalsRcv > 0 {
+		c.FileTotalsRcv = other.FileTotalsRcv
+	}
+	if other.FileTotalsSndMBytes > 0 {
+		c.FileTotalsSndMBytes = other.FileTotalsSndMBytes
+	}
+	if other.FileTotalsRcvMBytes > 0 {
+		c.FileTotalsRcvMBytes = other.FileTotalsRcvMBytes
 	}
 	if other.NetFilesAdded > 0 {
 		c.NetFilesAdded = other.NetFilesAdded
@@ -1302,6 +1333,7 @@ var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+\.\d+)s|^lapse (\.\d+)s|^lapse (\d+)s`)
 var prefixTrackCmdMem = "--- memory cmd/proc "
 var prefixTrackRPC = "--- rpc msgs/size in+out "
+var prefixTrackFileTotals = "--- filetotals (svr) send/recv files+bytes "
 var prefixTrackLbr = "---   opens+closes"
 var prefixTrackLbr2 = "---   reads+readbytes"
 var prefixTrackLbr3 = "---   digests+filesizes"
@@ -1311,6 +1343,7 @@ var reTrackLbrDigestFilesize = regexp.MustCompile(`^---   digests\+filesizes\+mo
 var reTrackCmdMem = regexp.MustCompile(`^--- memory cmd/proc (\d+)mb\/(\d+)mb`)
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
+var reTrackFileTotals = regexp.MustCompile(`^--- filetotals \(svr\) send/recv files\+bytes (\d+)\+(\d+)mb/(\d+)\+(\d+)mb`)
 var prefixTrackUsage = "--- usage"
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 var reCmdUsage = regexp.MustCompile(` (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
@@ -1447,6 +1480,13 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackRPC.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], "", "")
+				continue
+			}
+		}
+		if strings.HasPrefix(line, prefixTrackFileTotals) {
+			m = reTrackFileTotals.FindStringSubmatch(line)
+			if len(m) > 0 {
+				cmd.setFileTotals(m[1], m[2], m[3], m[4])
 				continue
 			}
 		}

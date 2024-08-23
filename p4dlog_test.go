@@ -1370,3 +1370,20 @@ Perforce server info:
 	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.1.TEST-TEST_ONLY/LINUX26X86_64/2611120", "args":"-Ob //...", "cmd":"user-fstat", "cmdError":true, "completedLapse":8.39, "diskIn":304, "endTime":"2024/06/19 12:25:39", "ip":"127.0.0.1", "lineNo":2, "maxRss":68864, "memMB":74, "memPeakMB":74, "pid":1.056864e+06, "processKey":"861c79f6f864bc6cfd2aa3d0ba35952e", "rpcHimarkFwd":795416, "rpcHimarkRev":795272, "rpcMsgsIn":2, "rpcMsgsOut":84225, "rpcRcv":0.002, "rpcSizeOut":45, "rpcSnd":5.64, "running":1, "sCpu":67, "startTime":"2024/06/19 12:25:31", "tables":[], "uCpu":598, "user":"perforce", "workspace":"ip-10-0-0-106"}`),
 		cleanJSON(output[0]))
 }
+
+func TestFileTotals(t *testing.T) {
+	// Note just for testing we set both snd/rcv values - normally you get either one or the other
+	testInput := `Perforce server info:
+	2024/07/11 11:16:51 pid 3433924 bruno@bruno_ws 127.0.0.1 [p4/2023.2/LINUX26X86_64/2605454] 'user-sync -f //depot/data/...'
+--- lapse 70.9s
+--- usage 16270+5907us 136024+176io 0+0net 15216k 0pf
+--- memory cmd/proc 5mb/5mb
+--- rpc msgs/size in+out 32+29907/0mb+1863mb himarks 97604/97604 snd/rcv 58.5s/.326s
+--- filetotals (svr) send/recv files+bytes 25+1862mb/1+2mb
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	// assert.Equal(t, "", output[0])
+	assert.JSONEq(t, cleanJSON(`{"app":"p4/2023.2/LINUX26X86_64/2605454", "args":"-f //depot/data/...", "cmd":"user-sync", "cmdError":false, "completedLapse":70.9, "diskIn":136024, "diskOut":176, "endTime":"2024/07/11 11:18:01", "fileTotalsRcv":1, "fileTotalsRcvMBytes":2, "fileTotalsSnd":25, "fileTotalsSndMBytes":1862, "ip":"127.0.0.1", "lineNo":1, "maxRss":15216, "memMB":5, "memPeakMB":5, "pid":3.433924e+06, "processKey":"06b672ec262cbfde8633bc759d498340", "rpcHimarkFwd":97604, "rpcHimarkRev":97604, "rpcMsgsIn":32, "rpcMsgsOut":29907, "rpcRcv":0.326, "rpcSizeOut":1863, "rpcSnd":58.5, "running":1, "sCpu":5907, "startTime":"2024/07/11 11:16:51", "tables":[], "uCpu":16270, "user":"bruno", "workspace":"bruno_ws"}`),
+		cleanJSON(output[0]))
+}
