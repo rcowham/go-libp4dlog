@@ -68,6 +68,7 @@ type P4DMetrics struct {
 	pauseRateMem              int64 // ditto
 	cpuPressureState          int64 // ditto
 	memPressureState          int64 // ditto
+	cmdsPausedCumulative      float64
 	cmdCounter                map[string]int64
 	cmdErrorCounter           map[string]int64
 	cmdCumulative             map[string]float64
@@ -307,6 +308,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.outputMetric(metrics, "p4_pause_rate_mem", "The (resource pressure) pause rate for Mem", "gauge", fmt.Sprintf("%d", p4m.pauseRateMem), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_state_cpu", "The (resource pressure) pause state for CPU (0-2)", "gauge", fmt.Sprintf("%d", p4m.cpuPressureState), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_state_mem", "The (resource pressure) pause state for Mem (0-2)", "gauge", fmt.Sprintf("%d", p4m.memPressureState), fixedLabels)
+	p4m.outputMetric(metrics, "p4_cmds_paused_cumulative", "Total time of commands paused due to resource pressure (seconds)", "counter", fmt.Sprintf("%.3f", p4m.cmdsPausedCumulative), fixedLabels)
 
 	// Cross platform call - eventually when Windows implemented
 	userCPU, systemCPU := getCPUStats()
@@ -534,6 +536,9 @@ func (p4m *P4DMetrics) publishCmdEvent(cmd p4dlog.Command) {
 	p4m.cmdsCPUCumulative[cmd.Cmd] += float64(cmd.SCpu) / 1000
 	if cmd.CmdError {
 		p4m.cmdErrorCounter[cmd.Cmd]++
+	}
+	if cmd.Paused > 0.0 {
+		p4m.cmdsPausedCumulative += float64(cmd.Paused)
 	}
 	p4m.cmdsRunning = cmd.Running
 	p4m.memMB += cmd.MemMB

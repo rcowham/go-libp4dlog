@@ -38,6 +38,7 @@ func writeHeader(f io.Writer) {
 	pid INT NOT NULL, -- Process ID
 	startTime DATETIME NOT NULL, endTime DATETIME NULL, -- Start/end time of command
 	computedLapse FLOAT NULL, completedLapse FLOAT NULL, -- Lapse time for compute phase and total command (secs)
+	paused FLOAT NULL, -- Amount of time command paused (secs)
 	user TEXT NOT NULL, workspace TEXT NOT NULL, ip TEXT NOT NULL, -- user/workspace name/IP
 	app TEXT NOT NULL, -- p4api application reported, e.g. p4/p4v etc
 	cmd TEXT NOT NULL, -- command executed, e.g. user-sync
@@ -130,7 +131,7 @@ func dateStr(t time.Time) string {
 func getProcessStatement() string {
 	return `INSERT INTO process
 		(processkey, lineNumber, pid,
-		startTime ,endTime, computedLapse, completedLapse,
+		startTime ,endTime, computedLapse, completedLapse, paused,
 		user, workspace, ip, app, cmd,
 		args, uCpu, sCpu, diskIn, diskOut, ipcIn,
 		ipcOut, maxRss, pageFaults, memMB, memPeakMB, rpcMsgsIn, rpcMsgsOut,
@@ -153,7 +154,7 @@ func getProcessStatement() string {
 		lbrUncompressWrites, lbrUncompressWriteBytes,
 		lbrUncompressDigests, lbrUncompressFileSizes, lbrUncompressModtimes, lbrUncompressCopies,
 		error)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getEventsStatement() string {
@@ -182,7 +183,7 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 	rows := 1
 	err := stmtProcess.Exec(
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
-		float64(cmd.ComputeLapse), float64(cmd.CompletedLapse),
+		float64(cmd.ComputeLapse), float64(cmd.CompletedLapse), float64(cmd.Paused),
 		string(cmd.User), string(cmd.Workspace), string(cmd.IP), string(cmd.App), string(cmd.Cmd), string(cmd.Args),
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.MemMB, cmd.MemPeakMB, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
@@ -246,7 +247,7 @@ func writeSQLServerEvents(f io.Writer, evt *p4dlog.ServerEvent) int64 {
 
 func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 	rows := 1
-	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,`+
+	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,%.3f,`+
 		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%.3f,%.3f,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
@@ -257,7 +258,7 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,"%v");`+"\n",
 		cmd.GetKey(), cmd.LineNo, cmd.Pid, dateStr(cmd.StartTime), dateStr(cmd.EndTime),
-		cmd.ComputeLapse, cmd.CompletedLapse,
+		cmd.ComputeLapse, cmd.CompletedLapse, cmd.Paused,
 		cmd.User, cmd.Workspace, cmd.IP, cmd.App, cmd.Cmd, cmd.Args,
 		cmd.UCpu, cmd.SCpu, cmd.DiskIn, cmd.DiskOut,
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.MemMB, cmd.MemPeakMB, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
