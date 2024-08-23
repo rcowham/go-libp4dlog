@@ -53,6 +53,8 @@ func writeHeader(f io.Writer) {
 	rpcSizeIn INT NULL, rpcSizeOut INT NULL, -- Total size of RPC messages rcvd/sent
 	rpcHimarkFwd INT NULL, rpcHimarkRev INT NULL, -- Snd/Rcv Window size for OS
 	rpcSnd FLOAT NULL, rpcRcv FLOAT NULL, -- times (secs) spent waiting to send RPC requests and waiting to receive RPC responses
+	fileTotalsSnd INT NULL, fileTotalsRcv INT NULL, -- Count of files sent/received
+	fileTotalsSndMB INT NULL, fileTotalsRcvMB INT NULL, -- Size of files sent/received in MB
 	running INT NULL, -- No of concurrent running commands
 	netSyncFilesAdded INT NULL, netSyncFilesUpdated INT NULL, netSyncFilesDeleted INT NULL, -- estimated counts
 	netSyncBytesAdded INT NULL, netSyncBytesUpdated INT NULL, -- estimated byte counts
@@ -131,12 +133,13 @@ func dateStr(t time.Time) string {
 func getProcessStatement() string {
 	return `INSERT INTO process
 		(processkey, lineNumber, pid,
-		startTime ,endTime, computedLapse, completedLapse, paused,
+		startTime, endTime, computedLapse, completedLapse, paused,
 		user, workspace, ip, app, cmd,
 		args, uCpu, sCpu, diskIn, diskOut, ipcIn,
 		ipcOut, maxRss, pageFaults, memMB, memPeakMB, rpcMsgsIn, rpcMsgsOut,
 		rpcSizeIn, rpcSizeOut, rpcHimarkFwd, rpcHimarkRev,
 		rpcSnd, rpcRcv, running,
+		fileTotalsSnd, fileTotalsRcv, fileTotalsSndMB, fileTotalsRcvMB,
 		netSyncFilesAdded, netSyncFilesUpdated, netSyncFilesDeleted,
 		netSyncBytesAdded, netSyncBytesUpdated,
 		lbrRcsOpens, lbrRcsCloses, lbrRcsCheckins, lbrRcsExists,
@@ -154,7 +157,7 @@ func getProcessStatement() string {
 		lbrUncompressWrites, lbrUncompressWriteBytes,
 		lbrUncompressDigests, lbrUncompressFileSizes, lbrUncompressModtimes, lbrUncompressCopies,
 		error)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getEventsStatement() string {
@@ -189,6 +192,7 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.MemMB, cmd.MemPeakMB, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
 		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
 		float64(cmd.RPCSnd), float64(cmd.RPCRcv), cmd.Running,
+		cmd.FileTotalsSnd, cmd.FileTotalsRcv, cmd.FileTotalsSndMBytes, cmd.FileTotalsRcvMBytes,
 		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
 		cmd.NetBytesAdded, cmd.NetBytesUpdated,
 		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
@@ -250,6 +254,7 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 	fmt.Fprintf(f, `INSERT INTO process VALUES ("%s",%d,%d,"%s","%s",%0.3f,%0.3f,%.3f,`+
 		`"%s","%s","%s","%s","%s","%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%.3f,%.3f,%d,%d,%d,%d,%d,%d,`+
+		`%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
 		`%d,%d,%d,%d,%d,%d,%d,%d,`+
@@ -264,6 +269,7 @@ func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
 		cmd.IpcIn, cmd.IpcOut, cmd.MaxRss, cmd.PageFaults, cmd.MemMB, cmd.MemPeakMB, cmd.RPCMsgsIn, cmd.RPCMsgsOut,
 		cmd.RPCSizeIn, cmd.RPCSizeOut, cmd.RPCHimarkFwd, cmd.RPCHimarkRev,
 		cmd.RPCSnd, cmd.RPCRcv, cmd.Running,
+		cmd.FileTotalsSnd, cmd.FileTotalsRcv, cmd.FileTotalsSndMBytes, cmd.FileTotalsRcvMBytes,
 		cmd.NetFilesAdded, cmd.NetFilesUpdated, cmd.NetFilesDeleted,
 		cmd.NetBytesAdded, cmd.NetBytesUpdated,
 		cmd.LbrRcsOpens, cmd.LbrRcsCloses, cmd.LbrRcsCheckins, cmd.LbrRcsExists,
