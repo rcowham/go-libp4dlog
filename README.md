@@ -18,6 +18,7 @@ Contents:
   - [P4D Log Analysis](#p4d-log-analysis)
   - [Output of this library](#output-of-this-library)
 - [p4locks - lock analyzer](#p4locks---lock-analyzer)
+- [p4dpending - records pending commands (so still in progress with no completion records)](#p4dpending---records-pending-commands-so-still-in-progress-with-no-completion-records)
 - [Building the log2sql binary](#building-the-log2sql-binary)
 
 P4D log files are written to a file specified by $P4LOG, or via command line flag "p4d -L p4d.log". We would normally 
@@ -186,6 +187,10 @@ It is used by:
 # p4locks - lock analyzer
 
 See [p4locks README](cmd/p4locks/README.md)
+
+# p4dpending - records pending commands (so still in progress with no completion records)
+
+See [p4dpending README](cmd/p4dpending/README.md)
 
 # Building the log2sql binary
 
