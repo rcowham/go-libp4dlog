@@ -1310,6 +1310,7 @@ func cmdHasNoCompletionRecord(cmdName string) bool {
 		cmdName == "rmt-FileFetchMulti" ||
 		// cmdName == "rmt-Journal" ||
 		cmdName == "rmt-JournalPos" ||
+		cmdName == "client-Stats" ||
 		cmdName == "pull"
 }
 
@@ -1334,6 +1335,7 @@ var reTriggerLapse = regexp.MustCompile(`^lapse (\d+\.\d+)s|^lapse (\.\d+)s|^lap
 var prefixTrackCmdMem = "--- memory cmd/proc "
 var prefixTrackRPC = "--- rpc msgs/size in+out "
 var prefixTrackFileTotals = "--- filetotals (svr) send/recv files+bytes "
+var prefixTrackFileTotalsClient = "--- filetotals (client) send/recv files+bytes "
 var prefixTrackLbr = "---   opens+closes"
 var prefixTrackLbr2 = "---   reads+readbytes"
 var prefixTrackLbr3 = "---   digests+filesizes"
@@ -1344,6 +1346,7 @@ var reTrackCmdMem = regexp.MustCompile(`^--- memory cmd/proc (\d+)mb\/(\d+)mb`)
 var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+)`)
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var reTrackFileTotals = regexp.MustCompile(`^--- filetotals \(svr\) send/recv files\+bytes (\d+)\+(\d+)mb/(\d+)\+(\d+)mb`)
+var reTrackFileTotalsClient = regexp.MustCompile(`^--- filetotals \(client\) send/recv files\+bytes (\d+)\+(\d+)mb/(\d+)\+(\d+)mb`)
 var prefixTrackUsage = "--- usage"
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 var reCmdUsage = regexp.MustCompile(` (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
@@ -1487,6 +1490,15 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackFileTotals.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setFileTotals(m[1], m[2], m[3], m[4])
+				hasTrackInfo = true
+				continue
+			}
+		}
+		if strings.HasPrefix(line, prefixTrackFileTotalsClient) {
+			m = reTrackFileTotalsClient.FindStringSubmatch(line)
+			if len(m) > 0 {
+				cmd.setFileTotals(m[1], m[2], m[3], m[4])
+				hasTrackInfo = true
 				continue
 			}
 		}

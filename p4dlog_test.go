@@ -1387,3 +1387,30 @@ func TestFileTotals(t *testing.T) {
 	assert.JSONEq(t, cleanJSON(`{"app":"p4/2023.2/LINUX26X86_64/2605454", "args":"-f //depot/data/...", "cmd":"user-sync", "cmdError":false, "completedLapse":70.9, "diskIn":136024, "diskOut":176, "endTime":"2024/07/11 11:18:01", "fileTotalsRcv":1, "fileTotalsRcvMBytes":2, "fileTotalsSnd":25, "fileTotalsSndMBytes":1862, "ip":"127.0.0.1", "lineNo":1, "maxRss":15216, "memMB":5, "memPeakMB":5, "pid":3.433924e+06, "processKey":"06b672ec262cbfde8633bc759d498340", "rpcHimarkFwd":97604, "rpcHimarkRev":97604, "rpcMsgsIn":32, "rpcMsgsOut":29907, "rpcRcv":0.326, "rpcSizeOut":1863, "rpcSnd":58.5, "running":1, "sCpu":5907, "startTime":"2024/07/11 11:16:51", "tables":[], "uCpu":16270, "user":"bruno", "workspace":"bruno_ws"}`),
 		cleanJSON(output[0]))
 }
+
+func TestClientStats(t *testing.T) {
+	// These records turn up on their own after track records - potentially useful for metrics
+	testInput := `Perforce server info:
+	2024/12/21 10:08:51 pid 93275 jenkins@${P4_CLIENT} 10.1.2.3 [unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/2675662]/v97] 'user-print -o C:\Users\jenkins\AppData\Local\Temp\9asfdhwehs //utils/configs/config.yaml'
+
+Perforce server info:
+	2024/12/21 10:08:51 pid 93275 completed .001s 0+0us 0+0io 0+0net 10936k 0pf
+Perforce server info:
+	2024/12/21 10:08:51 pid 93275 jenkins@${P4_CLIENT} 10.1.2.3 [unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/2675662]/v97] 'user-print -o C:\Users\jenkins\AppData\Local\Temp\9asfdhwehs //utils/configs/config.yaml'
+--- lapse .001s
+--- memory cmd/proc 19mb/19mb
+--- rpc msgs/size in+out 2+6/0mb+0mb himarks 175862/130372 snd/rcv .000s/.000s
+
+Perforce server info:
+	2024/12/21 10:08:51 pid 93275 unknown@unknown 10.1.2.3 [unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/5662]/v97] 'client-Stats'
+--- filetotals (client) send/recv files+bytes 1+2mb/3+4mb
+`
+
+	output := parseLogLines(testInput)
+	assert.Equal(t, 2, len(output))
+	// assert.Equal(t, "", output[0])
+	assert.JSONEq(t, cleanJSON(`{"app":"unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/5662]/v97", "args":"", "cmd":"client-Stats", "cmdError":false, "endTime":"2024/12/21 10:08:51", "fileTotalsRcv":3, "fileTotalsRcvMBytes":4, "fileTotalsSnd":1, "fileTotalsSndMBytes":2, "ip":"10.1.2.3", "lineNo":12, "pid":93275, "processKey":"89b4e4bf56c0419db857bda47c0e8433", "startTime":"2024/12/21 10:08:51", "tables":[], "user":"unknown", "workspace":"unknown"}`),
+		cleanJSON(output[0]))
+	assert.JSONEq(t, cleanJSON(`{"app":"unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/2675662]/v97", "args":"-o C:\\Users\\jenkins\\AppData\\Local\\Temp\\9asfdhwehs //utils/configs/config.yaml", "cmd":"user-print", "cmdError":false, "completedLapse":0.001, "endTime":"2024/12/21 10:08:51", "ip":"10.1.2.3", "lineNo":1, "maxRss":10936, "memMB":19, "memPeakMB":19, "pid":93275, "processKey":"b38b2f8982d9c6f0a6e84f62380e4f9e", "rpcHimarkFwd":175862, "rpcHimarkRev":130372, "rpcMsgsIn":2, "rpcMsgsOut":6, "running":1, "startTime":"2024/12/21 10:08:51", "tables":[], "user":"jenkins", "workspace":"${P4_CLIENT}"}`),
+		cleanJSON(output[1]))
+}
