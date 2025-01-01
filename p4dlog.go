@@ -2115,7 +2115,7 @@ func (fp *P4dFileParser) processServerThreadsBlock(block *Block) {
 		i, err := strconv.ParseInt(m[3], 10, 64)
 		if err == nil {
 			fp.cmdsRunning = i
-			fp.logger.Infof("Encountered server running threads (%d) message", i)
+			fp.logger.Debugf("Encountered server running threads (%d) message", i)
 			fp.outputSvrEvent(m[1], block.lineNo)
 		}
 	}
@@ -2128,7 +2128,7 @@ func (fp *P4dFileParser) processPausedThreadsBlock(block *Block) {
 		i, err := strconv.ParseInt(m[3], 10, 64)
 		if err == nil {
 			fp.cmdsPaused = i
-			fp.logger.Infof("Encountered server paused threads (%d) message", i)
+			fp.logger.Debugf("Encountered server paused threads (%d) message", i)
 			fp.outputSvrEvent(m[1], block.lineNo)
 		}
 	}
@@ -2139,7 +2139,7 @@ func (fp *P4dFileParser) processResourcePressureBlock(block *Block) {
 	line := block.lines[0]
 	m := reResourcePressure.FindStringSubmatch(line)
 	if len(m) > 0 {
-		fp.logger.Infof("Encountered server resource pressure message")
+		fp.logger.Debugf("Encountered server resource pressure message")
 		fp.pauseRateCPU = toInt64(m[3])
 		fp.pauseRateMem = toInt64(m[4])
 		fp.cpuPressureState = toInt64(m[5])
