@@ -1414,3 +1414,45 @@ Perforce server info:
 	assert.JSONEq(t, cleanJSON(`{"app":"unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/2675662]/v97", "args":"-o C:\\Users\\jenkins\\AppData\\Local\\Temp\\9asfdhwehs //utils/configs/config.yaml", "cmd":"user-print", "cmdError":false, "completedLapse":0.001, "endTime":"2024/12/21 10:08:51", "ip":"10.1.2.3", "lineNo":1, "maxRss":10936, "memMB":19, "memPeakMB":19, "pid":93275, "processKey":"b38b2f8982d9c6f0a6e84f62380e4f9e", "rpcHimarkFwd":175862, "rpcHimarkRev":130372, "rpcMsgsIn":2, "rpcMsgsOut":6, "running":1, "startTime":"2024/12/21 10:08:51", "tables":[], "user":"jenkins", "workspace":"${P4_CLIENT}"}`),
 		cleanJSON(output[1]))
 }
+
+func TestPullS(t *testing.T) {
+	// Pulls with track but not completion
+	testInput := `Perforce server info:
+	2025/02/18 02:56:01 pid 833770 p4sdp@castor 127.0.0.1 [p4/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2670806] 'user-info -s'
+Perforce server info:
+	2025/02/18 02:56:01 pid 833770 completed .000s 0+0us 0+0io 0+0net 11140k 0pf
+Perforce server info:
+	2025/02/18 02:56:01 pid 833770 p4sdp@castor 127.0.0.1 [p4/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2670806] 'user-info -s'
+--- memory cmd/proc 28mb/28mb
+--- rpc msgs/size in+out 0+19/0mb+0mb himarks 97604/97604 snd/rcv .000s/.000s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb
+--- db.trigger
+---   pages in+out+cached 6+0+5
+---   locks read/write 1/0 rows get+pos+scan put+del 0+1+28 0+0
+--- db.monitor
+---   pages in+out+cached 2+4+4096
+---   locks read/write 0/2 rows get+pos+scan put+del 0+0+0 2+0
+
+Perforce server info:
+	2025/02/18 02:56:01 pid 1958 svc_p4d_edge_CL1@unknown background [p4d/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2671716] 'pull -i 1 -u'
+--- rdb.lbr
+---   pages in+out+cached 2+0+14
+---   locks read/write 0/1 rows get+pos+scan put+del 0+3+122 0+0
+
+Perforce server info:
+	2025/02/18 02:56:01 pid 1954 svc_p4d_edge_CL1@unknown background [p4d/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2671716] 'pull -i 1'
+--- memory cmd/proc 85mb/85mb
+--- db.topology
+---   pages in+out+cached 2+3+9
+---   locks read/write 0/1 rows get+pos+scan put+del 0+0+0 1+0
+--- replica/pull(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+-1ms
+
+`
+
+	output := parseLogLines(testInput)
+	assert.Equal(t, 3, len(output))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2671716", "args":"-i 1 -u", "cmd":"pull", "cmdError":false, "endTime":"2025/02/18 02:56:01", "ip":"background", "lineNo":17, "pid":1958, "processKey":"449091d15dcd6c709c2508d3366ecd0f", "startTime":"2025/02/18 02:56:01", "tables":[{"pagesCached":14, "pagesIn":2, "posRows":3, "scanRows":122, "tableName":"rdb.lbr", "writeLocks":1}], "user":"svc_p4d_edge_CL1", "workspace":"unknown"}`), cleanJSON(output[0]))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2671716", "args":"-i 1", "cmd":"pull", "cmdError":false, "endTime":"2025/02/18 02:56:01", "ip":"background", "lineNo":23, "memMB":85, "memPeakMB":85, "pid":1954, "processKey":"c5145377db5f1f59dbf9ba653b5d51a8", "startTime":"2025/02/18 02:56:01", "tables":[{"pagesCached":9, "pagesIn":2, "pagesOut":3, "putRows":1, "tableName":"topology", "writeLocks":1}], "user":"svc_p4d_edge_CL1", "workspace":"unknown"}`), cleanJSON(output[1]))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2670806", "args":"-s", "cmd":"user-info", "cmdError":false, "endTime":"2025/02/18 02:56:01", "ip":"127.0.0.1", "lineNo":1, "maxRss":11140, "memMB":28, "memPeakMB":28, "pid":833770, "processKey":"fd57652b6af219c6ec23026d05eca09c", "rpcHimarkFwd":97604, "rpcHimarkRev":97604, "rpcMsgsOut":19, "running":1, "startTime":"2025/02/18 02:56:01", "tables":[{"pagesCached":4096, "pagesIn":2, "pagesOut":4, "putRows":2, "tableName":"monitor", "writeLocks":2}, {"pagesCached":5, "pagesIn":6, "posRows":1, "readLocks":1, "scanRows":28, "tableName":"trigger"}], "user":"p4sdp", "workspace":"castor"}`), cleanJSON(output[2]))
+}

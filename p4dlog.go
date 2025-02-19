@@ -1229,6 +1229,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	}
 	if fp.currTime.IsZero() || newCmd.StartTime.After(fp.currTime) {
 		fp.currTime = newCmd.StartTime
+		if debugLog {
+			fp.logger.Infof("addCommand: currTime %v", fp.currTime)
+		}
 	}
 	newCmd.Running = fp.cmdsRunning
 	if fp.currStartTime != newCmd.StartTime && newCmd.StartTime.After(fp.currStartTime) {
@@ -1253,6 +1256,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 				// TODO: if hasTrackInfo && !cmd.hasTrackInfo {
 				cmd.updateFrom(newCmd)
 			} else {
+				if debugLog {
+					fp.logger.Infof("addCommand outputting old since no trackInfo")
+				}
 				fp.outputCmd(cmd)
 				newCmd.duplicateKey = true
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
@@ -1724,6 +1730,10 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 		fp.logger.Infof("outputting: pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
 	}
 	cmd.updateStartEndTimes() // Required in some cases with partiall records
+	if FlagSet(fp.debug, DebugAddCommands) {
+		fp.logger.Debugf("outputCmd: updating tlcp from %v to %v", fp.timeLastCmdProcessed, fp.currTime)
+	}
+	fp.timeLastCmdProcessed = fp.currTime
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
 	cmdcopy := *cmd
 	if cmdHasNoCompletionRecord(cmd.Cmd) {
@@ -1856,6 +1866,9 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 			completed = true
 		}
 		// Handle the special commands which don't receive a completed time - we use StartTime
+		if debugLog {
+			fp.logger.Infof("output: r4a pid %d lineNo %d cmd %s start %v completed %v diff %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.StartTime, completed, fp.currStartTime.Sub(cmd.StartTime))
+		}
 		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && (cmdHasNoCompletionRecord(cmd.Cmd) || fp.noCompletionRecords) {
 			if debugLog {
 				fp.logger.Infof("output: r5 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
@@ -1877,6 +1890,9 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 	}
 
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
+		if FlagSet(fp.debug, DebugAddCommands) {
+			fp.logger.Debugf("outputCompletedCommands: updating tlcp from %v to %v", fp.timeLastCmdProcessed, fp.currTime)
+		}
 		fp.timeLastCmdProcessed = fp.currTime
 	}
 	if fp.logger != nil && fp.debug > 0 {
