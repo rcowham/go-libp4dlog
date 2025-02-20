@@ -1248,10 +1248,10 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			}
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
-			if !cmdHasNoCompletionRecord(newCmd.Cmd) {
+			if !cmdHasNoCompletionRecord(newCmd) {
 				fp.trackRunning("t01", newCmd, 1)
 			}
-		} else if cmdHasNoCompletionRecord(newCmd.Cmd) {
+		} else if cmdHasNoCompletionRecord(newCmd) {
 			if hasTrackInfo {
 				// TODO: if hasTrackInfo && !cmd.hasTrackInfo {
 				cmd.updateFrom(newCmd)
@@ -1265,8 +1265,9 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			}
 		} else {
 			// Typically track info only present when command has completed - especially for duplicates
+			// Interactive pull commands are an exception - they may have track records for rdb.lbr and then a final set too.
 			if cmd.hasTrackInfo {
-				if cmd.LineNo == newCmd.LineNo {
+				if cmd.LineNo == newCmd.LineNo || (cmd.Cmd == "user-pull" && !cmdPullAutomatic(cmd.Args)) {
 					if debugLog {
 						fp.logger.Infof("addCommand updating duplicate")
 					}
@@ -1302,7 +1303,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			newCmd.duplicateKey = true
 		}
 		fp.pidsSeenThisSecond[newCmd.Pid] = true
-		if !cmdHasNoCompletionRecord(newCmd.Cmd) && !newCmd.completed {
+		if !cmdHasNoCompletionRecord(newCmd) && !newCmd.completed {
 			fp.trackRunning("t03", newCmd, 1)
 		}
 	}
@@ -1311,13 +1312,21 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 
 // Special commands which only have start records not completion records
 // This was a thing with older p4d versions but now all commands have them
-func cmdHasNoCompletionRecord(cmdName string) bool {
-	return cmdName == "rmt-FileFetch" ||
-		cmdName == "rmt-FileFetchMulti" ||
+// Note that pull status commands (not automatic background pull threads) have completion records
+func cmdHasNoCompletionRecord(cmd *Command) bool {
+	return cmd.Cmd == "rmt-FileFetch" ||
+		cmd.Cmd == "rmt-FileFetchMulti" ||
 		// cmdName == "rmt-Journal" ||
-		cmdName == "rmt-JournalPos" ||
-		cmdName == "client-Stats" ||
-		cmdName == "pull"
+		cmd.Cmd == "rmt-JournalPos" ||
+		cmd.Cmd == "client-Stats" ||
+		cmd.Cmd == "pull" && cmdPullAutomatic(cmd.Args)
+}
+
+var rePullAutoArgs = regexp.MustCompile(`\-(\w*)[iI]`) // Auto pull commands have an interactive -i arg
+
+// Whether pull has background args
+func cmdPullAutomatic(args string) bool {
+	return rePullAutoArgs.MatchString(args)
 }
 
 var trackStart = "---"
@@ -1727,16 +1736,18 @@ func parseBytesString(value string) int64 {
 func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	fp.trackRunning("t04", cmd, -1)
 	if fp.debugLog(cmd) {
-		fp.logger.Infof("outputting: pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
+		fp.logger.Infof("outputCmd: pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
 	}
-	cmd.updateStartEndTimes() // Required in some cases with partiall records
-	if FlagSet(fp.debug, DebugAddCommands) {
+	cmd.updateStartEndTimes() // Required in some cases with partial records
+	if FlagSet(fp.debug, DebugAddCommands) && fp.timeLastCmdProcessed != fp.currTime {
 		fp.logger.Debugf("outputCmd: updating tlcp from %v to %v", fp.timeLastCmdProcessed, fp.currTime)
 	}
-	fp.timeLastCmdProcessed = fp.currTime
+	if fp.currTime.Sub(fp.timeLastCmdProcessed) > 0 {
+		fp.timeLastCmdProcessed = fp.currTime
+	}
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
 	cmdcopy := *cmd
-	if cmdHasNoCompletionRecord(cmd.Cmd) {
+	if cmdHasNoCompletionRecord(cmd) {
 		cmdcopy.EndTime = cmdcopy.StartTime
 	}
 	cmdcopy.Tables = make(map[string]*Table, len(cmd.Tables))
@@ -1746,7 +1757,7 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 		i++
 	}
 	if fp.debugLog(&cmdcopy) {
-		fp.logger.Infof("outputting: computelapse %v completelapse %v endTime %s", cmdcopy.ComputeLapse,
+		fp.logger.Infof("outputCmd: computelapse %v completelapse %v endTime %s", cmdcopy.ComputeLapse,
 			cmdcopy.CompletedLapse, cmdcopy.EndTime)
 	}
 	fp.cmdChan <- cmdcopy
@@ -1869,7 +1880,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		if debugLog {
 			fp.logger.Infof("output: r4a pid %d lineNo %d cmd %s start %v completed %v diff %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.StartTime, completed, fp.currStartTime.Sub(cmd.StartTime))
 		}
-		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && (cmdHasNoCompletionRecord(cmd.Cmd) || fp.noCompletionRecords) {
+		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && (cmdHasNoCompletionRecord(cmd) || fp.noCompletionRecords) {
 			if debugLog {
 				fp.logger.Infof("output: r5 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
 			}
@@ -2049,7 +2060,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 					if fcmd.EndTime.IsZero() {
 						fcmd.EndTime = fcmd.StartTime
 					}
-					if !cmdHasNoCompletionRecord(fcmd.Cmd) {
+					if !cmdHasNoCompletionRecord(fcmd) {
 						fp.trackRunning("t06", fcmd, -1)
 					}
 				}
@@ -2114,7 +2125,7 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 			if cmd, ok = fp.cmds[pid]; ok {
 				cmd.CmdError = true
 				cmd.completed = true
-				if !cmdHasNoCompletionRecord(cmd.Cmd) {
+				if !cmdHasNoCompletionRecord(cmd) {
 					fp.trackRunning("t06", cmd, -1)
 				}
 			}

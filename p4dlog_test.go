@@ -163,11 +163,11 @@ Perforce server info:
 ---   total lock wait+held read/write 0ms+3ms/0ms+0ms
 
 Perforce server info:
-	2020/10/16 06:00:01 pid 8748 completed .011s 4+4us 8+72io 0+0net 9984k 0pf 
+	2020/10/16 06:00:01 pid 8748 completed .011s 4+4us 8+72io 0+0net 9984k 0pf
 Perforce server info:
 	2020/10/16 06:00:01 pid 8748 build@commander-controller 10.5.20.152 [p4/2018.1/LINUX26X86_64/1957529] 'user-client -i'
 --- lapse .012s
---- usage 4+4us 8+80io 0+0net 9984k 0pf 
+--- usage 4+4us 8+80io 0+0net 9984k 0pf
 --- rpc msgs/size in+out 3+5/0mb+0mb himarks 795800/318788 snd/rcv .000s/.004s
 --- db.counters
 ---   pages in+out+cached 3+0+2
@@ -187,11 +187,11 @@ Perforce server info:
 	2020/10/16 06:00:01 pid 8748 build@commander-controller 10.5.20.152 [p4/2018.1/LINUX26X86_64/1957529] 'user-label -i'
 
 Perforce server info:
-	2020/10/16 06:00:01 pid 8748 completed .011s 4+4us 8+72io 0+0net 9984k 0pf 
+	2020/10/16 06:00:01 pid 8748 completed .011s 4+4us 8+72io 0+0net 9984k 0pf
 Perforce server info:
 	2020/10/16 06:00:01 pid 8748 build@commander-controller 10.5.20.152 [p4/2018.1/LINUX26X86_64/1957529] 'user-label -i'
 --- lapse .012s
---- usage 4+4us 8+80io 0+0net 9984k 0pf 
+--- usage 4+4us 8+80io 0+0net 9984k 0pf
 --- rpc msgs/size in+out 3+5/0mb+0mb himarks 795800/318788 snd/rcv .000s/.004s
 --- db.monitor
 ---   pages in+out+cached 2+4+4096
@@ -637,7 +637,7 @@ func TestNoStartRecord(t *testing.T) {
 Perforce server info:
 	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
 Perforce server info:
-	2020/01/11 02:00:02 pid 25390 completed .008s 0+0us 0+8io 0+0net 7632k 0pf 
+	2020/01/11 02:00:02 pid 25390 completed .008s 0+0us 0+8io 0+0net 7632k 0pf
 Perforce server info:
 	2020/01/11 02:00:02 pid 25390 bot-integ@_____CLIENT_UNSET_____ 127.0.0.1/10.5.40.103 [jenkins.p4-plugin/1.10.3-SNAPSHOT/Linux (brokered)] 'user-login -s'
 --- failed authentication check
@@ -645,7 +645,7 @@ Perforce server info:
 --- rpc msgs/size in+out 2+3/0mb+0mb himarks 795800/185540 snd/rcv .000s/.007s
 
 Perforce server info:
-	2020/01/11 02:00:02 pid 25396 completed .002s 0+0us 0+8io 0+0net 8036k 0pf 
+	2020/01/11 02:00:02 pid 25396 completed .002s 0+0us 0+8io 0+0net 8036k 0pf
 Perforce server info:
 	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
 --- lapse .002s
@@ -695,7 +695,7 @@ func TestServerActiveThreads(t *testing.T) {
 Perforce server info:
 	2020/01/11 02:00:02 pid 25396 p4sdp@chi 127.0.0.1 [p4/2019.2/LINUX26X86_64/1891638] 'user-serverid'
 Perforce server info:
-	2020/01/11 02:00:02 pid 25396 completed .008s 0+0us 0+8io 0+0net 7632k 0pf 
+	2020/01/11 02:00:02 pid 25396 completed .008s 0+0us 0+8io 0+0net 7632k 0pf
 2020/01/11 02:00:05 731966731 pid 24961: Server is now using 148 active threads.
 Perforce server info:
 	2020/01/11 02:00:06 pid 6170 svc_wok@unknown background [p4d/2019.2/LINUX26X86_64/1891638] 'pull -i 1'
@@ -865,7 +865,6 @@ Perforce server info:
 `
 	output := parseLogLines(testInput)
 	assert.Equal(t, 4, len(output))
-	//assert.Equal(t, "", output[3])
 	assert.JSONEq(t, cleanJSON(`{"processKey":"44c92f3be809fd15dfc26cc8fb359216","cmd":"pull","pid":55998,"lineNo":38,"user":"svc0","workspace":"unknown","ip":"background","app":"p4d/2018.1/DARWIN90X86_64/1660568","args":"-u -i 1 -b 1","startTime":"2018/06/01 04:29:44","endTime":"2018/06/01 04:29:44","cmdError":false,"tables":[{"tableName":"rdb.lbr","pagesIn":7,"pagesOut":4,"pagesCached":2,"writeLocks":3,"getRows":1,"posRows":1,"scanRows":4,"putRows":1,"delRows":1}]}`),
 		cleanJSON(output[0]))
 	assert.JSONEq(t, cleanJSON(`{"processKey":"9e39beedee815db46bb4c870c11a0b8d","cmd":"pull","pid":55997,"lineNo":2,"user":"svc0","workspace":"unknown","ip":"background","app":"p4d/2018.1/DARWIN90X86_64/1660568","args":"-I 100 -b 1","startTime":"2018/06/01 04:29:43","endTime":"2018/06/01 04:29:43","cmdError":false,"tables":[{"tableName":"counters","pagesIn":2,"pagesCached":2,"writeLocks":1,"getRows":1}]}`),
@@ -882,7 +881,7 @@ Perforce server info:
 	2018/09/06 06:00:02 pid 22245 auto@archive_auto 127.0.0.1 [archive/v60] 'user-revert /usr/local/arch/datastore/...'
 
 Perforce server info:
-	2018/09/06 06:00:02 pid 22245 completed 6.92s 6901+4us 32+8io 0+0net 19996k 0pf 
+	2018/09/06 06:00:02 pid 22245 completed 6.92s 6901+4us 32+8io 0+0net 19996k 0pf
 
 Perforce server info:
 	2018/09/06 06:00:02 pid 22245 auto@archive_auto 127.0.0.1 [archive/v60] 'user-revert /usr/local/arch/datastore/...'
@@ -936,11 +935,11 @@ Perforce server info:
 ---   total lock wait+held read/write 1ms+2ms/3ms+4ms
 
 Perforce server info:
-	2020/03/11 06:08:17 pid 15855 completed .276s 4+4us 256+224io 0+0net 9212k 0pf 
+	2020/03/11 06:08:17 pid 15855 completed .276s 4+4us 256+224io 0+0net 9212k 0pf
 Perforce server info:
 	2020/03/11 06:08:16 pid 15855 fred@fred_ws 10.1.4.213/10.1.3.243 [Helix P4V/NTX64/2019.2/1904275/v86] 'user-change -i'
 --- lapse .276s
---- usage 4+4us 256+240io 0+0net 9212k 0pf 
+--- usage 4+4us 256+240io 0+0net 9212k 0pf
 --- rpc msgs/size in+out 3+5/0mb+0mb himarks 280100/280100 snd/rcv .000s/.190s
 --- db.counters
 ---   pages in+out+cached 7+6+2
@@ -1455,4 +1454,51 @@ Perforce server info:
 	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2671716", "args":"-i 1 -u", "cmd":"pull", "cmdError":false, "endTime":"2025/02/18 02:56:01", "ip":"background", "lineNo":17, "pid":1958, "processKey":"449091d15dcd6c709c2508d3366ecd0f", "startTime":"2025/02/18 02:56:01", "tables":[{"pagesCached":14, "pagesIn":2, "posRows":3, "scanRows":122, "tableName":"rdb.lbr", "writeLocks":1}], "user":"svc_p4d_edge_CL1", "workspace":"unknown"}`), cleanJSON(output[0]))
 	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2671716", "args":"-i 1", "cmd":"pull", "cmdError":false, "endTime":"2025/02/18 02:56:01", "ip":"background", "lineNo":23, "memMB":85, "memPeakMB":85, "pid":1954, "processKey":"c5145377db5f1f59dbf9ba653b5d51a8", "startTime":"2025/02/18 02:56:01", "tables":[{"pagesCached":9, "pagesIn":2, "pagesOut":3, "putRows":1, "tableName":"topology", "writeLocks":1}], "user":"svc_p4d_edge_CL1", "workspace":"unknown"}`), cleanJSON(output[1]))
 	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.2.PREP-TEST_ONLY/LINUX26X86_64/2670806", "args":"-s", "cmd":"user-info", "cmdError":false, "endTime":"2025/02/18 02:56:01", "ip":"127.0.0.1", "lineNo":1, "maxRss":11140, "memMB":28, "memPeakMB":28, "pid":833770, "processKey":"fd57652b6af219c6ec23026d05eca09c", "rpcHimarkFwd":97604, "rpcHimarkRev":97604, "rpcMsgsOut":19, "running":1, "startTime":"2025/02/18 02:56:01", "tables":[{"pagesCached":4096, "pagesIn":2, "pagesOut":4, "putRows":2, "tableName":"monitor", "writeLocks":2}, {"pagesCached":5, "pagesIn":6, "posRows":1, "readLocks":1, "scanRows":28, "tableName":"trigger"}], "user":"p4sdp", "workspace":"castor"}`), cleanJSON(output[2]))
+}
+
+func TestPullInterval(t *testing.T) {
+	// Testing with pull -i or variation thereof as well as interactive pull which has track records for rdb.lbr as well as other tables potentially
+	testInput := `
+Perforce server info:
+	2025/02/16 02:35:02 pid 133109 perforce@ip-10-13-4-29 127.0.0.1 [p4/2024.1/LINUX26X86_64/2697766] 'user-pull -l'
+server to client 127.0.0.1:1666 vs 127.0.0.1:1666
+Perforce server info:
+	2025/02/16 02:35:02 pid 133109 perforce@ip-10-13-4-29 127.0.0.1 [p4/2024.1/LINUX26X86_64/2697766] 'user-pull -l'
+--- rdb.lbr
+---   pages in+out+cached 3+0+2
+---   locks read/write 1/0 rows get+pos+scan put+del 0+1+1 0+0
+
+Perforce server info:
+	2025/02/16 02:35:02 pid 133109 completed .001s 0+1us 0+0io 0+0net 13352k 0pf
+Perforce server info:
+	2025/02/16 02:35:02 pid 133109 perforce@ip-10-13-4-29 127.0.0.1 [p4/2024.1/LINUX26X86_64/2697766] 'user-pull -l'
+--- lapse .001s
+--- usage 0+1us 0+0io 0+0net 13352k 0pf
+--- memory cmd/proc 20mb/20mb
+--- rpc msgs/size in+out 2+2/0mb+0mb himarks 795416/795272 snd/rcv .000s/.000s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb
+--- db.server
+---   pages in+out+cached 1+0+2
+---   locks read/write 1/0 rows get+pos+scan put+del 1+0+0 0+0
+
+Perforce server info:
+	2025/02/16 02:35:03 pid 3709 svc_p4d_edge_usw2@unknown background [p4d/2024.1/LINUX26X86_64/2697766] 'pull -i 1 -u'
+--- rdb.lbr
+---   pages in+out+cached 2+0+6
+---   locks read/write 0/1 rows get+pos+scan put+del 0+0+1 0+0
+
+Perforce server info:
+	2025/02/16 02:35:16 pid 3704 svc_p4d_edge_usw2@unknown background [p4d/2024.1/LINUX26X86_64/2697766] 'pull -i 1'
+--- memory cmd/proc 1656mb/1656mb
+--- db.user
+---   pages in+out+cached 2+3+2
+---   locks read/write 0/1 rows get+pos+scan put+del 0+0+0 1+0
+--- replica/pull(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+-1ms
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 3, len(output))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.1/LINUX26X86_64/2697766", "args":"-l", "cmd":"user-pull", "cmdError":false, "completedLapse":0.001, "endTime":"2025/02/16 02:35:02", "ip":"127.0.0.1", "lineNo":2, "maxRss":13352, "memMB":20, "memPeakMB":20, "pid":133109, "processKey":"30042a51bb5ac7d12b06de6dec917306", "rpcHimarkFwd":795416, "rpcHimarkRev":795272, "rpcMsgsIn":2, "rpcMsgsOut":2, "running":1, "sCpu":1, "startTime":"2025/02/16 02:35:02", "tables":[{"pagesCached":2, "pagesIn":3, "posRows":1, "readLocks":1, "scanRows":1, "tableName":"rdb.lbr"}, {"getRows":1, "pagesCached":2, "pagesIn":1, "readLocks":1, "tableName":"server"}], "user":"perforce", "workspace":"ip-10-13-4-29"}`), cleanJSON(output[0]))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.1/LINUX26X86_64/2697766", "args":"-i 1", "cmd":"pull", "cmdError":false, "endTime":"2025/02/16 02:35:16", "ip":"background", "lineNo":30, "memMB":1656, "memPeakMB":1656, "pid":3704, "processKey":"7af452e5eff6e24dae0f25ea10368196", "startTime":"2025/02/16 02:35:16", "tables":[{"pagesCached":2, "pagesIn":2, "pagesOut":3, "putRows":1, "tableName":"user", "writeLocks":1}], "user":"svc_p4d_edge_usw2", "workspace":"unknown"}`), cleanJSON(output[1]))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.1/LINUX26X86_64/2697766", "args":"-i 1 -u", "cmd":"pull", "cmdError":false, "endTime":"2025/02/16 02:35:03", "ip":"background", "lineNo":24, "pid":3709, "processKey":"f84ba69c0945839e6418d009471301d8", "startTime":"2025/02/16 02:35:03", "tables":[{"pagesCached":6, "pagesIn":2, "scanRows":1, "tableName":"rdb.lbr", "writeLocks":1}], "user":"svc_p4d_edge_usw2", "workspace":"unknown"}`), cleanJSON(output[2]))
 }
