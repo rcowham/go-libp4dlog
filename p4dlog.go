@@ -1169,7 +1169,7 @@ func (fp *P4dFileParser) SetNoCompletionRecords() {
 }
 
 func (fp *P4dFileParser) debugLog(cmd *Command) bool {
-	return cmd.Pid == fp.debugPID && cmd.Cmd == fp.debugCmd
+	return cmd != nil && cmd.Pid == fp.debugPID && cmd.Cmd == fp.debugCmd
 }
 
 // SetDurations - for debugging
@@ -1252,17 +1252,13 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 				fp.trackRunning("t01", newCmd, 1)
 			}
 		} else if cmdHasNoCompletionRecord(newCmd) {
-			if hasTrackInfo {
-				// TODO: if hasTrackInfo && !cmd.hasTrackInfo {
-				cmd.updateFrom(newCmd)
-			} else {
-				if debugLog {
-					fp.logger.Infof("addCommand outputting old since no trackInfo")
-				}
-				fp.outputCmd(cmd)
-				newCmd.duplicateKey = true
-				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+			// Even if they have track info, we output the old command
+			if debugLog {
+				fp.logger.Infof("addCommand outputting old since no trackInfo")
 			}
+			fp.outputCmd(cmd)
+			newCmd.duplicateKey = true
+			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 		} else {
 			// Typically track info only present when command has completed - especially for duplicates
 			// Interactive pull commands are an exception - they may have track records for rdb.lbr and then a final set too.
@@ -2071,7 +2067,6 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			if len(trigger) > 0 {
 				fp.processTriggerLapse(cmd, trigger, block.lines[len(block.lines)-1])
 			}
-			fp.addCommand(cmd, false)
 		}
 		if !matched {
 			// process completed and computed
@@ -2111,7 +2106,9 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				}
 			}
 		}
-
+	}
+	if cmd != nil {
+		fp.addCommand(cmd, false) // Only happens if no track records - which will already have added the command
 	}
 }
 

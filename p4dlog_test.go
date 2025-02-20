@@ -296,7 +296,7 @@ Perforce server info:
 		cleanJSON(output[1]))
 }
 
-// Thes get duplicate pids in same second and have no completed record
+// These get duplicate pids in same second and have no completion record
 func TestRemoteFileFetches(t *testing.T) {
 	testInput := `
 Perforce server info:
