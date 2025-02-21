@@ -1225,7 +1225,7 @@ func (fp *P4dFileParser) trackRunning(msg string, cmd *Command, delta int) {
 func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	debugLog := fp.debugLog(newCmd) || FlagSet(fp.debug, DebugAddCommands)
 	if debugLog {
-		fp.logger.Infof("addCommand: hasTrack %v, pid %d lineNo %d cmd %s dup %v", hasTrackInfo, newCmd.Pid, newCmd.LineNo, newCmd.Cmd, newCmd.duplicateKey)
+		fp.logger.Infof("addCommand: start: pid %d, hasTrack %v, lineNo %d, cmd %s, dup %v", newCmd.Pid, hasTrackInfo, newCmd.LineNo, newCmd.Cmd, newCmd.duplicateKey)
 	}
 	if fp.currTime.IsZero() || newCmd.StartTime.After(fp.currTime) {
 		fp.currTime = newCmd.StartTime
@@ -1240,11 +1240,11 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	}
 	if cmd, ok := fp.cmds[newCmd.Pid]; ok {
 		if debugLog {
-			fp.logger.Infof("addCommand found: pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
+			fp.logger.Infof("addCommand: found same pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
 		}
 		if cmd.ProcessKey != "" && cmd.ProcessKey != newCmd.ProcessKey {
 			if debugLog {
-				fp.logger.Infof("addCommand outputting old since process key different")
+				fp.logger.Infof("addCommand: outputting old since process key different")
 			}
 			fp.outputCmd(cmd)
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
@@ -1254,7 +1254,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		} else if cmdHasNoCompletionRecord(newCmd) {
 			// Even if they have track info, we output the old command
 			if debugLog {
-				fp.logger.Infof("addCommand outputting old since no trackInfo")
+				fp.logger.Infof("addCommand: outputting old since no trackInfo pid %d", cmd.Pid)
 			}
 			fp.outputCmd(cmd)
 			newCmd.duplicateKey = true
@@ -1265,12 +1265,12 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			if cmd.hasTrackInfo {
 				if cmd.LineNo == newCmd.LineNo || (cmd.Cmd == "user-pull" && !cmdPullAutomatic(cmd.Args)) {
 					if debugLog {
-						fp.logger.Infof("addCommand updating duplicate")
+						fp.logger.Infof("addCommand: updating duplicate pid %d", cmd.Pid)
 					}
 					cmd.updateFrom(newCmd)
 				} else {
 					if debugLog {
-						fp.logger.Infof("addCommand found duplicate - outputting old")
+						fp.logger.Infof("addCommand: found duplicate - outputting old pid %d", cmd.Pid)
 					}
 					fp.outputCmd(cmd)
 					fp.trackRunning("t02", newCmd, 1)
@@ -1279,20 +1279,20 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 				}
 			} else {
 				if debugLog {
-					fp.logger.Infof("addCommand updating")
+					fp.logger.Infof("addCommand: updating pid %d", cmd.Pid)
 				}
 				cmd.updateFrom(newCmd)
 			}
 		}
 		if hasTrackInfo {
 			if debugLog {
-				fp.logger.Infof("addCommand setting hasTrackInfo")
+				fp.logger.Infof("addCommand: setting hasTrackInfo=true pid %d", cmd.Pid)
 			}
 			cmd.hasTrackInfo = true
 		}
 	} else {
 		if debugLog {
-			fp.logger.Infof("addCommand remembering newCmd")
+			fp.logger.Infof("addCommand: remembering newCmd pid %d", newCmd.Pid)
 		}
 		fp.cmds[newCmd.Pid] = newCmd
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
@@ -1849,17 +1849,17 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		if cmd.completed {
 			if cmd.hasTrackInfo {
 				if debugLog {
-					fp.logger.Infof("output: r1 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+					fp.logger.Infof("outputCompletedCmds: r1 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
 				}
 				completed = true
 			} else if !cmd.EndTime.IsZero() && fp.currStartTime.Sub(cmd.EndTime) >= timeWindow {
 				if debugLog {
-					fp.logger.Infof("output: r2 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+					fp.logger.Infof("outputCompletedCmds: r2 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
 				}
 				completed = true
 			} else if !fp.timeLastCmdProcessed.IsZero() && fp.currTime.Sub(fp.timeLastCmdProcessed) >= timeWindow {
 				if debugLog {
-					fp.logger.Infof("output: r3 pid %d lineNo %d cmd %s currT %s tlcp %s", cmd.Pid, cmd.LineNo, cmd.Cmd, fp.currTime, fp.timeLastCmdProcessed)
+					fp.logger.Infof("outputCompletedCmds: r3 pid %d lineNo %d cmd %s currT %s tlcp %s", cmd.Pid, cmd.LineNo, cmd.Cmd, fp.currTime, fp.timeLastCmdProcessed)
 				}
 				completed = true
 			}
@@ -1868,17 +1868,17 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		if !completed && (cmd.hasTrackInfo && cmd.computeEndTime() != blankTime &&
 			fp.currStartTime.Sub(cmd.computeEndTime()) >= timeWindow) {
 			if debugLog {
-				fp.logger.Infof("output: r4 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+				fp.logger.Infof("outputCompletedCmds: r4 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
 			}
 			completed = true
 		}
 		// Handle the special commands which don't receive a completed time - we use StartTime
 		if debugLog {
-			fp.logger.Infof("output: r4a pid %d lineNo %d cmd %s start %v completed %v diff %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.StartTime, completed, fp.currStartTime.Sub(cmd.StartTime))
+			fp.logger.Infof("outputCompletedCmds: r4a pid %d lineNo %d cmd %s start %v completed %v diff %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.StartTime, completed, fp.currStartTime.Sub(cmd.StartTime))
 		}
 		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && (cmdHasNoCompletionRecord(cmd) || fp.noCompletionRecords) {
 			if debugLog {
-				fp.logger.Infof("output: r5 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
+				fp.logger.Infof("outputCompletedCmds: r5 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
 			}
 			completed = true
 		}
@@ -1898,13 +1898,13 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 
 	if cmdHasBeenProcessed || fp.timeLastCmdProcessed == blankTime {
 		if FlagSet(fp.debug, DebugAddCommands) {
-			fp.logger.Debugf("outputCompletedCommands: updating tlcp from %v to %v", fp.timeLastCmdProcessed, fp.currTime)
+			fp.logger.Debugf("outputCompletedCmds: updating tlcp from %v to %v", fp.timeLastCmdProcessed, fp.currTime)
 		}
 		fp.timeLastCmdProcessed = fp.currTime
 	}
 	if fp.logger != nil && fp.debug > 0 {
 		endCount := len(fp.cmds)
-		fp.logger.Debugf("outputCompletedCommands: start %d, end %d, count %d, continued %d, exited %d",
+		fp.logger.Debugf("outputCompletedCmds: start %d, end %d, count %d, continued %d, exited %d",
 			startCount, endCount, startCount-endCount, fp.outputCmdsContinued, fp.outputCmdsExited)
 	}
 }
