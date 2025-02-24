@@ -1296,7 +1296,12 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		}
 		fp.cmds[newCmd.Pid] = newCmd
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
-			newCmd.duplicateKey = true
+			if len(newCmd.Tables) > 0 { // Ignore commands which update clientEntity locks for example
+				if debugLog {
+					fp.logger.Infof("addCommand: setting duplicate pid %d", newCmd.Pid)
+				}
+				newCmd.duplicateKey = true
+			}
 		}
 		fp.pidsSeenThisSecond[newCmd.Pid] = true
 		if !cmdHasNoCompletionRecord(newCmd) && !newCmd.completed {
@@ -2121,7 +2126,8 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 			ok := false
 			if cmd, ok = fp.cmds[pid]; ok {
 				cmd.CmdError = true
-				cmd.completed = true
+				// Use to be the case that errors would ensure nothing else for commands, but no longer!
+				// cmd.completed = true
 				if !cmdHasNoCompletionRecord(cmd) {
 					fp.trackRunning("t06", cmd, -1)
 				}

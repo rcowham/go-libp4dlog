@@ -363,8 +363,6 @@ func main() {
 			}
 		case p4dlog.ServerEvent:
 			p4p.totalCount += 1
-			p4p.pendingCount += 1
-			fmt.Fprintf(fJSON, "%s\n", cmd.String())
 		}
 	}
 

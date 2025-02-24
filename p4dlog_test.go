@@ -1502,3 +1502,105 @@ Perforce server info:
 	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.1/LINUX26X86_64/2697766", "args":"-i 1", "cmd":"pull", "cmdError":false, "endTime":"2025/02/16 02:35:16", "ip":"background", "lineNo":30, "memMB":1656, "memPeakMB":1656, "pid":3704, "processKey":"7af452e5eff6e24dae0f25ea10368196", "startTime":"2025/02/16 02:35:16", "tables":[{"pagesCached":2, "pagesIn":2, "pagesOut":3, "putRows":1, "tableName":"user", "writeLocks":1}], "user":"svc_p4d_edge_usw2", "workspace":"unknown"}`), cleanJSON(output[1]))
 	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.1/LINUX26X86_64/2697766", "args":"-i 1 -u", "cmd":"pull", "cmdError":false, "endTime":"2025/02/16 02:35:03", "ip":"background", "lineNo":24, "pid":3709, "processKey":"f84ba69c0945839e6418d009471301d8", "startTime":"2025/02/16 02:35:03", "tables":[{"pagesCached":6, "pagesIn":2, "scanRows":1, "tableName":"rdb.lbr", "writeLocks":1}], "user":"svc_p4d_edge_usw2", "workspace":"unknown"}`), cleanJSON(output[2]))
 }
+
+func TestUnlockErrors(t *testing.T) {
+	// Testing with unlock having errors but returning track info!
+	testInput := `Perforce server info:
+	2025/02/16 03:00:01 pid 146053 perforce@ip-10-13-4-29 127.0.0.1 [p4/2024.1/LINUX26X86_64/2697766] 'user-unlock -x'
+
+Perforce server error:
+	Date 2025/02/16 03:00:01:
+	Pid 146053
+	Operation: user-unlock
+	No such file(s).
+
+Perforce server info:
+	2025/02/16 03:00:01 pid 146053 perforce@ip-10-13-4-29 127.0.0.1 [p4/2024.1/LINUX26X86_64/2697766] 'user-unlock -x'
+--- clientEntity/ip-10-13-4-29(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+0ms
+
+Perforce server info:
+	2025/02/16 03:00:01 pid 146053 completed .208s 4+1us 0+0io 0+0net 14680k 0pf
+Perforce server info:
+	2025/02/16 03:00:01 pid 146053 perforce@ip-10-13-4-29 127.0.0.1 [p4/2024.1/LINUX26X86_64/2697766] 'user-unlock -x'
+--- lapse .208s
+--- usage 4+1us 0+0io 0+0net 14680k 0pf
+--- memory cmd/proc 25mb/25mb
+--- rpc msgs/size in+out 2+3/0mb+0mb himarks 795416/795272 snd/rcv .000s/.000s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb
+--- rpc (p4d-commit-usw2-01.priv.eginfra.net:1666) msgs/size in+out 1+1/0mb+0mb himarks 2000/2000 snd/rcv .000s/.001s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb
+
+Perforce server info:
+	2025/02/16 03:00:04 pid 3704 svc_p4d_edge_usw2@unknown background [p4d/2024.1/LINUX26X86_64/2697766] 'pull -i 1'
+--- memory cmd/proc 1656mb/1656mb
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 2, len(output))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4d/2024.1/LINUX26X86_64/2697766", "args":"-i 1", "cmd":"pull", "cmdError":false, "endTime":"2025/02/16 03:00:04", "ip":"background", "lineNo":27, "memMB":1656, "memPeakMB":1656, "pid":3704, "processKey":"04d5057e3d4b7bb212253805ddc103e3", "startTime":"2025/02/16 03:00:04", "tables":[], "user":"svc_p4d_edge_usw2", "workspace":"unknown"}`), cleanJSON(output[0]))
+	assert.JSONEq(t, cleanJSON(`{"app":"p4/2024.1/LINUX26X86_64/2697766", "args":"-x", "cmd":"user-unlock", "cmdError":true, "completedLapse":0.208, "endTime":"2025/02/16 03:00:01", "ip":"127.0.0.1", "lineNo":1, "maxRss":14680, "memMB":25, "memPeakMB":25, "pid":146053, "processKey":"649ecb43b231ba18af2dc9239e958e00", "rpcHimarkFwd":795416, "rpcHimarkRev":795272, "rpcMsgsIn":2, "rpcMsgsOut":3, "running":1, "sCpu":1, "startTime":"2025/02/16 03:00:01", "tables":[], "uCpu":4, "user":"perforce", "workspace":"ip-10-13-4-29"}`), cleanJSON(output[1]))
+}
+
+func TestDiffErrors(t *testing.T) {
+	// Testing with diff having errors but returning track info!
+	testInput := `Perforce server info:
+	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
+
+Perforce server error:
+	Date 2025/02/19 04:33:40:
+	Pid 2504639
+	Operation: user-diff
+	Z:/main/fred_ws/__TurboStreaming__/Gyms/TurboStreaming/TurboStreaming_Proxy/TurboStreamingWorld.uasset#have - file(s) not on client.
+Perforce server info:
+	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
+--- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+---   total lock wait+held read/write 0ms+0ms/0ms+0ms
+
+Perforce server info:
+	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
+--- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+---   total lock wait+held read/write 0ms+0ms/0ms+0ms
+
+Perforce server error:
+	Date 2025/02/19 04:33:40:
+	Pid 2504639
+	Operation: user-diff
+	Z:/main/fred_ws/UI/Panels/HealthBar/Enemy/WB_Enemy_HealthBar.uasset#have - file(s) not on client.
+Perforce server info:
+	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
+--- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+---   total lock wait+held read/write 0ms+0ms/0ms+0ms
+
+Perforce server error:
+	Date 2025/02/19 04:33:40:
+	Pid 2504639
+	Operation: user-diff
+	Z:/main/fred_ws/__TurboStreaming__/Gyms/TurboStreaming/TurboStreaming_Structure/TurboStreamingWorld.uasset#have - file(s) not on client.
+Perforce server info:
+	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
+--- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+---   total lock wait+held read/write 0ms+0ms/0ms+0ms
+
+Perforce server error:
+	Date 2025/02/19 04:33:40:
+	Pid 2504639
+	Operation: user-diff
+	Z:/main/fred_ws/assetsInit.uasset#have - file(s) not on client.
+Perforce server info:
+	2025/02/19 04:33:40 pid 2504639 completed .093s 34+57us 0+1640io 0+0net 13724k 0pf
+Perforce server info:
+	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
+--- lapse .093s
+--- usage 34+57us 0+1640io 0+0net 13724k 0pf
+--- memory cmd/proc 18mb/18mb
+--- rpc msgs/size in+out 0+828/0mb+0mb himarks 64835/64836 snd/rcv .000s/.000s
+--- filetotals (svr) send/recv files+bytes 0+0mb/0+0mb
+--- db.counters
+---   pages in+out+cached 1+0+2
+---   locks read/write 1/0 rows get+pos+scan put+del 0+0+0 0+0
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.JSONEq(t, cleanJSON(`{"app":"UE/v91", "args":"-f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have", "cmd":"user-diff", "cmdError":true, "completedLapse":0.093, "diskOut":1640, "endTime":"2025/02/19 04:33:40", "ip":"10.134.56.10/192.168.181.46", "lineNo":1, "maxRss":13724, "memMB":18, "memPeakMB":18, "pid":2.504639e+06, "processKey":"3d67c6a89b0b9bbcbff041af0ed116d7", "rpcHimarkFwd":64835, "rpcHimarkRev":64836, "rpcMsgsOut":828, "running":1, "sCpu":57, "startTime":"2025/02/19 04:33:40", "tables":[{"pagesCached":2, "pagesIn":1, "readLocks":1, "tableName":"counters"}], "uCpu":34, "user":"fred", "workspace":"fred_CDPRS-ID2883_8836"}`), cleanJSON(output[0]))
+	// assert.JSONEq(t, cleanJSON(`{}`), cleanJSON(output[1]))
+}
