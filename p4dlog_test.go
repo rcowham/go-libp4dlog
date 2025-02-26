@@ -536,9 +536,9 @@ Perforce server info:
 `
 	output := parseLogLines(testInput)
 	assert.Equal(t, 2, len(output))
-	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c","cmd":"user-change","pid":4496,"lineNo":2,"user":"lcheng","workspace":"lcheng","completedLapse":0.015,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
+	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c","cmd":"user-change","pid":4496,"lineNo":2,"user":"lcheng","workspace":"lcheng","completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
 		cleanJSON(output[0]))
-	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c.18","cmd":"user-change","pid":4496,"lineNo":18,"user":"lcheng","workspace":"lcheng","completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
+	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c.23","cmd":"user-change","pid":4496,"lineNo":23,"user":"lcheng","workspace":"lcheng","completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
 		cleanJSON(output[1]))
 }
 
@@ -1273,12 +1273,10 @@ Perforce server info:
 Perforce server info:
 	2024/06/10 06:13:02 pid 1837049 git-fusion-user@git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4 10.5.40.30 [Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)] 'IDLE' exited unexpectedly, removed from monitor table.`
 	output := parseLogLines(testInput)
-	assert.Equal(t, 2, len(output))
+	assert.Equal(t, 1, len(output))
 	// assert.Equal(t, "", output[0])
-	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":false, "completedLapse":0.002, "diskOut":8, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":2, "maxRss":13876, "memMB":30, "memPeakMB":30, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a", "rpcHimarkFwd":97604, "rpcHimarkRev":318788, "rpcMsgsOut":1, "running":1, "sCpu":1, "startTime":"2024/06/10 06:12:03", "uCpu":1, "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4","tables":[]}`),
+	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":true, "completedLapse":0.002, "diskOut":8, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":2, "maxRss":13876, "memMB":30, "memPeakMB":30, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a", "rpcHimarkFwd":97604, "rpcHimarkRev":318788, "rpcMsgsOut":1, "running":1, "sCpu":1, "startTime":"2024/06/10 06:12:03", "uCpu":1, "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4","tables":[]}`),
 		cleanJSON(output[0]))
-	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":true, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":14, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a.14", "running":1, "startTime":"2024/06/10 06:12:03", "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4", "tables":[]}`),
-		cleanJSON(output[1]))
 }
 
 func TestTriggerLapse(t *testing.T) {
@@ -1406,12 +1404,10 @@ Perforce server info:
 `
 
 	output := parseLogLines(testInput)
-	assert.Equal(t, 2, len(output))
+	assert.Equal(t, 1, len(output))
 	// assert.Equal(t, "", output[0])
-	assert.JSONEq(t, cleanJSON(`{"app":"unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/5662]/v97", "args":"", "cmd":"client-Stats", "cmdError":false, "endTime":"2024/12/21 10:08:51", "fileTotalsRcv":3, "fileTotalsRcvMBytes":4, "fileTotalsSnd":1, "fileTotalsSndMBytes":2, "ip":"10.1.2.3", "lineNo":12, "pid":93275, "processKey":"89b4e4bf56c0419db857bda47c0e8433", "startTime":"2024/12/21 10:08:51", "tables":[], "user":"unknown", "workspace":"unknown"}`),
-		cleanJSON(output[0]))
 	assert.JSONEq(t, cleanJSON(`{"app":"unnamed p4-python script [PY3.10.4/P4PY2024.2/API2024.2/2675662]/v97", "args":"-o C:\\Users\\jenkins\\AppData\\Local\\Temp\\9asfdhwehs //utils/configs/config.yaml", "cmd":"user-print", "cmdError":false, "completedLapse":0.001, "endTime":"2024/12/21 10:08:51", "ip":"10.1.2.3", "lineNo":1, "maxRss":10936, "memMB":19, "memPeakMB":19, "pid":93275, "processKey":"b38b2f8982d9c6f0a6e84f62380e4f9e", "rpcHimarkFwd":175862, "rpcHimarkRev":130372, "rpcMsgsIn":2, "rpcMsgsOut":6, "running":1, "startTime":"2024/12/21 10:08:51", "tables":[], "user":"jenkins", "workspace":"${P4_CLIENT}"}`),
-		cleanJSON(output[1]))
+		cleanJSON(output[0]))
 }
 
 func TestPullS(t *testing.T) {

@@ -1243,13 +1243,19 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			fp.logger.Infof("addCommand: found same pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
 		}
 		if cmd.ProcessKey != "" && cmd.ProcessKey != newCmd.ProcessKey {
-			if debugLog {
-				fp.logger.Infof("addCommand: outputting old since process key different")
-			}
-			fp.outputCmd(cmd)
-			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
-			if !cmdHasNoCompletionRecord(newCmd) {
-				fp.trackRunning("t01", newCmd, 1)
+			if hasTrackInfo && !cmdHasRealTableTrackInfo(newCmd) {
+				if debugLog {
+					fp.logger.Infof("addCommand: ignoring dummy track for pid %d", cmd.Pid)
+				}
+			} else {
+				if debugLog {
+					fp.logger.Infof("addCommand: outputting old since process key different pid %d", cmd.Pid)
+				}
+				fp.outputCmd(cmd)
+				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+				if !cmdHasNoCompletionRecord(newCmd) {
+					fp.trackRunning("t01", newCmd, 1)
+				}
 			}
 		} else if cmdHasNoCompletionRecord(newCmd) {
 			// Even if they have track info, we output the old command
@@ -1262,7 +1268,8 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		} else {
 			// Typically track info only present when command has completed - especially for duplicates
 			// Interactive pull commands are an exception - they may have track records for rdb.lbr and then a final set too.
-			if cmd.hasTrackInfo {
+			// Syncs etc also set intermediate track info
+			if cmd.hasTrackInfo && cmdHasRealTableTrackInfo(newCmd) {
 				if cmd.LineNo == newCmd.LineNo || (cmd.Cmd == "user-pull" && !cmdPullAutomatic(cmd.Args)) {
 					if debugLog {
 						fp.logger.Infof("addCommand: updating duplicate pid %d", cmd.Pid)
@@ -1296,7 +1303,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		}
 		fp.cmds[newCmd.Pid] = newCmd
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
-			if len(newCmd.Tables) > 0 { // Ignore commands which update clientEntity locks for example
+			if !cmdHasRealTableTrackInfo(newCmd) { // Ignore commands which update clientEntity locks for example
 				if debugLog {
 					fp.logger.Infof("addCommand: setting duplicate pid %d", newCmd.Pid)
 				}
@@ -1309,6 +1316,18 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		}
 	}
 	fp.outputCompletedCommands()
+}
+
+// Commands are treated as having no track info if they have no table entries, or the only
+// tables are things like rdb.lbr
+func cmdHasRealTableTrackInfo(cmd *Command) bool {
+	if len(cmd.Tables) == 0 {
+		return false
+	}
+	if _, ok := cmd.Tables["rdb.lbr"]; ok { // If only table is this one ignore it as can be update multiple times
+		return len(cmd.Tables) > 1
+	}
+	return true
 }
 
 // Special commands which only have start records not completion records
@@ -2069,6 +2088,9 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			}
 			h := md5.Sum([]byte(line))
 			cmd.ProcessKey = hex.EncodeToString(h[:])
+			// if fp.debugLog(cmd) {
+			// 	fp.logger.Debugf("Setting pid %d, processKey %s, '%s'", cmd.Pid, cmd.ProcessKey, line)
+			// }
 			if len(trigger) > 0 {
 				fp.processTriggerLapse(cmd, trigger, block.lines[len(block.lines)-1])
 			}
