@@ -181,11 +181,11 @@ func (p4p *P4Pending) parseLog(logfile string) {
 		// Use time records in log to cause ticks for log parser
 		if len(scanner.Text()) > maxLine {
 			line := fmt.Sprintf("%s...'", scanner.Text()[0:maxLine])
-			p4p.processTimePassing(line)
+			// p4p.processTimePassing(line)
 			p4p.linesChan <- line
 		} else {
 			line := scanner.Text()
-			p4p.processTimePassing(line)
+			// p4p.processTimePassing(line)
 			p4p.linesChan <- line
 		}
 		i += 1
@@ -337,7 +337,8 @@ func main() {
 	if *debugPID != 0 && *debugCmd != "" {
 		fp.SetDebugPID(*debugPID, *debugCmd)
 	}
-	cmdChan = fp.LogParser(ctx, linesChan, p4p.timeChan)
+	// cmdChan = fp.LogParser(ctx, linesChan, p4p.timeChan)
+	cmdChan = fp.LogParser(ctx, linesChan, nil)
 
 	// Process all input files, sending lines into linesChan
 	wg.Add(1)

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"flag"
 	"sort"
 	"strings"
 	"testing"
@@ -13,13 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// func getResult(output chan string) []string {
-// 	lines := []string{}
-// 	for line := range output {
-// 		lines = append(lines, line)
-// 	}
-// 	return lines
-// }
+var testDebug = flag.Bool("debug", false, "Set for debug")
 
 func parseLogLines(input string) []string {
 
@@ -28,6 +23,10 @@ func parseLogLines(input string) []string {
 	logger := logrus.New()
 	logger.Level = logrus.InfoLevel
 	fp := NewP4dFileParser(logger)
+	if *testDebug {
+		fp.debug = 511
+		logger.Level = logrus.DebugLevel
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -152,6 +151,9 @@ Perforce server info:
 
 func TestStorageRecords(t *testing.T) {
 	testInput := `
+Perforce server info:
+	2020/10/16 06:00:01 pid 8748 build@commander-controller 10.5.20.152 [p4/2018.1/LINUX26X86_64/1957529] 'user-client -i'
+
 Perforce server info:
 	2020/10/16 06:00:01 pid 8748 build@commander-controller 10.5.20.152 [p4/2018.1/LINUX26X86_64/1957529] 'user-client -i'
 --- storageup/storageup(R)
@@ -536,9 +538,9 @@ Perforce server info:
 `
 	output := parseLogLines(testInput)
 	assert.Equal(t, 2, len(output))
-	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c","cmd":"user-change","pid":4496,"lineNo":2,"user":"lcheng","workspace":"lcheng","completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
+	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c","cmd":"user-change","pid":4496,"lineNo":2,"user":"lcheng","workspace":"lcheng","completedLapse":0.015,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
 		cleanJSON(output[0]))
-	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c.23","cmd":"user-change","pid":4496,"lineNo":23,"user":"lcheng","workspace":"lcheng","completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
+	assert.JSONEq(t, cleanJSON(`{"processKey":"9b2bf87ce1b8e88d0d89cf44cffc4a8c.18","cmd":"user-change","pid":4496,"lineNo":18,"user":"lcheng","workspace":"lcheng","completedLapse":0.016,"ip":"10.100.72.195","app":"P4V/NTX64/2014.1/888424/v76","args":"-o","startTime":"2016/10/19 14:53:48","endTime":"2016/10/19 14:53:48","running":1,"rpcMsgsOut":1,"rpcHimarkFwd":523588,"rpcHimarkRev":64836,"cmdError":false,"tables":[{"tableName":"group","pagesIn":1,"pagesCached":7,"readLocks":1,"posRows":6,"scanRows":11},{"tableName":"user","pagesIn":1,"pagesCached":3,"readLocks":1,"getRows":1}]}`),
 		cleanJSON(output[1]))
 }
 
@@ -1262,6 +1264,9 @@ Perforce server info:
 
 Perforce server info:
 	2024/06/10 06:12:03 pid 1837049 git-fusion-user@git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4 127.0.0.1/10.5.40.30 [Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)] 'user-key git-fusion-auth-keys-last-changenum-gfprod3'
+
+Perforce server info:
+	2024/06/10 06:12:03 pid 1837049 git-fusion-user@git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4 127.0.0.1/10.5.40.30 [Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)] 'user-key git-fusion-auth-keys-last-changenum-gfprod3'
 --- clientEntity/git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4(W)
 ---   total lock wait+held read/write 0ms+0ms/0ms+68ms
 
@@ -1273,10 +1278,13 @@ Perforce server info:
 Perforce server info:
 	2024/06/10 06:13:02 pid 1837049 git-fusion-user@git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4 10.5.40.30 [Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)] 'IDLE' exited unexpectedly, removed from monitor table.`
 	output := parseLogLines(testInput)
-	assert.Equal(t, 1, len(output))
+	assert.Equal(t, 2, len(output))
 	// assert.Equal(t, "", output[0])
-	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":true, "completedLapse":0.002, "diskOut":8, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":2, "maxRss":13876, "memMB":30, "memPeakMB":30, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a", "rpcHimarkFwd":97604, "rpcHimarkRev":318788, "rpcMsgsOut":1, "running":1, "sCpu":1, "startTime":"2024/06/10 06:12:03", "uCpu":1, "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4","tables":[]}`),
+	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":false, "completedLapse":0.002, "diskOut":8, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":2, "maxRss":13876, "memMB":30, "memPeakMB":30, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a", "rpcHimarkFwd":97604, "rpcHimarkRev":318788, "rpcMsgsOut":1, "running":1, "sCpu":1, "startTime":"2024/06/10 06:12:03", "uCpu":1, "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4","tables":[]}`),
 		cleanJSON(output[0]))
+	assert.JSONEq(t, cleanJSON(`{"app":"Git Fusion/2017.1.SNAPSHOT/1778910 (2019/04/01)/v82 (brokered)", "args":"git-fusion-auth-keys-last-changenum-gfprod3", "cmd":"user-key", "cmdError":true, "endTime":"2024/06/10 06:12:03", "ip":"127.0.0.1/10.5.40.30", "lineNo":14, "pid":1.837049e+06, "processKey":"e60035bfd064b9c153c732d3b6a9206a.14", "running":1, "startTime":"2024/06/10 06:12:03", "user":"git-fusion-user", "workspace":"git-fusion--gfprod3-076a3fa2-272b-11ef-8240-0050568421b4", "tables":[]}`),
+		cleanJSON(output[1]))
+
 }
 
 func TestTriggerLapse(t *testing.T) {
@@ -1599,4 +1607,36 @@ Perforce server info:
 	assert.Equal(t, 1, len(output))
 	assert.JSONEq(t, cleanJSON(`{"app":"UE/v91", "args":"-f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have", "cmd":"user-diff", "cmdError":true, "completedLapse":0.093, "diskOut":1640, "endTime":"2025/02/19 04:33:40", "ip":"10.134.56.10/192.168.181.46", "lineNo":1, "maxRss":13724, "memMB":18, "memPeakMB":18, "pid":2.504639e+06, "processKey":"3d67c6a89b0b9bbcbff041af0ed116d7", "rpcHimarkFwd":64835, "rpcHimarkRev":64836, "rpcMsgsOut":828, "running":1, "sCpu":57, "startTime":"2025/02/19 04:33:40", "tables":[{"pagesCached":2, "pagesIn":1, "readLocks":1, "tableName":"counters"}], "uCpu":34, "user":"fred", "workspace":"fred_CDPRS-ID2883_8836"}`), cleanJSON(output[0]))
 	// assert.JSONEq(t, cleanJSON(`{}`), cleanJSON(output[1]))
+}
+
+func TestRdbLbrTimes(t *testing.T) {
+	// Testing with entries having different times for rdb.lbr - preventing easy tie up with the original pid
+	// So in the below the entry with timestampe 09:55:20 is ignored...
+	testInput := `
+Perforce server info:
+	2025/02/19 09:55:15 pid 2737919 fred@fred_ws 10.134.56.10/10.128.60.11 [UnrealGameSync/1.0.0] 'user-sync --parallel=threads=0 //fred.ws/Modifications.csv@8342135  (195) //fred.ws/Plugins/RED/Tool/Source/Tool/Public/ToolActorFilter.h@8342135'
+
+Perforce server info:
+	2025/02/19 09:55:15 pid 2737919 fred@fred_ws 10.134.56.10/10.128.60.11 [UnrealGameSync/1.0.0] 'user-sync --parallel=threads=0 //fred.ws/Modifications.csv@8342135  (195) //fred.ws/Plugins/RED/Tool/Source/Tool/Public/ToolActorFilter.h@8342135'
+--- clientEntity/fred.ws(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+1ms
+
+Perforce server info:
+	2025/02/19 09:55:20 pid 2737919 fred@fred_ws 10.134.56.10/10.128.60.11 [UnrealGameSync/1.0.0] 'user-sync --parallel=threads=0 //fred.ws/Modifications.csv@8342135  (195) //fred.ws/Plugins/RED/Tool/Source/Tool/Public/ToolActorFilter.h@8342135'
+--- rdb.lbr
+---   pages in+out+cached 10+6+2
+
+Perforce server info:
+	2025/02/19 09:55:15 pid 2737919 completed .093s 34+57us 0+1640io 0+0net 13724k 0pf
+Perforce server info:
+	2025/02/19 09:55:15 pid 2737919 fred@fred_ws 10.134.56.10/10.128.60.11 [UnrealGameSync/1.0.0] 'user-sync --parallel=threads=0 //fred.ws/Modifications.csv@8342135  (195) //fred.ws/Plugins/RED/Tool/Source/Tool/Public/ToolActorFilter.h@8342135'
+--- lapse .093s
+--- usage 34+57us 0+1640io 0+0net 13724k 0pf
+--- memory cmd/proc 18mb/18mb
+--- rpc msgs/size in+out 0+828/0mb+0mb himarks 64835/64836 snd/rcv .000s/.000s
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.JSONEq(t, cleanJSON(`{"app":"UnrealGameSync/1.0.0", "args":"--parallel=threads=0 //fred.ws/Modifications.csv@8342135  (195) //fred.ws/Plugins/RED/Tool/Source/Tool/Public/ToolActorFilter.h@8342135", "cmd":"user-sync", "cmdError":false, "completedLapse":0.093, "diskOut":1640, "endTime":"2025/02/19 09:55:15", "ip":"10.134.56.10/10.128.60.11", "lineNo":2, "maxRss":13724, "memMB":18, "memPeakMB":18, "pid":2.737919e+06, "processKey":"c8aba3119522e915d58da82f6dc849d9", "rpcHimarkFwd":64835, "rpcHimarkRev":64836, "rpcMsgsOut":828, "running":1, "sCpu":57, "startTime":"2025/02/19 09:55:15", "tables":[], "uCpu":34, "user":"fred", "workspace":"fred_ws"}`),
+		cleanJSON(output[0]))
 }

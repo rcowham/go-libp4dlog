@@ -146,6 +146,12 @@ func (s *ServerEvent) String() string {
 
 // Command is a command found in the block
 type Command struct {
+	duplicateKey            bool
+	completed               bool
+	countedInRunning        bool
+	hasTrackInfo            bool
+	hasTableTrackInfo       bool      // Has one or more entries for tablesß
+	hasIgnoredTables        bool      // Tables such as clientEntity which aren't tracked
 	ProcessKey              string    `json:"processKey"`
 	Cmd                     string    `json:"cmd"`
 	Pid                     int64     `json:"pid"`
@@ -238,10 +244,6 @@ type Command struct {
 	LbrUncompressCopies     int64     `json:"lbrUncompressCopies"`
 	CmdError                bool      `json:"cmderror"`
 	Tables                  map[string]*Table
-	duplicateKey            bool
-	completed               bool
-	countedInRunning        bool
-	hasTrackInfo            bool
 }
 
 // Table stores track information per table (part of Command)
@@ -827,6 +829,9 @@ func (c *Command) updateFrom(other *Command) {
 	if c.ProcessKey == "" {
 		c.ProcessKey = other.ProcessKey
 	}
+	if other.hasTableTrackInfo {
+		c.hasTableTrackInfo = other.hasTableTrackInfo
+	}
 	if c.User == "" {
 		c.User = other.User
 	}
@@ -1243,21 +1248,27 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			fp.logger.Infof("addCommand: found same pid %d lineNo %d cmd %s dup %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.duplicateKey)
 		}
 		if cmd.ProcessKey != "" && cmd.ProcessKey != newCmd.ProcessKey {
-			if hasTrackInfo && !cmdHasRealTableTrackInfo(newCmd) {
+			// This is likely the same pid but a new command start - except for dummy track records!
+			if hasTrackInfo && !newCmd.hasRealTableTrackInfo() {
 				if debugLog {
 					fp.logger.Infof("addCommand: ignoring dummy track for pid %d", cmd.Pid)
 				}
-			} else {
+			} else if !newCmd.hasTableTrackInfo || newCmd.hasRealTableTrackInfo() {
 				if debugLog {
 					fp.logger.Infof("addCommand: outputting old since process key different pid %d", cmd.Pid)
 				}
 				fp.outputCmd(cmd)
 				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
-				if !cmdHasNoCompletionRecord(newCmd) {
+				if !newCmd.hasNoCompletionRecord() {
 					fp.trackRunning("t01", newCmd, 1)
 				}
+			} else {
+				if debugLog {
+					fp.logger.Infof("addCommand: ignoring dummy track2 for pid %d", cmd.Pid)
+				}
 			}
-		} else if cmdHasNoCompletionRecord(newCmd) {
+		} else if newCmd.hasNoCompletionRecord() {
+			// This is commands which don't expect to receive a complete record (or track info) - e.g. some rmt- and background pull threads
 			// Even if they have track info, we output the old command
 			if debugLog {
 				fp.logger.Infof("addCommand: outputting old since no trackInfo pid %d", cmd.Pid)
@@ -1266,16 +1277,32 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			newCmd.duplicateKey = true
 			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 		} else {
+			// same cmd.ProcessKey for new and found cmd
+			// At this point do we have a new (duplicate) - with same timestamp as old, or an update to existing?
 			// Typically track info only present when command has completed - especially for duplicates
 			// Interactive pull commands are an exception - they may have track records for rdb.lbr and then a final set too.
-			// Syncs etc also set intermediate track info
-			if cmd.hasTrackInfo && cmdHasRealTableTrackInfo(newCmd) {
-				if cmd.LineNo == newCmd.LineNo || (cmd.Cmd == "user-pull" && !cmdPullAutomatic(cmd.Args)) {
+			// Syncs etc can also set intermediate track info
+			if hasTrackInfo {
+				// We expect to only get trackInfo once!
+				// We may get multiple records updating some intermediate tables - but these should have no trackInfo - only hasTableTrackInfo
+				if cmd.hasTrackInfo {
+					// In this case we consider the command to be a duplicate
 					if debugLog {
-						fp.logger.Infof("addCommand: updating duplicate pid %d", cmd.Pid)
+						fp.logger.Infof("addCommand: found duplicate1 - outputting old pid %d", cmd.Pid)
+					}
+					fp.outputCmd(cmd)
+					fp.trackRunning("t02", newCmd, 1)
+					newCmd.duplicateKey = true
+					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+				} else { // !cmd.hasTrackInfo
+					if debugLog {
+						fp.logger.Infof("addCommand: updating pid %d", cmd.Pid)
 					}
 					cmd.updateFrom(newCmd)
-				} else {
+				}
+			} else { // !hasTrackInfo
+				if cmd.hasTrackInfo {
+					// Because new command doesn't have track info and original does - we treat as new and output the old
 					if debugLog {
 						fp.logger.Infof("addCommand: found duplicate - outputting old pid %d", cmd.Pid)
 					}
@@ -1283,27 +1310,42 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 					fp.trackRunning("t02", newCmd, 1)
 					newCmd.duplicateKey = true
 					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+				} else if newCmd.hasTableTrackInfo || newCmd.hasRealTableTrackInfo() {
+					if debugLog {
+						fp.logger.Infof("addCommand: updating2 pid %d", cmd.Pid)
+					}
+					cmd.updateFrom(newCmd)
+				} else if newCmd.hasIgnoredTables {
+					if debugLog {
+						fp.logger.Infof("addCommand: ignoring pid %d", cmd.Pid)
+					}
+				} else {
+					if debugLog {
+						fp.logger.Infof("addCommand: found duplicate2 - outputting old pid %d", cmd.Pid)
+					}
+					fp.outputCmd(cmd)
+					fp.trackRunning("t02", newCmd, 1)
+					newCmd.duplicateKey = true
+					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 				}
-			} else {
+
+			}
+
+			if hasTrackInfo && newCmd.hasRealTableTrackInfo() {
 				if debugLog {
-					fp.logger.Infof("addCommand: updating pid %d", cmd.Pid)
+					fp.logger.Infof("addCommand: setting hasTrackInfo=true pid %d", cmd.Pid)
 				}
-				cmd.updateFrom(newCmd)
+				cmd.hasTrackInfo = true
 			}
 		}
-		if hasTrackInfo {
-			if debugLog {
-				fp.logger.Infof("addCommand: setting hasTrackInfo=true pid %d", cmd.Pid)
-			}
-			cmd.hasTrackInfo = true
-		}
-	} else {
+	} else { // different pid to any currently being tracked.
 		if debugLog {
 			fp.logger.Infof("addCommand: remembering newCmd pid %d", newCmd.Pid)
 		}
 		fp.cmds[newCmd.Pid] = newCmd
+		// Check if this is a pid seen with similar timestape - but ignore commands which update clientEntity locks for example
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
-			if !cmdHasRealTableTrackInfo(newCmd) { // Ignore commands which update clientEntity locks for example
+			if !newCmd.hasRealTableTrackInfo() {
 				if debugLog {
 					fp.logger.Infof("addCommand: setting duplicate pid %d", newCmd.Pid)
 				}
@@ -1311,7 +1353,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			}
 		}
 		fp.pidsSeenThisSecond[newCmd.Pid] = true
-		if !cmdHasNoCompletionRecord(newCmd) && !newCmd.completed {
+		if !newCmd.hasNoCompletionRecord() && !newCmd.completed {
 			fp.trackRunning("t03", newCmd, 1)
 		}
 	}
@@ -1320,7 +1362,10 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 
 // Commands are treated as having no track info if they have no table entries, or the only
 // tables are things like rdb.lbr
-func cmdHasRealTableTrackInfo(cmd *Command) bool {
+func (cmd *Command) hasRealTableTrackInfo() bool {
+	if !cmd.hasTableTrackInfo {
+		return false
+	}
 	if len(cmd.Tables) == 0 {
 		return false
 	}
@@ -1333,7 +1378,7 @@ func cmdHasRealTableTrackInfo(cmd *Command) bool {
 // Special commands which only have start records not completion records
 // This was a thing with older p4d versions but now all commands have them
 // Note that pull status commands (not automatic background pull threads) have completion records
-func cmdHasNoCompletionRecord(cmd *Command) bool {
+func (cmd *Command) hasNoCompletionRecord() bool {
 	return cmd.Cmd == "rmt-FileFetch" ||
 		cmd.Cmd == "rmt-FileFetchMulti" ||
 		// cmdName == "rmt-Journal" ||
@@ -1349,31 +1394,34 @@ func cmdPullAutomatic(args string) bool {
 	return rePullAutoArgs.MatchString(args)
 }
 
-var trackStart = "---"
-var trackLapse = "--- lapse "
-var trackPaused = "--- paused "
-var trackFatalError = "--- exited on fatal server error"
-var trackDB = "--- db."
-var trackRdbLbr = "--- rdb.lbr"
-var trackMeta = "--- meta"
-var trackClients = "--- clients"
-var trackChange = "--- change"
-var trackClientEntity = "--- clientEntity"
-var trackReplicaPull = "--- replica/pull"
-var trackStorage = "--- storageup/"
-var trackLbrRcs = "--- lbr Rcs"
-var trackLbrBinary = "--- lbr Binary"
-var trackLbrCompress = "--- lbr Compress"
-var trackLbrUncompress = "--- lbr Uncompress"
+const trackStart = "---"
+const trackLapse = "--- lapse "
+const trackPaused = "--- paused "
+const trackFatalError = "--- exited on fatal server error"
+const trackDB = "--- db."
+const trackRdbLbr = "--- rdb.lbr"
+const trackMeta = "--- meta"
+const trackClients = "--- clients"
+const trackChange = "--- change"
+const trackClientEntity = "--- clientEntity"
+const trackReplicaPull = "--- replica/pull"
+const trackStorage = "--- storageup/"
+const trackLbrRcs = "--- lbr Rcs"
+const trackLbrBinary = "--- lbr Binary"
+const trackLbrCompress = "--- lbr Compress"
+const trackLbrUncompress = "--- lbr Uncompress"
+
 var reCmdTrigger = regexp.MustCompile(` trigger ([^ ]+)$`)
 var reTriggerLapse = regexp.MustCompile(`^lapse (\d+\.\d+)s|^lapse (\.\d+)s|^lapse (\d+)s`)
-var prefixTrackCmdMem = "--- memory cmd/proc "
-var prefixTrackRPC = "--- rpc msgs/size in+out "
-var prefixTrackFileTotals = "--- filetotals (svr) send/recv files+bytes "
-var prefixTrackFileTotalsClient = "--- filetotals (client) send/recv files+bytes "
-var prefixTrackLbr = "---   opens+closes"
-var prefixTrackLbr2 = "---   reads+readbytes"
-var prefixTrackLbr3 = "---   digests+filesizes"
+
+const prefixTrackCmdMem = "--- memory cmd/proc "
+const prefixTrackRPC = "--- rpc msgs/size in+out "
+const prefixTrackFileTotals = "--- filetotals (svr) send/recv files+bytes "
+const prefixTrackFileTotalsClient = "--- filetotals (client) send/recv files+bytes "
+const prefixTrackLbr = "---   opens+closes"
+const prefixTrackLbr2 = "---   reads+readbytes"
+const prefixTrackLbr3 = "---   digests+filesizes"
+
 var reTrackLbr = regexp.MustCompile(`^---   opens\+closes\+checkins\+exists +(\d+)\+(\d+)\+(\d+)\+(\d+)`)
 var reTrackLbrReadWrite = regexp.MustCompile(`^---   reads\+readbytes\+writes\+writebytes (\d+)\+([\.0-9KMGTP]+)\+(\d+)\+([\.0-9KMGTP]+)`)
 var reTrackLbrDigestFilesize = regexp.MustCompile(`^---   digests\+filesizes\+modtimes\+copies +(\d+)\+(\d+)\+(\d+)\+(\d+)`)
@@ -1382,24 +1430,40 @@ var reTrackRPC = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d
 var reTrackRPC2 = regexp.MustCompile(`^--- rpc msgs/size in\+out (\d+)\+(\d+)/(\d+)mb\+(\d+)mb himarks (\d+)/(\d+) snd/rcv ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s/([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s`)
 var reTrackFileTotals = regexp.MustCompile(`^--- filetotals \(svr\) send/recv files\+bytes (\d+)\+(\d+)mb/(\d+)\+(\d+)mb`)
 var reTrackFileTotalsClient = regexp.MustCompile(`^--- filetotals \(client\) send/recv files\+bytes (\d+)\+(\d+)mb/(\d+)\+(\d+)mb`)
-var prefixTrackUsage = "--- usage"
+
+const prefixTrackUsage = "--- usage"
+
 var reTrackUsage = regexp.MustCompile(`^--- usage (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
 var reCmdUsage = regexp.MustCompile(` (\d+)\+(\d+)us (\d+)\+(\d+)io (\d+)\+(\d+)net (\d+)k (\d+)pf`)
-var prefixTrackPages = "---   pages in+out+cached "
+
+const prefixTrackPages = "---   pages in+out+cached "
+
 var reTrackPages = regexp.MustCompile(`^---   pages in\+out\+cached (\d+)\+(\d+)\+(\d+)`)
-var prefixTrackPagesSplit = "---   pages split internal+leaf "
+
+const prefixTrackPagesSplit = "---   pages split internal+leaf "
+
 var reTrackPagesSplit = regexp.MustCompile(`^---   pages split internal\+leaf (\d+)\+(\d+)`)
-var prefixTrackLocksRows = "---   locks read/write "
+
+const prefixTrackLocksRows = "---   locks read/write "
+
 var reTrackLocksRows = regexp.MustCompile(`^---   locks read/write (\d+)/(\d+) rows get\+pos\+scan put\+del (\d+)\+(\d+)\+(\d+) (\d+)\+(\d+)`)
-var prefixTrackTotalLock = "---   total lock wait+held read/write "
+
+const prefixTrackTotalLock = "---   total lock wait+held read/write "
+
 var reTrackTotalLock = regexp.MustCompile(`^---   total lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+\-?(\d+)ms`)
-var prefixTrackPeek = "---   peek count "
+
+const prefixTrackPeek = "---   peek count "
+
 var reTrackPeek = regexp.MustCompile(`^---   peek count (\d+) wait\+held total/max (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
-var prefixTrackMaxLock = "---   max lock wait+held read/write "
-var prefixTrackMaxLock2 = "---   locks wait+held read/write "
+
+const prefixTrackMaxLock = "---   max lock wait+held read/write "
+const prefixTrackMaxLock2 = "---   locks wait+held read/write "
+
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var rePid = regexp.MustCompile(`\tPid (\d+)$`)
-var prefixNetworkEstimates = "\tServer network estimates:"
+
+const prefixNetworkEstimates = "\tServer network estimates:"
+
 var reNetworkEstimates = regexp.MustCompile(`\tServer network estimates: files added/updated/deleted=(\d+)/(\d+)/(\d+), bytes added/updated=(\d+)/(\d+)`)
 
 func getTable(cmd *Command, tableName string) *Table {
@@ -1411,6 +1475,7 @@ func getTable(cmd *Command, tableName string) *Table {
 
 func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 	hasTrackInfo := false
+	hasTableTrackInfo := false
 	var tableName string
 	var lbrAction string
 	for _, line := range lines {
@@ -1447,14 +1512,14 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			tableName = string(line[len(trackDB):])
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
-			hasTrackInfo = true
+			hasTableTrackInfo = true
 			continue
 		}
 		if strings.HasPrefix(line, trackRdbLbr) {
 			tableName = "rdb.lbr"
 			t := newTable(tableName)
 			cmd.Tables[tableName] = t
-			hasTrackInfo = true
+			hasTableTrackInfo = true
 			continue
 		}
 		if strings.HasPrefix(line, trackStorage) {
@@ -1479,7 +1544,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			// Normally if we find track info we note it but this is a sppecial case since storageup
 			// often output before end of command. If we note track info then we may not process end
 			// record properly with the rest of the track info.
-			hasTrackInfo = false
+			hasTableTrackInfo = true
 			continue
 		}
 		if strings.HasPrefix(line, trackMeta) ||
@@ -1488,6 +1553,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			strings.HasPrefix(line, trackClientEntity) ||
 			strings.HasPrefix(line, trackReplicaPull) {
 			// Special tables don't have trackInfo set
+			cmd.hasIgnoredTables = true
 			tableName = ""
 			continue
 		}
@@ -1499,6 +1565,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackUsage.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setUsage(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+				hasTrackInfo = true
 				continue
 			}
 		}
@@ -1506,6 +1573,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackCmdMem.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setMem(m[1], m[2])
+				hasTrackInfo = true
 				continue
 			}
 		}
@@ -1513,11 +1581,13 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			m = reTrackRPC2.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8])
+				hasTrackInfo = true
 				continue
 			}
 			m = reTrackRPC.FindStringSubmatch(line)
 			if len(m) > 0 {
 				cmd.setRPC(m[1], m[2], m[3], m[4], m[5], m[6], "", "")
+				hasTrackInfo = true
 				continue
 			}
 		}
@@ -1727,6 +1797,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 
 	}
 	cmd.hasTrackInfo = hasTrackInfo
+	cmd.hasTableTrackInfo = hasTableTrackInfo
 	fp.addCommand(cmd, hasTrackInfo)
 }
 
@@ -1767,7 +1838,7 @@ func (fp *P4dFileParser) outputCmd(cmd *Command) {
 	}
 	// Ensure entire structure is copied, particularly map member to avoid concurrency issues
 	cmdcopy := *cmd
-	if cmdHasNoCompletionRecord(cmd) {
+	if cmd.hasNoCompletionRecord() {
 		cmdcopy.EndTime = cmdcopy.StartTime
 	}
 	cmdcopy.Tables = make(map[string]*Table, len(cmd.Tables))
@@ -1900,7 +1971,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		if debugLog {
 			fp.logger.Infof("outputCompletedCmds: r4a pid %d lineNo %d cmd %s start %v completed %v diff %v", cmd.Pid, cmd.LineNo, cmd.Cmd, cmd.StartTime, completed, fp.currStartTime.Sub(cmd.StartTime))
 		}
-		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && (cmdHasNoCompletionRecord(cmd) || fp.noCompletionRecords) {
+		if !completed && fp.currStartTime.Sub(cmd.StartTime) >= timeWindow && (cmd.hasNoCompletionRecord() || fp.noCompletionRecords) {
 			if debugLog {
 				fp.logger.Infof("outputCompletedCmds: r5 pid %d lineNo %d cmd %s", cmd.Pid, cmd.LineNo, cmd.Cmd)
 			}
@@ -2009,6 +2080,7 @@ func (fp *P4dFileParser) processTriggerLapse(cmd *Command, trigger string, line 
 		t := newTable(tableName)
 		t.TriggerLapse = float32(triggerLapse)
 		cmd.Tables[tableName] = t
+		cmd.hasTableTrackInfo = true
 	}
 }
 
@@ -2080,7 +2152,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 					if fcmd.EndTime.IsZero() {
 						fcmd.EndTime = fcmd.StartTime
 					}
-					if !cmdHasNoCompletionRecord(fcmd) {
+					if !fcmd.hasNoCompletionRecord() {
 						fp.trackRunning("t06", fcmd, -1)
 					}
 				}
@@ -2150,7 +2222,7 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 				cmd.CmdError = true
 				// Use to be the case that errors would ensure nothing else for commands, but no longer!
 				// cmd.completed = true
-				if !cmdHasNoCompletionRecord(cmd) {
+				if !cmd.hasNoCompletionRecord() {
 					fp.trackRunning("t06", cmd, -1)
 				}
 			}
@@ -2305,15 +2377,15 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 	// timeChan is nil when there are no metrics to process.
 	// We need to consume events on timeChan to avoid blocking other processes
 	if timeChan == nil {
-		ticker := time.NewTicker(fp.outputDuration)
+		// ticker := time.NewTicker(fp.outputDuration)
 		tickerDebug := time.NewTicker(fp.debugDuration)
 		go func() {
 			for {
 				select {
-				case t := <-ticker.C:
-					fp.m.Lock()
-					fp.currTime = t
-					fp.m.Unlock()
+				// case t := <-ticker.C:
+				// fp.m.Lock()
+				// fp.currTime = t
+				// fp.m.Unlock()
 				case <-tickerDebug.C:
 					fp.debugOutputCommands()
 				}
@@ -2324,14 +2396,14 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 			tickerDebug := time.NewTicker(fp.debugDuration)
 			for {
 				select {
-				case t, ok := <-timeChan:
-					if ok {
-						fp.m.Lock()
-						fp.currTime = t
-						fp.m.Unlock()
-					} else {
-						return
-					}
+				// case t, ok := <-timeChan:
+				// 	if ok {
+				// 		fp.m.Lock()
+				// 		fp.currTime = t
+				// 		fp.m.Unlock()
+				// 	} else {
+				// 		return
+				// 	}
 				case <-tickerDebug.C:
 					fp.debugOutputCommands()
 				}
