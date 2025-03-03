@@ -1557,12 +1557,12 @@ Perforce server error:
 	Z:/main/fred_ws/__TurboStreaming__/Gyms/TurboStreaming/TurboStreaming_Proxy/TurboStreamingWorld.uasset#have - file(s) not on client.
 Perforce server info:
 	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
---- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+--- clientEntity/freds_ws(R)
 ---   total lock wait+held read/write 0ms+0ms/0ms+0ms
 
 Perforce server info:
 	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
---- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+--- clientEntity/freds_ws(R)
 ---   total lock wait+held read/write 0ms+0ms/0ms+0ms
 
 Perforce server error:
@@ -1572,7 +1572,7 @@ Perforce server error:
 	Z:/main/fred_ws/UI/Panels/HealthBar/Enemy/WB_Enemy_HealthBar.uasset#have - file(s) not on client.
 Perforce server info:
 	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
---- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+--- clientEntity/freds_ws(R)
 ---   total lock wait+held read/write 0ms+0ms/0ms+0ms
 
 Perforce server error:
@@ -1582,7 +1582,7 @@ Perforce server error:
 	Z:/main/fred_ws/__TurboStreaming__/Gyms/TurboStreaming/TurboStreaming_Structure/TurboStreamingWorld.uasset#have - file(s) not on client.
 Perforce server info:
 	2025/02/19 04:33:40 pid 2504639 fred@fred_CDPRS-ID2883_8836 10.134.56.10/192.168.181.46 [UE/v91] 'user-diff -f -sa Z:/main/fred_ws/assetsStreamingWorld.uasset#have (824) Z:/main/fred_ws/assetsInit.uasset#have'
---- clientEntity/douglas%2Ebarbosa_CDPRS-ID2883_8836(R)
+--- clientEntity/freds_ws(R)
 ---   total lock wait+held read/write 0ms+0ms/0ms+0ms
 
 Perforce server error:
@@ -1638,5 +1638,46 @@ Perforce server info:
 	output := parseLogLines(testInput)
 	assert.Equal(t, 1, len(output))
 	assert.JSONEq(t, cleanJSON(`{"app":"UnrealGameSync/1.0.0", "args":"--parallel=threads=0 //fred.ws/Modifications.csv@8342135  (195) //fred.ws/Plugins/RED/Tool/Source/Tool/Public/ToolActorFilter.h@8342135", "cmd":"user-sync", "cmdError":false, "completedLapse":0.093, "diskOut":1640, "endTime":"2025/02/19 09:55:15", "ip":"10.134.56.10/10.128.60.11", "lineNo":2, "maxRss":13724, "memMB":18, "memPeakMB":18, "pid":2.737919e+06, "processKey":"c8aba3119522e915d58da82f6dc849d9", "rpcHimarkFwd":64835, "rpcHimarkRev":64836, "rpcMsgsOut":828, "running":1, "sCpu":57, "startTime":"2025/02/19 09:55:15", "tables":[], "uCpu":34, "user":"fred", "workspace":"fred_ws"}`),
+		cleanJSON(output[0]))
+}
+
+func TestChangeStorage(t *testing.T) {
+	// Testing with entries having storage intermediate records and a trigger
+	testInput := `
+Perforce server info:
+	2025/02/19 06:34:59 pid 2593566 fred@freds_ws 10.134.56.10/192.168.181.46 [UE/v91] 'user-change -i'
+server to inter 10.192.5.5:1666 vs 10.192.5.5:1666
+Forwarder set trusted client address 10.136.60.5
+
+Perforce server info:
+	2025/02/19 06:34:59 pid 2593566 fred@freds_ws 10.134.56.10/192.168.181.46 [UE/v91] 'user-change -i' trigger swarm
+lapse .448s
+forwarder to unknown 10.192.5.5:1666 vs 10.192.5.5:1666
+
+Perforce server info:
+	2025/02/19 06:34:59 pid 2593566 fred@freds_ws 10.134.56.10/192.168.181.46 [UE/v91] 'user-change -i'
+--- clientEntity/freds_ws(W)
+---   total lock wait+held read/write 0ms+0ms/0ms+1158ms
+
+Perforce server info:
+	2025/02/19 06:34:59 pid 2593566 fred@freds_ws 10.134.56.10/192.168.181.46 [UE/v91] 'user-change -i'
+--- storageup/storageup(R)
+---   total lock wait+held read/write 0ms+1158ms/0ms+0ms
+
+Perforce server info:
+	2025/02/19 06:34:59 pid 2593566 fred@freds_ws 10.134.56.10/192.168.181.46 [UE/v91] 'user-change -i'
+--- storageup/storagemasterup(R)
+---   total lock wait+held read/write 0ms+1158ms/0ms+0ms
+
+Perforce server info:
+	2025/02/19 06:35:00 pid 2593566 completed 1.67s 70+13us 0+56io 0+0net 17436k 0pf
+Perforce server info:
+	2025/02/19 06:34:59 pid 2593566 fred@freds_ws 10.134.56.10/192.168.181.46 [UE/v91] 'user-change -i'
+--- lapse 1.67s
+--- usage 70+13us 0+56io 0+0net 17436k 0pf
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.JSONEq(t, cleanJSON(`{"app":"UE/v91", "args":"-i", "cmd":"user-change", "cmdError":false, "completedLapse":1.67, "diskOut":56, "endTime":"2025/02/19 06:35:00", "ip":"10.134.56.10/192.168.181.46", "lineNo":2, "maxRss":17436, "pid":2.593566e+06, "processKey":"e16d7391eae24cee1fe80a7d0922d0b0", "running":1, "sCpu":13, "startTime":"2025/02/19 06:34:59", "tables":[{"tableName":"storagemasterup_R", "totalReadHeld":1158}, {"tableName":"storageup_R", "totalReadHeld":1158}, {"tableName":"trigger_swarm", "triggerLapse":0.448}], "uCpu":70, "user":"fred", "workspace":"freds_ws"}`),
 		cleanJSON(output[0]))
 }

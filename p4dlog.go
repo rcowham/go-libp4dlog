@@ -1232,6 +1232,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	if debugLog {
 		fp.logger.Infof("addCommand: start: pid %d, hasTrack %v, lineNo %d, cmd %s, dup %v", newCmd.Pid, hasTrackInfo, newCmd.LineNo, newCmd.Cmd, newCmd.duplicateKey)
 	}
+	newCmd.setTableTrackInfo()
 	if fp.currTime.IsZero() || newCmd.StartTime.After(fp.currTime) {
 		fp.currTime = newCmd.StartTime
 		if debugLog {
@@ -1328,7 +1329,6 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 					newCmd.duplicateKey = true
 					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
 				}
-
 			}
 
 			if hasTrackInfo && newCmd.hasRealTableTrackInfo() {
@@ -1360,8 +1360,21 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 	fp.outputCompletedCommands()
 }
 
+// tables are things like rdb.lbr or storage which can be updated multiple times
+func (cmd *Command) setTableTrackInfo() {
+	if len(cmd.Tables) == 0 {
+		return
+	}
+	for k, _ := range cmd.Tables {
+		if k != "rdb.lbr" && !strings.HasPrefix(k, "storage") && !strings.HasPrefix(k, "trigger") {
+			return
+		}
+	}
+	cmd.hasIgnoredTables = true
+}
+
 // Commands are treated as having no track info if they have no table entries, or the only
-// tables are things like rdb.lbr
+// tables are things like rdb.lbr or storage which can be updated multiple times
 func (cmd *Command) hasRealTableTrackInfo() bool {
 	if !cmd.hasTableTrackInfo {
 		return false
@@ -1369,10 +1382,12 @@ func (cmd *Command) hasRealTableTrackInfo() bool {
 	if len(cmd.Tables) == 0 {
 		return false
 	}
-	if _, ok := cmd.Tables["rdb.lbr"]; ok { // If only table is this one ignore it as can be update multiple times
-		return len(cmd.Tables) > 1
+	for k, _ := range cmd.Tables {
+		if k != "rdb.lbr" && !strings.HasPrefix(k, "storage") && !strings.HasPrefix(k, "trigger") {
+			return true
+		}
 	}
-	return true
+	return false
 }
 
 // Special commands which only have start records not completion records
@@ -2097,13 +2112,13 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 		return
 	}
 
-	i := 0
+	ind := 0
 	for _, line := range block.lines {
 		if cmd != nil && strings.HasPrefix(line, trackStart) {
-			fp.processTrackRecords(cmd, block.lines[i:])
+			fp.processTrackRecords(cmd, block.lines[ind:])
 			return // Block has been processed
 		}
-		i++
+		ind++
 
 		matched := false
 		m := reCmd.FindStringSubmatch(line)
@@ -2164,7 +2179,7 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			// 	fp.logger.Debugf("Setting pid %d, processKey %s, '%s'", cmd.Pid, cmd.ProcessKey, line)
 			// }
 			if len(trigger) > 0 {
-				fp.processTriggerLapse(cmd, trigger, block.lines[len(block.lines)-1])
+				fp.processTriggerLapse(cmd, trigger, block.lines[ind])
 			}
 		}
 		if !matched {
