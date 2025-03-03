@@ -76,52 +76,6 @@ type P4Pending struct {
 	pendingCount       int
 	timeLatestStartCmd time.Time
 	latestStartCmdBuf  string
-	timeChan           chan time.Time
-}
-
-// Searches for log lines starting with a <tab>date - assumes increasing dates in log
-func (p4p *P4Pending) processTimePassing(line string) bool {
-	// This next section is more efficient than regex parsing - we return ASAP
-	const lenPrefix = len("\t2020/03/04 12:13:14")
-	if len(line) < lenPrefix {
-		return false
-	}
-	// Check for expected chars at specific points
-	if line[0] != '\t' || line[5] != '/' || line[8] != '/' ||
-		line[11] != ' ' || line[14] != ':' || line[17] != ':' {
-		return false
-	}
-	// Check for digits
-	for _, i := range []int{1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19} {
-		if line[i] < byte('0') || line[i] > byte('9') {
-			return false
-		}
-	}
-	if len(p4p.latestStartCmdBuf) == 0 {
-		p4p.latestStartCmdBuf = line[:lenPrefix]
-		p4p.timeLatestStartCmd, _ = time.Parse(p4timeformat, line[1:lenPrefix])
-		return false
-	}
-	if len(p4p.latestStartCmdBuf) > 0 && p4p.latestStartCmdBuf == line[:lenPrefix] {
-		return false
-	}
-	// Update only if greater (due to log format we do see out of sequence dates with track records)
-	if strings.Compare(line[:lenPrefix], p4p.latestStartCmdBuf) <= 0 {
-		return false
-	}
-	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
-	if dt.Sub(p4p.timeLatestStartCmd) >= 1*time.Second {
-		if p4p.debug != 0 {
-			p4p.logger.Debugf("Updating pending time to %v", dt)
-		}
-		p4p.timeChan <- dt
-	}
-	if dt.Sub(p4p.timeLatestStartCmd) >= 1*time.Second {
-		p4p.timeLatestStartCmd = dt
-		p4p.latestStartCmdBuf = line[:lenPrefix]
-		return true
-	}
-	return false
 }
 
 // Parse single log file - output is sent via linesChan channel
@@ -326,7 +280,6 @@ func main() {
 		logger:    logger,
 		fp:        fp,
 		linesChan: linesChan,
-		timeChan:  make(chan time.Time, 1000),
 	}
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
@@ -337,8 +290,7 @@ func main() {
 	if *debugPID != 0 && *debugCmd != "" {
 		fp.SetDebugPID(*debugPID, *debugCmd)
 	}
-	// cmdChan = fp.LogParser(ctx, linesChan, p4p.timeChan)
-	cmdChan = fp.LogParser(ctx, linesChan, nil)
+	cmdChan = fp.LogParser(ctx, linesChan)
 
 	// Process all input files, sending lines into linesChan
 	wg.Add(1)

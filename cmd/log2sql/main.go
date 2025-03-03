@@ -697,7 +697,7 @@ func main() {
 		if *noCompletionRecords {
 			fp.SetNoCompletionRecords()
 		}
-		cmdChan = fp.LogParser(ctx, linesChan, nil)
+		cmdChan = fp.LogParser(ctx, linesChan)
 	}
 
 	// Process all input files, sending lines into linesChan

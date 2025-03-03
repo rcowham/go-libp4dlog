@@ -2381,7 +2381,7 @@ func (fp *P4dFileParser) CmdsPendingCount() int {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string, timeChan <-chan time.Time) chan interface{} {
+func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string) chan interface{} {
 	fp.lineNo = 1
 
 	fp.cmdChan = make(chan interface{}, 10000)
@@ -2389,42 +2389,15 @@ func (fp *P4dFileParser) LogParser(ctx context.Context, linesChan <-chan string,
 	fp.blockChan = make(chan *Block, 1000)
 
 	// Commands are output on a seperate thread
-	// timeChan is nil when there are no metrics to process.
-	// We need to consume events on timeChan to avoid blocking other processes
-	if timeChan == nil {
-		// ticker := time.NewTicker(fp.outputDuration)
-		tickerDebug := time.NewTicker(fp.debugDuration)
-		go func() {
-			for {
-				select {
-				// case t := <-ticker.C:
-				// fp.m.Lock()
-				// fp.currTime = t
-				// fp.m.Unlock()
-				case <-tickerDebug.C:
-					fp.debugOutputCommands()
-				}
+	tickerDebug := time.NewTicker(fp.debugDuration)
+	go func() {
+		for {
+			select {
+			case <-tickerDebug.C:
+				fp.debugOutputCommands()
 			}
-		}()
-	} else {
-		go func() {
-			tickerDebug := time.NewTicker(fp.debugDuration)
-			for {
-				select {
-				// case t, ok := <-timeChan:
-				// 	if ok {
-				// 		fp.m.Lock()
-				// 		fp.currTime = t
-				// 		fp.m.Unlock()
-				// 	} else {
-				// 		return
-				// 	}
-				case <-tickerDebug.C:
-					fp.debugOutputCommands()
-				}
-			}
-		}()
-	}
+		}
+	}()
 
 	// Go routine to process all the lines being received
 	// sends blocks on the blockChannel

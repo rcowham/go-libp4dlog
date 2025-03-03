@@ -835,7 +835,7 @@ Process multiple log files (gzipped or not) into single output file:
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
 	}
-	cmdChan = fp.LogParser(ctx, linesChan, nil)
+	cmdChan = fp.LogParser(ctx, linesChan)
 
 	// Process all input files, sending lines into linesChan
 	wg.Add(1)

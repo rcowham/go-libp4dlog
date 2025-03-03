@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -30,8 +29,7 @@ func parseLogLines(input string) []string {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	timeChan := make(chan time.Time, 1)
-	cmdChan := fp.LogParser(ctx, inchan, timeChan)
+	cmdChan := fp.LogParser(ctx, inchan)
 
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	for scanner.Scan() {

@@ -58,7 +58,6 @@ type P4DMetrics struct {
 	timeLatestStartCmd        time.Time
 	latestStartCmdBuf         string
 	logger                    *logrus.Logger
-	timeChan                  chan time.Time
 	cmdsRunning               int64
 	cmdsRunningMax            int64
 	cmdsPaused                int64 // Server Events
@@ -687,9 +686,6 @@ func (p4m *P4DMetrics) historicalUpdateRequired(line string) bool {
 		return false
 	}
 	dt, _ := time.Parse(p4timeformat, string(line[1:lenPrefix]))
-	if dt.Sub(p4m.timeLatestStartCmd) >= 3*time.Second {
-		p4m.timeChan <- dt
-	}
 	if dt.Sub(p4m.timeLatestStartCmd) >= p4m.config.UpdateInterval {
 		p4m.timeLatestStartCmd = dt
 		p4m.latestStartCmdBuf = line[:lenPrefix]
@@ -708,17 +704,13 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 		p4m.fp.SetDebugMode(p4m.config.Debug)
 	}
 	fpLinesChan := make(chan string, 10000)
-	// Leave as unset
-	if p4m.historical {
-		p4m.timeChan = make(chan time.Time, 1000)
-	}
 
 	metricsChan := make(chan string, 1000)
 	var cmdsOutChan chan interface{}
 	if needCmdChan {
 		cmdsOutChan = make(chan interface{}, 10000)
 	}
-	cmdsInChan := p4m.fp.LogParser(ctx, fpLinesChan, p4m.timeChan)
+	cmdsInChan := p4m.fp.LogParser(ctx, fpLinesChan)
 
 	go func() {
 		defer close(metricsChan)
