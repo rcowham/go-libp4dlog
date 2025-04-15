@@ -13,6 +13,7 @@ Contents:
   - [Running the log analyzer](#running-the-log-analyzer)
   - [Examples](#examples)
   - [Some sample SQL queries](#some-sample-sql-queries)
+  - [Testing and debugging of tests](#testing-and-debugging-of-tests)
   - [Viewing historical metrics via Grafana/Prometheus/VictoriaMetrics](#viewing-historical-metrics-via-grafanaprometheusvictoriametrics)
     - [Closing down and removing data](#closing-down-and-removing-data)
   - [P4D Log Analysis](#p4d-log-analysis)
@@ -121,6 +122,16 @@ lowering its priority using the `nice` command.
 ## Some sample SQL queries
 
 See [log2sql-examples.md](log2sql-examples.md)
+
+## Testing and debugging of tests
+
+Standard tests are run:
+
+    go test
+
+If you want to debug a particular test (and output debug info):
+
+    go test -run TestRemovedFromMonitorTable -args -debug
 
 ## Viewing historical metrics via Grafana/Prometheus/VictoriaMetrics
 
