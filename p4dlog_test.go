@@ -13,6 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// If you want to debug a particular test (and output debug info):
+//
+//	go test -run TestRemovedFromMonitorTable -args -debug
 var testDebug = flag.Bool("debug", false, "Set for debug")
 
 func parseLogLines(input string) []string {
@@ -656,7 +659,7 @@ Perforce server info:
 	//assert.Equal(t, "", output[1])
 	assert.JSONEq(t, cleanJSON(`{"processKey":"7c437167b3eef0a81ba6ecb710ad7572","cmd":"user-serverid","pid":25396,"lineNo":2,"user":"p4sdp","workspace":"chi","completedLapse":0.002,"ip":"127.0.0.1","app":"p4/2019.2/LINUX26X86_64/1891638","args":"","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"diskOut":8,"maxRss":8036,"rpcMsgsIn":2,"rpcMsgsOut":3,"rpcHimarkFwd":795800,"rpcHimarkRev":795656,"cmdError":false,"tables":[]}`),
 		cleanJSON(output[0]))
-	assert.JSONEq(t, cleanJSON(`{"processKey":"9bbbb204208b1af212c38a906294708c","cmd":"user-login","pid":25390,"lineNo":4,"user":"bot-integ","workspace":"_____CLIENT_UNSET_____","completedLapse":0.008,"ip":"127.0.0.1/10.5.40.103","app":"jenkins.p4-plugin/1.10.3-SNAPSHOT/Linux (brokered)","args":"-s","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"diskOut":8,"maxRss":7632,"rpcMsgsIn":2,"rpcMsgsOut":3,"rpcHimarkFwd":795800,"rpcHimarkRev":185540,"rpcRcv":0.007,"cmdError":false,"tables":[]}`),
+	assert.JSONEq(t, cleanJSON(`{"processKey":"9bbbb204208b1af212c38a906294708c","cmd":"user-login","pid":25390,"lineNo":4,"user":"bot-integ","workspace":"_____CLIENT_UNSET_____","completedLapse":0.008,"ip":"127.0.0.1/10.5.40.103","app":"jenkins.p4-plugin/1.10.3-SNAPSHOT/Linux (brokered)","args":"-s","startTime":"2020/01/11 02:00:02","endTime":"2020/01/11 02:00:02","running":1,"diskOut":8,"maxRss":7632,"rpcMsgsIn":2,"rpcMsgsOut":3,"rpcHimarkFwd":795800,"rpcHimarkRev":185540,"rpcRcv":0.007,"cmdError":true,"tables":[]}`),
 		cleanJSON(output[1]))
 }
 
@@ -1677,5 +1680,24 @@ Perforce server info:
 	output := parseLogLines(testInput)
 	assert.Equal(t, 1, len(output))
 	assert.JSONEq(t, cleanJSON(`{"app":"UE/v91", "args":"-i", "cmd":"user-change", "cmdError":false, "completedLapse":1.67, "diskOut":56, "endTime":"2025/02/19 06:35:00", "ip":"10.134.56.10/192.168.181.46", "lineNo":2, "maxRss":17436, "pid":2.593566e+06, "processKey":"e16d7391eae24cee1fe80a7d0922d0b0", "running":1, "sCpu":13, "startTime":"2025/02/19 06:34:59", "tables":[{"tableName":"storagemasterup_R", "totalReadHeld":1158}, {"tableName":"storageup_R", "totalReadHeld":1158}, {"tableName":"trigger_swarm", "triggerLapse":0.448}], "uCpu":70, "user":"fred", "workspace":"freds_ws"}`),
+		cleanJSON(output[0]))
+}
+
+func TestFailedAuthentication(t *testing.T) {
+	// Testing with a somewhat  spurious entry that was causing commands to be doubled counted and lruk as pending.
+	testInput := `
+Perforce server info:
+	2025/03/25 17:07:37 pid 3943377 fred@fred_ws 10.12.18.46 [Unity/v86] 'user-fstat F:/fred_ws/ProjectSettings/EditorSettings.asset'
+
+Perforce server info:
+	2025/03/25 17:07:37 pid 3943377 completed .009s 2+1us 0+0io 0+0net 20028k 0pf
+
+Perforce server info:
+	2025/03/25 17:07:37 pid 3943377 fred@fred_ws 10.12.18.46 [Unity/v86] 'user-fstat F:/fred_ws/ProjectSettings/EditorSettings.asset'
+--- failed authentication check
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.JSONEq(t, cleanJSON(`{"app":"Unity/v86", "args":"F:/fred_ws/ProjectSettings/EditorSettings.asset", "cmd":"user-fstat", "cmdError":true, "completedLapse":0.009, "endTime":"2025/03/25 17:07:37", "ip":"10.12.18.46", "lineNo":2, "maxRss":20028, "pid":3943377, "processKey":"44e256ce3dff7f2e2a71f2f8770282fd", "running":1, "sCpu":1, "startTime":"2025/03/25 17:07:37", "tables":[], "uCpu":2, "user":"fred", "workspace":"fred_ws"}`),
 		cleanJSON(output[0]))
 }

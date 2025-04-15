@@ -1413,6 +1413,7 @@ const trackStart = "---"
 const trackLapse = "--- lapse "
 const trackPaused = "--- paused "
 const trackFatalError = "--- exited on fatal server error"
+const trackAuthenticationError = "--- failed authentication check"
 const trackDB = "--- db."
 const trackRdbLbr = "--- rdb.lbr"
 const trackMeta = "--- meta"
@@ -1521,6 +1522,11 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			cmd.CmdError = true
 			hasTrackInfo = true
 			fp.cmdsPausedErrorCount += 1
+			continue
+		}
+		if strings.HasPrefix(line, trackAuthenticationError) {
+			cmd.CmdError = true
+			hasTrackInfo = true
 			continue
 		}
 		if strings.HasPrefix(line, trackDB) {
