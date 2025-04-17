@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alecthomas/kingpin/v2"
 	"github.com/bvinc/go-sqlite-lite/sqlite3"
 	"github.com/pkg/profile"
+	"github.com/rcowham/kingpin"
 
 	"github.com/machinebox/progress"
 	"github.com/sirupsen/logrus"

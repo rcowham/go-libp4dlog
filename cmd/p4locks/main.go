@@ -17,15 +17,13 @@ import (
 	"time"
 
 	"github.com/pkg/profile"
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/machinebox/progress"
 	"github.com/sirupsen/logrus"
 
-	// "github.com/pkg/profile"
-
 	"github.com/perforce/p4prometheus/version"
 	p4dlog "github.com/rcowham/go-libp4dlog"
+	"github.com/rcowham/kingpin"
 )
 
 // Threshold in milliseconds below which we filter out commands - for at least one of read/write wait/held

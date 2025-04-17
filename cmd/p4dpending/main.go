@@ -12,12 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/rcowham/kingpin"
 
 	"github.com/machinebox/progress"
 	"github.com/sirupsen/logrus"
-
-	// "github.com/pkg/profile"
 
 	"github.com/perforce/p4prometheus/version"
 	p4dlog "github.com/rcowham/go-libp4dlog"
