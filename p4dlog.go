@@ -1752,7 +1752,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 			if FlagSet(fp.debug, DebugUnrecognised) {
 				buf := fmt.Sprintf("Unrecognised track table: %d %s\n", cmd.LineNo, line)
 				if fp.logger != nil {
-					fp.logger.Tracef(buf)
+					fp.logger.Trace(buf)
 				} else {
 					fmt.Fprint(os.Stderr, buf)
 				}
@@ -1810,7 +1810,7 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 		if FlagSet(fp.debug, DebugUnrecognised) {
 			buf := fmt.Sprintf("Unrecognised track: %d %s\n", cmd.LineNo, string(line))
 			if fp.logger != nil {
-				fp.logger.Tracef(buf)
+				fp.logger.Trace(buf)
 			} else {
 				fmt.Fprint(os.Stderr, buf)
 			}
