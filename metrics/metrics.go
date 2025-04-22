@@ -264,7 +264,7 @@ func (p4m *P4DMetrics) formatMetric(mname string, labels []labelStruct, metricVa
 func (p4m *P4DMetrics) printMetric(metrics *bytes.Buffer, mname string, labels []labelStruct, metricVal string) {
 	buf := p4m.formatMetric(mname, labels, metricVal)
 	if p4dlog.FlagSet(p4m.debug, p4dlog.DebugMetricStats) {
-		p4m.logger.Debugf(buf)
+		p4m.logger.Debug(buf)
 	}
 	// node_exporter requires doubling of backslashes
 	buf = strings.Replace(buf, `\`, "\\\\", -1)
