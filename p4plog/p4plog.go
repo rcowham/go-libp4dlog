@@ -156,8 +156,8 @@ type P4pFileParser struct {
 	logger    *logrus.Logger
 	lineNo    int64
 	m         sync.Mutex
-	CmdsCount int //Count of commands processed
-	cmdChan   chan interface{}
+	CmdsCount int               //Count of commands processed
+	cmdChan   chan ProxyCommand // Channel to send commands on
 	linesChan *<-chan string
 	blockChan chan *Block
 	debug     int
@@ -367,10 +367,10 @@ func ignoreLine(line string) bool {
 }
 
 // LogParser - interface to be run on a go routine - commands are returned on cmdchan
-func (fp *P4pFileParser) LogParser(ctx context.Context, linesChan <-chan string) chan interface{} {
+func (fp *P4pFileParser) LogParser(ctx context.Context, linesChan <-chan string) chan ProxyCommand {
 	fp.lineNo = 1
 
-	fp.cmdChan = make(chan interface{}, 10000)
+	fp.cmdChan = make(chan ProxyCommand, 10000)
 	fp.linesChan = &linesChan
 	fp.blockChan = make(chan *Block, 1000)
 
