@@ -7,6 +7,8 @@ a database created by the log2sql scripts.
 
 You need to install sqlite3 to be able to view (with apt-get/yum as appropriate on Linux).
 
+Many of these queries have been automated in the Bash script provided as part of this project: [sql_report.sh](cmd/log2sql/sql_report.sh)
+
 Once installed, you can quickly view some results with commands like this:
 
 ```
