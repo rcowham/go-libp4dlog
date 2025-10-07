@@ -19,7 +19,8 @@ SCRIPT_NAME=$(basename "$0")
 
 # Default configuration - can be overridden by command line args
 declare -A CONFIG
-CONFIG["long_command_threshold"]=300        # Commands over N seconds
+CONFIG["long_command_threshold"]=100       # Commands over N seconds
+CONFIG["long_sync_command_threshold"]=500  # Commands over N seconds
 CONFIG["busy_threshold"]=20                # Running commands threshold
 CONFIG["lock_threshold"]=10000             # Lock wait/held threshold in ms
 CONFIG["output_format"]="text"             # text, json, csv, html
@@ -78,7 +79,8 @@ OPTIONS:
     -o, --output FILE          Output file (default: auto-generated)
     -f, --format FORMAT        Output format: text, json, csv, html (default: text)
     -t, --threshold TYPE=VALUE Set threshold values:
-                              long_cmd=N     (commands over N seconds, default: 300)
+                              long_cmd=N     (commands over N seconds, default: 100)
+                              long_sync_cmd=N (synchronous commands over N seconds, default: 500)
                               busy=N         (running commands threshold, default: 20)
                               locks=N        (lock threshold in ms, default: 10000)
                               limit=N        (top N results, default: 25)
@@ -174,6 +176,9 @@ parse_args() {
                     case "$threshold_name" in
                         long_cmd)
                             CONFIG[long_command_threshold]="$threshold_value"
+                            ;;
+                        long_sync_cmd)
+                            CONFIG[long_sync_command_threshold]="$threshold_value"
                             ;;
                         busy)
                             CONFIG[busy_threshold]="$threshold_value"
@@ -287,11 +292,18 @@ init_queries() {
     LIMIT 30;"
 
     # Performance Analysis
-    QUERY_TITLES[perf_long_commands]="Commands over ${CONFIG[long_command_threshold]}s by endTime\\n   NOTE - Do lots of commands finish at the same time after a big command or lock?"
-    QUERIES[perf_long_commands]="SELECT startTime, endTime, pid, user, round(completedLapse) as 'lapse (s)',
+    QUERY_TITLES[perf_long_commands]="Commands (non-sync) over ${CONFIG[long_command_threshold]}s by endTime\\n   NOTE - Do lots of commands finish at the same time after a big command or lock?"
+    QUERIES[perf_long_commands]="SELECT startTime, endTime, pid, user, round(completedLapse) as 'lapse(s)',
         running, cmd, args
     FROM process
-    WHERE completedLapse > ${CONFIG[long_command_threshold]}
+    WHERE completedLapse > ${CONFIG[long_command_threshold]} and cmd != 'user-sync' and cmd != 'user-transmit'
+    ORDER BY endTime;"
+
+    QUERY_TITLES[perf_long_sync_commands]="Sync commands over ${CONFIG[long_sync_command_threshold]}s by endTime\\n   NOTE - Do lots of commands finish at the same time after a big command or lock?"
+    QUERIES[perf_long_sync_commands]="SELECT startTime, endTime, pid, user, round(completedLapse) as 'lapse(s)',
+        running, cmd, args
+    FROM process
+    WHERE completedLapse > ${CONFIG[long_sync_command_threshold]} and (cmd ='user-sync' or cmd ='user-transmit')
     ORDER BY endTime;"
 
     QUERY_TITLES[perf_busy_periods]="Busiest Running Per Minutes (> ${CONFIG[busy_threshold]})\\n    NOTE - When were the busy times?"
@@ -314,8 +326,8 @@ init_queries() {
 
     QUERY_TITLES[perf_cpu_system]="System CPU - Top ${CONFIG[top_limit]} commands"
     QUERIES[perf_cpu_system]="SELECT pid, user, cmd, round(completedLapse, 3) as lapse,
-           round(rpcRcv, 3) as 'rpcReceiveWait (s)',
-           round(rpcSnd, 3) as 'rpcSendWait (s)',
+           round(rpcRcv, 3) as 'rpcReceiveWait(s)',
+           round(rpcSnd, 3) as 'rpcSendWait(s)',
            uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime
     FROM process
     ORDER BY sCpu DESC
@@ -323,8 +335,8 @@ init_queries() {
 
     QUERY_TITLES[perf_cpu_user]="User CPU - Top ${CONFIG[top_limit]} commands"
     QUERIES[perf_cpu_user]="SELECT pid, user, cmd, round(completedLapse, 3) as lapse,
-           round(rpcRcv, 3) as 'rpcReceiveWait (s)',
-           round(rpcSnd, 3) as 'rpcSendWait (s)',
+           round(rpcRcv, 3) as 'rpcReceiveWait(s)',
+           round(rpcSnd, 3) as 'rpcSendWait(s)',
            uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime
     FROM process
     ORDER BY uCpu DESC
@@ -351,6 +363,14 @@ init_queries() {
     QUERIES[perf_read_write_pct]="SELECT round(TOTAL(pagesIn) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as readPct,
            round(TOTAL(pagesOut) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as writePct
     FROM tableUse;"
+
+    QUERY_TITLES[triggers]="Trigger Analysis - performance of triggers"
+    QUERIES[triggers]="SELECT tablename as trigger, count(tablename) as num_triggers, cmd,
+        round(avg(triggerlapse), 2) as avg_lapse, round(max(triggerlapse), 2) as max_lapse
+    FROM tableuse
+    JOIN process USING (processkey)
+    WHERE tablename LIKE 'trigger_%'
+    GROUP BY trigger, cmd;"
 
     # Lock Analysis
     QUERY_TITLES[locks_contention_summary]="DB CONTENTION - Average Locks Summary (with total locks > ${CONFIG[lock_threshold]} ms)\\n   NOTE - Does one table have high average or total wait (victims) or held (culprits)?"
@@ -410,20 +430,17 @@ init_queries() {
 
     # Compute Analysis
     QUERY_TITLES[compute_longest_phases]="Longest Compute Phases (top ${CONFIG[top_limit]}) in ms"
-    QUERIES[compute_longest_phases]="SELECT process.processKey,
-           user,
-           cmd,
-           startTime,
+    QUERIES[compute_longest_phases]="SELECT process.processKey, user, cmd, startTime,
            CASE
                WHEN MAX(totalreadHeld + totalwriteHeld) > MAX(totalreadWait + totalwriteWait)
                THEN MAX(totalreadHeld + totalwriteHeld) - MAX(totalreadWait + totalwriteWait)
                ELSE MAX(totalreadHeld + totalwriteHeld)
-           END AS compute,
+           END AS 'compute(ms)',
            args
     FROM tableUse
     JOIN process USING (processKey)
     GROUP BY tableUse.processKey
-    ORDER BY compute DESC
+    ORDER BY 'compute(ms)' DESC
     LIMIT ${CONFIG[top_limit]};"
 
     # Replication (if applicable)
@@ -515,6 +532,7 @@ generate_report_header() {
                 echo ""
                 echo "Configuration:"
                 echo "  Long command threshold: ${CONFIG[long_command_threshold]}s"
+                echo "  Long sync command threshold: ${CONFIG[long_sync_command_threshold]}s"
                 echo "  Busy threshold: ${CONFIG[busy_threshold]} commands"
                 echo "  Lock threshold: ${CONFIG[lock_threshold]}ms"
                 echo "  Top results limit: ${CONFIG[top_limit]}"
@@ -531,6 +549,7 @@ generate_report_header() {
                 echo "    \"script_version\": \"$SCRIPT_VERSION\","
                 echo "    \"configuration\": {"
                 echo "      \"long_command_threshold\": ${CONFIG[long_command_threshold]},"
+                echo "      \"long_sync_command_threshold\": ${CONFIG[long_sync_command_threshold]},"
                 echo "      \"busy_threshold\": ${CONFIG[busy_threshold]},"
                 echo "      \"lock_threshold\": ${CONFIG[lock_threshold]},"
                 echo "      \"top_limit\": ${CONFIG[top_limit]}"
@@ -615,8 +634,9 @@ generate_report() {
                 ;;
             performance)
                 generate_section "performance" "Performance Analysis" \
-                    "perf_long_commands" "perf_busy_periods" "perf_memory_usage" \
-                    "perf_cpu_system" "perf_cpu_user" "perf_cpu_consumers" "perf_io_usage" "perf_read_write_pct"
+                    "perf_long_commands" "perf_long_sync_commands" "perf_busy_periods" "perf_memory_usage" \
+                    "perf_cpu_system" "perf_cpu_user" "perf_cpu_consumers" "perf_io_usage" "perf_read_write_pct" \
+                    "triggers"
                 ;;
             locks)
                 generate_section "locks" "Database Lock Analysis" \
@@ -666,6 +686,7 @@ main() {
     log_info "  Output: $OUTPUT_FILE"
     log_info "  Format: ${CONFIG[output_format]}"
     log_info "  Long command threshold: ${CONFIG[long_command_threshold]}s"
+    log_info "  Long sync command threshold: ${CONFIG[long_sync_command_threshold]}s"
     log_info "  Busy threshold: ${CONFIG[busy_threshold]} commands"
     log_info "  Lock threshold: ${CONFIG[lock_threshold]}ms"
 
