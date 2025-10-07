@@ -19,7 +19,7 @@ SCRIPT_NAME=$(basename "$0")
 
 # Default configuration - can be overridden by command line args
 declare -A CONFIG
-CONFIG["long_command_threshold"]=100        # Commands over N seconds
+CONFIG["long_command_threshold"]=300        # Commands over N seconds
 CONFIG["busy_threshold"]=20                # Running commands threshold
 CONFIG["lock_threshold"]=10000             # Lock wait/held threshold in ms
 CONFIG["output_format"]="text"             # text, json, csv, html
@@ -78,7 +78,7 @@ OPTIONS:
     -o, --output FILE          Output file (default: auto-generated)
     -f, --format FORMAT        Output format: text, json, csv, html (default: text)
     -t, --threshold TYPE=VALUE Set threshold values:
-                              long_cmd=N     (commands over N seconds, default: 100)
+                              long_cmd=N     (commands over N seconds, default: 300)
                               busy=N         (running commands threshold, default: 20)
                               locks=N        (lock threshold in ms, default: 10000)
                               limit=N        (top N results, default: 25)
@@ -111,25 +111,25 @@ trap cleanup EXIT INT TERM
 # Validate database file
 validate_database() {
     local db_file="$1"
-    
+
     # Check file existence
     if [[ ! -f "$db_file" ]]; then
         log_error "Database file '$db_file' not found"
         return 1
     fi
-    
+
     # Check file readability
     if [[ ! -r "$db_file" ]]; then
         log_error "Database file '$db_file' is not readable"
         return 1
     fi
-    
+
     # Check if it's a valid SQLite database
     if ! sqlite3 "$db_file" "SELECT 1;" &>/dev/null; then
         log_error "File '$db_file' is not a valid SQLite database"
         return 1
     fi
-    
+
     # Check for required tables
     local required_tables=("process" "tableUse")
     for table in "${required_tables[@]}"; do
@@ -138,7 +138,7 @@ validate_database() {
             return 1
         fi
     done
-    
+
     log_info "Database validation passed"
     return 0
 }
@@ -226,14 +226,14 @@ parse_args() {
                 ;;
         esac
     done
-    
+
     # Check if database file was provided
     if [[ -z "$DB_FILE" ]]; then
         log_error "No database file specified"
         usage
         exit 1
     fi
-    
+
     # Validate output format
     case "${CONFIG[output_format]}" in
         text|json|csv|html) ;;
@@ -242,7 +242,7 @@ parse_args() {
             exit 1
             ;;
     esac
-    
+
     # Set default output file if not specified
     if [[ -z "$OUTPUT_FILE" ]]; then
         local base_name=$(basename "$DB_FILE" .db)
@@ -262,171 +262,185 @@ declare -A QUERY_TITLES
 init_queries() {
     # Basic Information
     QUERY_TITLES[basic_timerange]="Start and end time for this log"
-    QUERIES[basic_timerange]="SELECT MIN(starttime) as Start, MAX(starttime) as End 
+    QUERIES[basic_timerange]="SELECT MIN(starttime) as Start, MAX(starttime) as End
     FROM process;"
-    
+
     QUERY_TITLES[basic_command_counts]="How many commands of each type (top ${CONFIG[top_limit]})"
-    QUERIES[basic_command_counts]="SELECT cmd, count(cmd) as NumCmds 
-    FROM process 
-    GROUP BY cmd 
-    ORDER BY NumCmds DESC 
+    QUERIES[basic_command_counts]="SELECT cmd, count(cmd) as NumCmds
+    FROM process
+    GROUP BY cmd
+    ORDER BY NumCmds DESC
     LIMIT ${CONFIG[top_limit]};"
-    
+
     QUERY_TITLES[basic_commands_by_user]="How many commands of each type per user"
-    QUERIES[basic_commands_by_user]="SELECT cmd, count(cmd) as NumCmds, user 
-    FROM process 
-    GROUP BY cmd, user 
-    ORDER BY NumCmds DESC 
+    QUERIES[basic_commands_by_user]="SELECT cmd, count(cmd) as NumCmds, user
+    FROM process
+    GROUP BY cmd, user
+    ORDER BY NumCmds DESC
     LIMIT 30;"
-    
+
+    QUERY_TITLES[basic_commands_by_app]="How many commands of each type per app"
+    QUERIES[basic_commands_by_app]="SELECT cmd, count(cmd) as NumCmds, app
+    FROM process
+    GROUP BY cmd, app
+    ORDER BY NumCmds DESC
+    LIMIT 30;"
+
     # Performance Analysis
     QUERY_TITLES[perf_long_commands]="Commands over ${CONFIG[long_command_threshold]}s by endTime\\n   NOTE - Do lots of commands finish at the same time after a big command or lock?"
-    QUERIES[perf_long_commands]="SELECT startTime, endTime, pid, user, cmd, args, 
-           round(completedLapse) as 'lapse (s)', running 
-    FROM process 
-    WHERE completedLapse > ${CONFIG[long_command_threshold]} 
+    QUERIES[perf_long_commands]="SELECT startTime, endTime, pid, user, round(completedLapse) as 'lapse (s)',
+        running, cmd, args
+    FROM process
+    WHERE completedLapse > ${CONFIG[long_command_threshold]}
     ORDER BY endTime;"
-    
+
     QUERY_TITLES[perf_busy_periods]="Busiest Running Per Minutes (> ${CONFIG[busy_threshold]})\\n    NOTE - When were the busy times?"
-    QUERIES[perf_busy_periods]="SELECT substr(startTime,1,16) as Time, MAX(running) as Running 
-    FROM process 
-    GROUP BY Time 
-    HAVING MAX(running) > ${CONFIG[busy_threshold]} 
-    ORDER BY Running DESC 
+    QUERIES[perf_busy_periods]="SELECT substr(startTime,1,16) as Time, MAX(running) as Running
+    FROM process
+    GROUP BY Time
+    HAVING MAX(running) > ${CONFIG[busy_threshold]}
+    ORDER BY time
     LIMIT ${CONFIG[top_limit]};"
-    
+
     QUERY_TITLES[perf_memory_usage]="Highest memory usage commands (top ${CONFIG[top_limit]})"
-    QUERIES[perf_memory_usage]="SELECT pid, user, cmd as command, app, 
-           round(completedLapse, 2) as 'lapse (s)', 
-           round(rpcRcv) as 'rpcReceiveWait (s)', 
-           round(rpcSnd) as 'rpcSendWait (s)', 
-           uCpu, sCpu, startTime, endTime, maxRss 
-    FROM process 
-    ORDER by maxRss DESC 
+    QUERIES[perf_memory_usage]="SELECT pid, user, cmd, app,
+           round(completedLapse, 2) as 'lapse(s)',
+           round(rpcRcv) as 'rpcReceiveWait(s)',
+           round(rpcSnd) as 'rpcSendWait(s)',
+           memMB, memPeakMB, uCpu, sCpu, startTime, endTime
+    FROM process
+    ORDER by maxRss DESC
     LIMIT ${CONFIG[top_limit]};"
-    
+
     QUERY_TITLES[perf_cpu_system]="System CPU - Top ${CONFIG[top_limit]} commands"
-    QUERIES[perf_cpu_system]="SELECT pid, user, cmd, round(completedLapse, 3) as lapse, 
-           round(rpcRcv, 3) as 'rpcReceiveWait (s)', 
-           round(rpcSnd, 3) as 'rpcSendWait (s)', 
-           uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime 
-    FROM process 
-    ORDER BY sCpu DESC 
+    QUERIES[perf_cpu_system]="SELECT pid, user, cmd, round(completedLapse, 3) as lapse,
+           round(rpcRcv, 3) as 'rpcReceiveWait (s)',
+           round(rpcSnd, 3) as 'rpcSendWait (s)',
+           uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime
+    FROM process
+    ORDER BY sCpu DESC
     LIMIT ${CONFIG[top_limit]};"
-    
+
     QUERY_TITLES[perf_cpu_user]="User CPU - Top ${CONFIG[top_limit]} commands"
-    QUERIES[perf_cpu_user]="SELECT pid, user, cmd, round(completedLapse, 3) as lapse, 
-           round(rpcRcv, 3) as 'rpcReceiveWait (s)', 
-           round(rpcSnd, 3) as 'rpcSendWait (s)', 
-           uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime 
-    FROM process 
-    ORDER BY uCpu DESC 
+    QUERIES[perf_cpu_user]="SELECT pid, user, cmd, round(completedLapse, 3) as lapse,
+           round(rpcRcv, 3) as 'rpcReceiveWait (s)',
+           round(rpcSnd, 3) as 'rpcSendWait (s)',
+           uCpu as uCPU_ms, sCpu as sCPU_ms, startTime, endTime
+    FROM process
+    ORDER BY uCpu DESC
     LIMIT ${CONFIG[top_limit]};"
-    
+
+    QUERY_TITLES[perf_cpu_consumers]="User CPU consumers (not sync or transmit)"
+    QUERIES[perf_cpu_consumers]="SELECT distinct(pid), user, cmd, 
+        round(completedLapse, 2) AS \"lapse(s)\", 
+        uCpu AS \"uCpu(ms)\" , startTime, endTime, args
+        FROM process
+        WHERE cmd !='user-sync' AND cmd !='user-transmit'
+        ORDER BY uCpu DESC LIMIT 25;"
+
     QUERY_TITLES[perf_io_usage]="Consumed Most IO (top ${CONFIG[top_limit]})"
-    QUERIES[perf_io_usage]="SELECT user, cmd, SUM(pagesIn+pagesOut) as ioPages, 
-           process.processKey, process.args 
-    FROM tableUse 
-    JOIN process USING (processKey) 
-    GROUP BY tableUse.processKey 
-    ORDER BY ioPages DESC 
+    QUERIES[perf_io_usage]="SELECT user, cmd, SUM(pagesIn+pagesOut) as ioPages,
+           process.processKey, process.args
+    FROM tableUse
+    JOIN process USING (processKey)
+    GROUP BY tableUse.processKey
+    ORDER BY ioPages DESC
     LIMIT ${CONFIG[top_limit]};"
-    
+
     QUERY_TITLES[perf_read_write_pct]="Read / Write Percentage - Percentage of pages read and pages written"
-    QUERIES[perf_read_write_pct]="SELECT round(TOTAL(pagesIn) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as readPct, 
-           round(TOTAL(pagesOut) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as writePct 
+    QUERIES[perf_read_write_pct]="SELECT round(TOTAL(pagesIn) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as readPct,
+           round(TOTAL(pagesOut) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as writePct
     FROM tableUse;"
-    
+
     # Lock Analysis
     QUERY_TITLES[locks_contention_summary]="DB CONTENTION - Average Locks Summary (with total locks > ${CONFIG[lock_threshold]} ms)\\n   NOTE - Does one table have high average or total wait (victims) or held (culprits)?"
     QUERIES[locks_contention_summary]="SELECT * FROM (
-        SELECT tableName, 
+        SELECT tableName,
                COUNT(readLocks) AS NumReadLocks,
-               round(AVG(readLocks)) AS 'Avg Read Locks (ms)', 
-               round(AVG(writeLocks)) AS 'Avg Write Locks (ms)', 
-               round(AVG(totalReadWait)) AS 'Avg totalRead Wait (ms)', 
-               round(AVG(totalReadHeld)) AS 'Avg totalRead Held (ms)', 
-               round(AVG(totalWriteWait)) AS 'Avg totalWrite Wait (ms)', 
-               round(AVG(totalWriteHeld)) AS 'Avg totalWrite Held (ms)', 
-               round(SUM(totalReadWait)+SUM(totalWriteWait)) AS 'Total Wait (ms)', 
-               round(SUM(totalReadHeld)+SUM(totalWriteHeld)) AS 'Total Held (ms)' 
-        FROM tableUse 
+               round(AVG(readLocks)) AS 'Avg Read Locks (ms)',
+               round(AVG(writeLocks)) AS 'Avg Write Locks (ms)',
+               round(AVG(totalReadWait)) AS 'Avg totalRead Wait (ms)',
+               round(AVG(totalReadHeld)) AS 'Avg totalRead Held (ms)',
+               round(AVG(totalWriteWait)) AS 'Avg totalWrite Wait (ms)',
+               round(AVG(totalWriteHeld)) AS 'Avg totalWrite Held (ms)',
+               round(SUM(totalReadWait)+SUM(totalWriteWait)) AS 'Total Wait (ms)',
+               round(SUM(totalReadHeld)+SUM(totalWriteHeld)) AS 'Total Held (ms)'
+        FROM tableUse
         GROUP BY tableUse.tableName
-    ) 
-    WHERE \"Total Wait (ms)\" > ${CONFIG[lock_threshold]} 
-      AND \"Total Held (ms)\" > ${CONFIG[lock_threshold]} 
+    )
+    WHERE \"Total Wait (ms)\" > ${CONFIG[lock_threshold]}
+      AND \"Total Held (ms)\" > ${CONFIG[lock_threshold]}
     ORDER BY \"Total Wait (ms)\" DESC;"
-    
+
     QUERY_TITLES[locks_blocking_commands]="Blocking Commands - Commands that blocked others (top 30) - totals in ms"
     QUERIES[locks_blocking_commands]="SELECT startTime, endTime, running, user, cmd, pid, tablename,
-           maxReadHeld, totalReadHeld, maxWriteHeld, totalWriteHeld, 
-           totalReadWait, totalWriteWait 
-    FROM tableUse 
-    JOIN process USING (processKey) 
-    WHERE (totalReadHeld > ${CONFIG[lock_threshold]} or totalWriteHeld > ${CONFIG[lock_threshold]}) 
-      AND tablename not like 'meta%' 
-      AND tablename not like 'clients%' 
-      AND tablename not like 'changes%' 
-    ORDER BY startTime, endTime 
+           maxReadHeld, totalReadHeld, maxWriteHeld, totalWriteHeld,
+           totalReadWait, totalWriteWait
+    FROM tableUse
+    JOIN process USING (processKey)
+    WHERE (totalReadHeld > ${CONFIG[lock_threshold]} or totalWriteHeld > ${CONFIG[lock_threshold]})
+      AND tablename not like 'meta%'
+      AND tablename not like 'clients%'
+      AND tablename not like 'changes%'
+    ORDER BY startTime, endTime
     LIMIT 30;"
-    
+
     QUERY_TITLES[locks_blocked_commands]="Blocked commands - victims of the above (top 30)"
-    QUERIES[locks_blocked_commands]="SELECT startTime, endTime, computedLapse, running, user, cmd, pid, tablename, 
-           maxReadHeld, maxWriteHeld, totalReadWait, totalWriteWait 
-    FROM tableUse 
-    JOIN process USING (processKey) 
-    WHERE (totalReadWait > ${CONFIG[lock_threshold]}) 
-       or (totalWriteWait > ${CONFIG[lock_threshold]}) 
-    ORDER BY startTime, endTime 
+    QUERIES[locks_blocked_commands]="SELECT startTime, endTime, round(computedLapse, 2) as \"computed_lapse(s)\", running, user, cmd, pid, tablename,
+           maxReadHeld, maxWriteHeld, totalReadWait, totalWriteWait
+    FROM tableUse
+    JOIN process USING (processKey)
+    WHERE (totalReadWait > ${CONFIG[lock_threshold]})
+       or (totalWriteWait > ${CONFIG[lock_threshold]})
+    ORDER BY startTime, endTime
     LIMIT 30;"
-    
+
     QUERY_TITLES[locks_worst_offenders]="Worst lock offenders - Users whose commands hold locks (top ${CONFIG[top_limit]})"
-    QUERIES[locks_worst_offenders]="SELECT user, 
-           SUM(maxreadHeld+maxwriteHeld) as 'held (ms)' 
-    FROM tableUse 
-    JOIN process USING (processKey) 
-    GROUP BY user 
-    ORDER BY \"held (ms)\" DESC 
+    QUERIES[locks_worst_offenders]="SELECT user,
+           SUM(maxreadHeld+maxwriteHeld) as 'held (ms)'
+    FROM tableUse
+    JOIN process USING (processKey)
+    GROUP BY user
+    ORDER BY \"held (ms)\" DESC
     LIMIT ${CONFIG[top_limit]};"
-    
+
     QUERY_TITLES[locks_avg_wait_time]="Average wait time"
-    QUERIES[locks_avg_wait_time]="SELECT ROUND(AVG(totalreadWait+totalwriteWait), 2) as wait 
+    QUERIES[locks_avg_wait_time]="SELECT ROUND(AVG(totalreadWait+totalwriteWait), 2) as wait
     FROM tableUse;"
-    
+
     # Compute Analysis
     QUERY_TITLES[compute_longest_phases]="Longest Compute Phases (top ${CONFIG[top_limit]}) in ms"
-    QUERIES[compute_longest_phases]="SELECT process.processKey, 
-           user, 
-           cmd, 
-           startTime, 
-           CASE 
-               WHEN MAX(totalreadHeld + totalwriteHeld) > MAX(totalreadWait + totalwriteWait) 
-               THEN MAX(totalreadHeld + totalwriteHeld) - MAX(totalreadWait + totalwriteWait) 
-               ELSE MAX(totalreadHeld + totalwriteHeld) 
-           END AS compute, 
-           args 
-    FROM tableUse 
-    JOIN process USING (processKey) 
-    GROUP BY tableUse.processKey 
-    ORDER BY compute DESC 
+    QUERIES[compute_longest_phases]="SELECT process.processKey,
+           user,
+           cmd,
+           startTime,
+           CASE
+               WHEN MAX(totalreadHeld + totalwriteHeld) > MAX(totalreadWait + totalwriteWait)
+               THEN MAX(totalreadHeld + totalwriteHeld) - MAX(totalreadWait + totalwriteWait)
+               ELSE MAX(totalreadHeld + totalwriteHeld)
+           END AS compute,
+           args
+    FROM tableUse
+    JOIN process USING (processKey)
+    GROUP BY tableUse.processKey
+    ORDER BY compute DESC
     LIMIT ${CONFIG[top_limit]};"
-    
+
     # Replication (if applicable)
-    QUERY_TITLES[repl_avg_times]="Average replication times (on master)"
-    QUERIES[repl_avg_times]="SELECT substr(startTime,1,16), count(cmd), user, cmd, 
-           ROUND(MAX(completedLapse), 2) AS 'Max Time', 
-           ROUND(SUM(completedLapse), 2) AS 'Total Time', 
-           ROUND(AVG(completedLapse), 2) AS 'Average Time', 
-           COUNT(completedLapse) AS number 
-    FROM process 
-    WHERE cmd = 'rmt-Journal' 
-    GROUP BY substr(startTime,1,16), user;"
+    QUERY_TITLES[repl_avg_times]="Average replication times (on master) - per 10s"
+    QUERIES[repl_avg_times]="SELECT substr(startTime,1,15), count(cmd), user, cmd,
+           ROUND(MAX(completedLapse), 2) AS 'Max Time',
+           ROUND(SUM(completedLapse), 2) AS 'Total Time',
+           ROUND(AVG(completedLapse), 2) AS 'Average Time'
+    FROM process
+    WHERE cmd = 'rmt-Journal'
+    GROUP BY substr(startTime,1,15), user;"
 }
 
 # Format duration to nearest second
 format_duration() {
     local duration="$1"
-    
+
     # Round to nearest second using printf
     printf "%.0f" "$duration"
 }
@@ -436,9 +450,9 @@ execute_query() {
     local query_name="$1"
     local query="${QUERIES[$query_name]}"
     local output_file="$2"
-    
+
     log_progress "Executing query: $query_name"
-    
+
     # Add query comment header like original script
     {
         # echo ""
@@ -449,10 +463,10 @@ execute_query() {
         echo "$clean_query"
         echo ""
     } >> "$output_file"
-    
+
     # Record start time
     local start_time=$(date +%s)
-    
+
     # Execute the query with headers and column formatting, including pragma optimize
     local optimized_query="pragma optimize; $query"
     if ! sqlite3 -header -column "$DB_FILE" "$optimized_query" >> "$output_file" 2>/dev/null; then
@@ -460,10 +474,10 @@ execute_query() {
         echo "-- Query '$query_name' failed or returned no results" >> "$output_file"
         return 1
     fi
-    
+
     # Calculate execution time
     local end_time=$(date +%s)
-    
+
     # Calculate duration using bc if available, otherwise awk
     local duration
     if command -v bc >/dev/null 2>&1; then
@@ -471,24 +485,24 @@ execute_query() {
     else
         duration=$(awk -v end="$end_time" -v start="$start_time" 'BEGIN {print end - start}')
     fi
-    
+
     # Convert duration to nearest second
     local seconds=$(format_duration "$duration")
-    
+
     # Add execution time and spacing after query results
     {
         echo ""
         echo "-- Execution time: ${seconds}s"
         echo ""
     } >> "$output_file"
-    
+
     return 0
 }
 
 # Generate report header
 generate_report_header() {
     local output_file="$1"
-    
+
     case "${CONFIG[output_format]}" in
         text)
             {
@@ -533,9 +547,9 @@ generate_section() {
     local section_title="$2"
     local queries=("${@:3}")
     local output_file="$OUTPUT_FILE"
-    
+
     log_progress "Generating section: $section_name"
-    
+
     case "${CONFIG[output_format]}" in
         text)
             {
@@ -545,7 +559,7 @@ generate_section() {
                 echo "==============================="
                 echo ""
             } >> "$output_file"
-            
+
             for query_name in "${queries[@]}"; do
                 if [[ -n "${QUERIES[$query_name]:-}" ]]; then
                     # Add separator and query title like original script
@@ -580,10 +594,10 @@ generate_section() {
 generate_report() {
     log_progress "Initializing queries with current configuration..."
     init_queries
-    
+
     log_progress "Generating report header..."
     generate_report_header "$OUTPUT_FILE"
-    
+
     # Determine which sections to include
     local sections
     if [[ "${CONFIG[report_sections]}" == "all" ]]; then
@@ -591,18 +605,18 @@ generate_report() {
     else
         IFS=',' read -ra sections <<< "${CONFIG[report_sections]}"
     fi
-    
+
     # Generate each requested section
     for section in "${sections[@]}"; do
         case "$section" in
             basic)
                 generate_section "basic" "Basic Information" \
-                    "basic_timerange" "basic_command_counts" "basic_commands_by_user"
+                    "basic_timerange" "basic_command_counts" "basic_commands_by_user" "basic_commands_by_app"
                 ;;
             performance)
                 generate_section "performance" "Performance Analysis" \
                     "perf_long_commands" "perf_busy_periods" "perf_memory_usage" \
-                    "perf_cpu_system" "perf_cpu_user" "perf_io_usage" "perf_read_write_pct"
+                    "perf_cpu_system" "perf_cpu_user" "perf_cpu_consumers" "perf_io_usage" "perf_read_write_pct"
                 ;;
             locks)
                 generate_section "locks" "Database Lock Analysis" \
@@ -622,7 +636,7 @@ generate_report() {
                 ;;
         esac
     done
-    
+
     # Close JSON if needed
     if [[ "${CONFIG[output_format]}" == "json" ]]; then
         {
@@ -636,17 +650,17 @@ generate_report() {
 # Main function
 main() {
     log_info "Starting $SCRIPT_NAME version $SCRIPT_VERSION"
-    
+
     # Parse command line arguments
     parse_args "$@"
-    
+
     # Validate database
     validate_database "$DB_FILE"
-    
+
     # Create temporary directory
     TEMP_DIR=$(mktemp -d)
     log_progress "Created temporary directory: $TEMP_DIR"
-    
+
     log_info "Configuration:"
     log_info "  Database: $DB_FILE"
     log_info "  Output: $OUTPUT_FILE"
@@ -654,10 +668,10 @@ main() {
     log_info "  Long command threshold: ${CONFIG[long_command_threshold]}s"
     log_info "  Busy threshold: ${CONFIG[busy_threshold]} commands"
     log_info "  Lock threshold: ${CONFIG[lock_threshold]}ms"
-    
+
     # Generate the report
     generate_report
-    
+
     log_info "Report generated successfully: $OUTPUT_FILE"
 }
 
