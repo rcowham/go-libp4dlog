@@ -392,7 +392,7 @@ init_queries() {
       AND \"Total Held (ms)\" > ${CONFIG[lock_threshold]}
     ORDER BY \"Total Wait (ms)\" DESC;"
 
-    QUERY_TITLES[locks_blocking_commands]="Blocking Commands - Commands that blocked others (top 30) - totals in ms"
+    QUERY_TITLES[locks_blocking_commands]="Blocking Commands - Commands that blocked others (top 30 by time) - totals in ms"
     QUERIES[locks_blocking_commands]="SELECT startTime, endTime, running, user, cmd, pid, tablename,
            maxReadHeld, totalReadHeld, maxWriteHeld, totalWriteHeld,
            totalReadWait, totalWriteWait
@@ -403,6 +403,24 @@ init_queries() {
       AND tablename not like 'clients%'
       AND tablename not like 'changes%'
     ORDER BY startTime, endTime
+    LIMIT 30;"
+
+    QUERY_TITLES[locks_blocking_read_commands]="Blocking Commands - Commands that blocked others (readheld top 30) - totals in ms"
+    QUERIES[locks_blocking_read_commands]="SELECT startTime, endTime, pid, user, round(completedLapse) as 'lapse(s)',
+        running, tableName, totalReadHeld, totalWriteHeld, cmd, args
+    FROM tableUse
+    JOIN process USING (processKey)
+    WHERE completedLapse > 100
+    ORDER BY totalReadHeld DESC
+    LIMIT 30;"
+
+    QUERY_TITLES[locks_blocking_write_commands]="Blocking Commands - Commands that blocked others (writeheld top 30) - totals in ms"
+    QUERIES[locks_blocking_write_commands]="SELECT startTime, endTime, pid, user, round(completedLapse) as 'lapse(s)',
+        running, tableName, totalReadHeld, totalWriteHeld, cmd, args
+    FROM tableUse
+    JOIN process USING (processKey)
+    WHERE completedLapse > 100
+    ORDER BY totalWriteHeld DESC
     LIMIT 30;"
 
     QUERY_TITLES[locks_blocked_commands]="Blocked commands - victims of the above (top 30)"
@@ -640,7 +658,7 @@ generate_report() {
                 ;;
             locks)
                 generate_section "locks" "Database Lock Analysis" \
-                    "locks_contention_summary" "locks_blocking_commands" \
+                    "locks_contention_summary" "locks_blocking_commands" "locks_blocking_write_commands" "locks_blocking_read_commands" \
                     "locks_blocked_commands" "locks_worst_offenders" "locks_avg_wait_time"
                 ;;
             compute)
