@@ -33,7 +33,10 @@ CONFIG["report_sections"]="all"            # all, performance, locks, users, sys
 TEMP_DIR=""
 DB_FILE=""
 OUTPUT_FILE=""
+OUTPUT_FILE_FORMAT="list"
+OUTPUT_FILE_PARAMETER="-column"
 QUIET=false
+first_section=true
 
 # Color codes for output
 if [[ -t 1 ]]; then  # Only use colors if outputting to terminal
@@ -252,10 +255,10 @@ parse_args() {
     if [[ -z "$OUTPUT_FILE" ]]; then
         local base_name=$(basename "$DB_FILE" .db)
         case "${CONFIG[output_format]}" in
-            text) OUTPUT_FILE="${base_name}_report.txt" ;;
-            json) OUTPUT_FILE="${base_name}_report.json" ;;
-            csv) OUTPUT_FILE="${base_name}_report.csv" ;;
-            html) OUTPUT_FILE="${base_name}_report.html" ;;
+            text) OUTPUT_FILE="${base_name}_report.txt"; OUTPUT_FILE_FORMAT="list"; OUTPUT_FILE_PARAMETER="-column" ;;
+            json) OUTPUT_FILE="${base_name}_report.json"; OUTPUT_FILE_FORMAT="json"; OUTPUT_FILE_PARAMETER="-json" ;;
+            csv) OUTPUT_FILE="${base_name}_report.csv"; OUTPUT_FILE_FORMAT="csv"; OUTPUT_FILE_PARAMETER="-csv" ;;
+            html) OUTPUT_FILE="${base_name}_report.html"; OUTPUT_FILE_FORMAT="html"; OUTPUT_FILE_PARAMETER="-html" ;;
         esac
     fi
 }
@@ -488,27 +491,62 @@ execute_query() {
 
     log_progress "Executing query: $query_name"
 
-    # Add query comment header like original script
-    {
-        # echo ""
-        # Clean up query for display (preserve multi-line formatting and indentation)
-        # Only remove trailing whitespace, preserve leading spaces for indentation
-        local clean_query
-        clean_query=$(echo "$query" | sed 's/[[:space:]]*$//')
-        echo "$clean_query"
-        echo ""
-    } >> "$output_file"
-
     # Record start time
     local start_time=$(date +%s)
 
-    # Execute the query with headers and column formatting, including pragma optimize
-    local optimized_query="pragma optimize; $query"
-    if ! sqlite3 -header -column "$DB_FILE" "$optimized_query" >> "$output_file" 2>/dev/null; then
-        log_warn "Query '$query_name' failed or returned no results"
-        echo "-- Query '$query_name' failed or returned no results" >> "$output_file"
-        return 1
-    fi
+    case "${CONFIG[output_format]}" in
+        text|csv)
+            # Add query comment header like original script
+            {
+                # Clean up query for display (preserve multi-line formatting and indentation)
+                # Only remove trailing whitespace, preserve leading spaces for indentation
+                local clean_query
+                clean_query=$(echo "$query" | sed 's/[[:space:]]*$//')
+                echo "$clean_query"
+                echo ""
+            } >> "$output_file"
+
+            # Execute the query with headers and column formatting, including pragma optimize
+            local query_options="pragma optimize; "
+            if ! sqlite3 -header "$OUTPUT_FILE_PARAMETER" "$DB_FILE" "$query_options $query" >> "$output_file" 2>/dev/null; then
+                log_warn "Query '$query_name' failed or returned no results"
+                echo "-- Query '$query_name' failed or returned no results" >> "$output_file"
+                return 1
+            fi
+            ;;
+        json)
+            # Execute query and capture results to temp file first
+            local query_options="pragma optimize; "
+            local temp_result="${TEMP_DIR}/query_result_${query_name}.json"
+            if sqlite3 -header "$OUTPUT_FILE_PARAMETER" "$DB_FILE" "$query_options $query" > "$temp_result" 2>/dev/null && [[ -s "$temp_result" ]]; then
+                cat "$temp_result" >> "$output_file"
+            else
+                log_warn "Query '$query_name' failed or returned no results"
+                echo "[]" >> "$output_file"
+            fi
+            ;;
+        html)
+            # Display the query in a pre-formatted box wrapped in a table
+            {
+                local clean_query
+                clean_query=$(echo "$query" | sed 's/[[:space:]]*$//' | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+                echo "        <div class=\"query-sql\">$clean_query</div>"
+                echo "        <div class=\"query-table\">"
+                echo "<TABLE>"
+            } >> "$output_file"
+
+            # Execute the query with HTML table output
+            local query_options="pragma optimize; "
+            if ! sqlite3 -header -html "$DB_FILE" "$query_options $query" >> "$output_file" 2>/dev/null; then
+                log_warn "Query '$query_name' failed or returned no results"
+                echo "        <div class=\"error\">Query '$query_name' failed or returned no results</div>" >> "$output_file"
+                return 1
+            fi
+            {
+                echo "</TABLE>"
+            } >> "$output_file"
+            ;;
+    esac
 
     # Calculate execution time
     local end_time=$(date +%s)
@@ -525,11 +563,20 @@ execute_query() {
     local seconds=$(format_duration "$duration")
 
     # Add execution time and spacing after query results
-    {
-        echo ""
-        echo "-- Execution time: ${seconds}s"
-        echo ""
-    } >> "$output_file"
+    case "${CONFIG[output_format]}" in
+        text|csv)
+            {
+                echo ""
+                echo "-- Execution time: ${seconds}s"
+                echo ""
+            } >> "$output_file"
+            ;;
+        html)
+            {
+                echo "        <p class=\"execution-time\">Execution time: ${seconds}s</p>"
+            } >> "$output_file"
+            ;;
+    esac
 
     return 0
 }
@@ -575,6 +622,148 @@ generate_report_header() {
                 echo "    \"sections\": {"
             } > "$output_file"
             ;;
+        html)
+            {
+                cat << 'HTML_HEADER' > "$output_file"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P4D Log Analysis Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        h2 {
+            color: #34495e;
+            background-color: #ecf0f1;
+            padding: 12px 15px;
+            margin-top: 30px;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+        h3 {
+            color: #2c3e50;
+            margin-top: 25px;
+            padding: 8px 10px;
+            background-color: #f8f9fa;
+            border-left: 3px solid #95a5a6;
+        }
+        .metadata {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+        .metadata p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .metadata strong {
+            color: #2c3e50;
+        }
+        .query-sql {
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f0f8ff;
+        }
+        .execution-time {
+            color: #7f8c8d;
+            font-size: 12px;
+            font-style: italic;
+            margin: 10px 0;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        @media print {
+            body { background-color: white; }
+            .container { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>P4D Log Analysis Report</h1>
+        <div class="metadata">
+HTML_HEADER
+                echo "            <p><strong>Generated:</strong> $(date)</p>"
+                echo "            <p><strong>Database:</strong> $DB_FILE</p>"
+                echo "            <p><strong>Script Version:</strong> $SCRIPT_VERSION</p>"
+                echo "            <p><strong>Long Command Threshold:</strong> ${CONFIG[long_command_threshold]}s</p>"
+                echo "            <p><strong>Long Sync Command Threshold:</strong> ${CONFIG[long_sync_command_threshold]}s</p>"
+                echo "            <p><strong>Busy Threshold:</strong> ${CONFIG[busy_threshold]} commands</p>"
+                echo "            <p><strong>Lock Threshold:</strong> ${CONFIG[lock_threshold]}ms</p>"
+                echo "            <p><strong>Top Results Limit:</strong> ${CONFIG[top_limit]}</p>"
+                echo "        </div>"
+            } >> "$output_file"
+            ;;
     esac
 }
 
@@ -611,18 +800,65 @@ generate_section() {
                 fi
             done
             ;;
+        csv)
+            {
+                echo ""
+                echo "===============================$section_title==============================="
+                echo ""
+            } >> "$output_file"
+
+            for query_name in "${queries[@]}"; do
+                if [[ -n "${QUERIES[$query_name]:-}" ]]; then
+                    # Add separator and query title like original script
+                    local title="${QUERY_TITLES[$query_name]:-$query_name}"
+                    {
+                        echo -e "==============================\\n\"$title\"\\n"
+                    } >> "$output_file"
+                    execute_query "$query_name" "$output_file"
+                fi
+            done
+            ;;
         json)
+            [[ "$first_section" == true ]] && first_section=false || echo "," >> "$output_file"
             echo "      \"$section_name\": {" >> "$output_file"
             local first=true
             for query_name in "${queries[@]}"; do
                 if [[ -n "${QUERIES[$query_name]:-}" ]]; then
+                    local title="${QUERY_TITLES[$query_name]:-$query_name}"
+                    local query="${QUERIES[$query_name]}"
                     [[ "$first" == true ]] && first=false || echo "," >> "$output_file"
-                    echo -n "        \"$query_name\": [" >> "$output_file"
-                    # TODO: Implement JSON output for query results
-                    echo "]" >> "$output_file"
+                    {
+                        local clean_query
+                        # Remove newlines and extra spaces for JSON embedding
+                        clean_query=$(echo "$query" | sed 's/[[:space:]]*$//g' | sed -E 's/^[[:space:]]+/ /g' | \
+                                sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+                        echo "        \"$query_name\": {"
+                        echo "           \"query_title\": \"$title\","
+                        echo "           \"query-sql\": \"$clean_query\","
+                        echo "           \"results\": "
+                    } >> "$output_file"
+                    execute_query "$query_name" "$output_file"
+                    echo "}" >> "$output_file"
                 fi
             done
             echo "      }" >> "$output_file"
+            ;;
+        html)
+            {
+                echo "        <h2>$section_title</h2>"
+            } >> "$output_file"
+            
+            for query_name in "${queries[@]}"; do
+                if [[ -n "${QUERIES[$query_name]:-}" ]]; then
+                    local title="${QUERY_TITLES[$query_name]:-$query_name}"
+                    # Remove escaped newlines from title for HTML
+                    title=$(echo -e "$title" | sed 's/\\n/ /g')
+                    {
+                        echo "        <h3>$title</h3>"
+                    } >> "$output_file"
+                    execute_query "$query_name" "$output_file"
+                fi
+            done
             ;;
     esac
 }
@@ -675,14 +911,23 @@ generate_report() {
         esac
     done
 
-    # Close JSON if needed
-    if [[ "${CONFIG[output_format]}" == "json" ]]; then
-        {
-            echo "    }"
-            echo "  }"
-            echo "}"
-        } >> "$OUTPUT_FILE"
-    fi
+    # Close JSON/HTML if needed
+    case "${CONFIG[output_format]}" in
+        json)
+            {
+                echo "    }"
+                echo "  }"
+                echo "}"
+            } >> "$OUTPUT_FILE"
+            ;;
+        html)
+            {
+                echo "    </div>"
+                echo "</body>"
+                echo "</html>"
+            } >> "$OUTPUT_FILE"
+            ;;
+    esac
 }
 
 # Main function
