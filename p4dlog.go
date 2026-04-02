@@ -2041,6 +2041,29 @@ func (fp *P4dFileParser) outputRemainingCommands() {
 	}
 }
 
+// ResetForNewFile - call when a new log file is detected to flush stale state
+// from the previous file. Prevents cmdsRunning accumulating across log rotations,
+// which would otherwise cause a panic when the max running command limit is exceeded.
+func (fp *P4dFileParser) ResetForNewFile() {
+	fp.m.Lock()
+	defer fp.m.Unlock()
+	fp.outputRemainingCommands()
+	fp.cmdsRunning = 0
+	fp.cmdsRunningMax = 0
+	fp.cmdsPaused = 0
+	fp.cmdsPausedMax = 0
+	fp.cmdsPausedErrorCount = 0
+	fp.pidsSeenThisSecond = make(map[int64]bool)
+	fp.runningPids = make(map[int64]int64)
+	fp.currTime = time.Time{}
+	fp.currStartTime = time.Time{}
+	fp.timeLastCmdProcessed = time.Time{}
+	fp.timeLastSvrEvent = time.Time{}
+	fp.hadServerThreadsMsg = false
+	fp.lastSyncPID = 0
+	fp.lineNo = 0
+}
+
 func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 	if cmd, ok := fp.cmds[pid]; ok {
 		f, _ := strconv.ParseFloat(string(computeLapse), 32)
