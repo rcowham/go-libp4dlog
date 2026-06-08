@@ -126,17 +126,18 @@ func (block *Block) addLine(line string, lineNo int64) {
 
 // ServerEvent
 type ServerEvent struct {
-	EventTime        time.Time `json:"eventTime"`
-	LineNo           int64     `json:"lineNo"`
-	ActiveThreads    int64     `json:"activeThreads"`
-	ActiveThreadsMax int64     `json:"activeThreadsMax"`
-	PausedThreads    int64     `json:"pausedThreads"`
-	PausedThreadsMax int64     `json:"pausedThreadsMax"`
-	PausedErrorCount int64     `json:"pausedErrorCount"`
-	PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
-	PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
-	CPUPressureState int64     `json:"cpuPressureState"` // 0-2
-	MemPressureState int64     `json:"memPressureState"` // 0-2
+	EventTime            time.Time `json:"eventTime"`
+	LineNo               int64     `json:"lineNo"`
+	ActiveThreads        int64     `json:"activeThreads"`
+	ActiveThreadsMax     int64     `json:"activeThreadsMax"`
+	PausedThreads        int64     `json:"pausedThreads"`
+	PausedThreadsMax     int64     `json:"pausedThreadsMax"`
+	PausedErrorCount     int64     `json:"pausedErrorCount"`
+	ResourceTerminations int64     `json:"resourceTerminations"`
+	PauseRateCPU         int64     `json:"pauseRateCPU"`     // Percentage 1-100
+	PauseRateMem         int64     `json:"pauseRateMem"`     // Percentage 1-100
+	CPUPressureState     int64     `json:"cpuPressureState"` // 0-2
+	MemPressureState     int64     `json:"memPressureState"` // 0-2
 }
 
 func (s *ServerEvent) String() string {
@@ -592,29 +593,31 @@ func (c *Command) setLbrUncompressDigestFilesizes(digests, filesizez, modtimes, 
 // MarshalJSON - handle formatting
 func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		EventTime        time.Time `json:"eventTime"`
-		LineNo           int64     `json:"lineNo"`
-		ActiveThreads    int64     `json:"activeThreads"`
-		ActiveThreadsMax int64     `json:"activeThreadsMax"`
-		PausedThreads    int64     `json:"pausedThreads"`
-		PausedThreadsMax int64     `json:"pausedThreadsMax"`
-		PausedErrorCount int64     `json:"pausedErrorCount"`
-		PauseRateCPU     int64     `json:"pauseRateCPU"`     // Percentage 1-100
-		PauseRateMem     int64     `json:"pauseRateMem"`     // Percentage 1-100
-		CPUPressureState int64     `json:"cpuPressureState"` // 0-2
-		MemPressureState int64     `json:"memPressureState"` // 0-2
+		EventTime            time.Time `json:"eventTime"`
+		LineNo               int64     `json:"lineNo"`
+		ActiveThreads        int64     `json:"activeThreads"`
+		ActiveThreadsMax     int64     `json:"activeThreadsMax"`
+		PausedThreads        int64     `json:"pausedThreads"`
+		PausedThreadsMax     int64     `json:"pausedThreadsMax"`
+		PausedErrorCount     int64     `json:"pausedErrorCount"`
+		ResourceTerminations int64     `json:"resourceTerminations"`
+		PauseRateCPU         int64     `json:"pauseRateCPU"`     // Percentage 1-100
+		PauseRateMem         int64     `json:"pauseRateMem"`     // Percentage 1-100
+		CPUPressureState     int64     `json:"cpuPressureState"` // 0-2
+		MemPressureState     int64     `json:"memPressureState"` // 0-2
 	}{
-		EventTime:        s.EventTime,
-		LineNo:           s.LineNo,
-		ActiveThreads:    s.ActiveThreads,
-		ActiveThreadsMax: s.ActiveThreadsMax,
-		PausedThreads:    s.PausedThreads,
-		PausedThreadsMax: s.PausedThreadsMax,
-		PausedErrorCount: s.PausedErrorCount,
-		PauseRateCPU:     s.PauseRateCPU,
-		PauseRateMem:     s.PauseRateMem,
-		CPUPressureState: s.CPUPressureState,
-		MemPressureState: s.MemPressureState,
+		EventTime:            s.EventTime,
+		LineNo:               s.LineNo,
+		ActiveThreads:        s.ActiveThreads,
+		ActiveThreadsMax:     s.ActiveThreadsMax,
+		PausedThreads:        s.PausedThreads,
+		PausedThreadsMax:     s.PausedThreadsMax,
+		PausedErrorCount:     s.PausedErrorCount,
+		ResourceTerminations: s.ResourceTerminations,
+		PauseRateCPU:         s.PauseRateCPU,
+		PauseRateMem:         s.PauseRateMem,
+		CPUPressureState:     s.CPUPressureState,
+		MemPressureState:     s.MemPressureState,
 	})
 }
 
@@ -1131,6 +1134,7 @@ type P4dFileParser struct {
 	cmdsPaused           int64           // No of paused threads
 	cmdsPausedMax        int64           // Max no of paused threads
 	cmdsPausedErrorCount int64           // Count of commands paused due to resource pressure errors
+	resourceTerminations int64           // Count of commands terminated due to low server resources
 	pauseRateCPU         int64           // Resource pressure
 	pauseRateMem         int64           // ditto
 	cpuPressureState     int64           // ditto
@@ -1478,6 +1482,7 @@ const prefixTrackMaxLock2 = "---   locks wait+held read/write "
 
 var reTrackMaxLock = regexp.MustCompile(`^---   max lock wait\+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms|---   locks wait+held read/write (\d+)ms\+(\d+)ms/(\d+)ms\+(\d+)ms`)
 var rePid = regexp.MustCompile(`\tPid (\d+)$`)
+var reErrorDate = regexp.MustCompile(`\tDate (\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d):$`)
 
 const prefixNetworkEstimates = "\tServer network estimates:"
 
@@ -1898,17 +1903,18 @@ func (fp *P4dFileParser) outputSvrEvent(timeStr string, lineNo int64) {
 		fp.timeLastSvrEvent = fp.currTime
 	}
 	svrEvent := ServerEvent{
-		EventTime:        eventTime,
-		LineNo:           lineNo,
-		ActiveThreads:    fp.cmdsRunning,
-		ActiveThreadsMax: fp.cmdsRunningMax,
-		PausedThreads:    fp.cmdsPaused,
-		PausedThreadsMax: fp.cmdsPausedMax,
-		PausedErrorCount: fp.cmdsPausedErrorCount,
-		PauseRateCPU:     fp.pauseRateCPU,
-		PauseRateMem:     fp.pauseRateMem,
-		CPUPressureState: fp.cpuPressureState,
-		MemPressureState: fp.memPressureState,
+		EventTime:            eventTime,
+		LineNo:               lineNo,
+		ActiveThreads:        fp.cmdsRunning,
+		ActiveThreadsMax:     fp.cmdsRunningMax,
+		PausedThreads:        fp.cmdsPaused,
+		PausedThreadsMax:     fp.cmdsPausedMax,
+		PausedErrorCount:     fp.cmdsPausedErrorCount,
+		ResourceTerminations: fp.resourceTerminations,
+		PauseRateCPU:         fp.pauseRateCPU,
+		PauseRateMem:         fp.pauseRateMem,
+		CPUPressureState:     fp.cpuPressureState,
+		MemPressureState:     fp.memPressureState,
 	}
 	fp.cmdChan <- svrEvent
 	fp.ServerEventsCount++
@@ -2263,7 +2269,17 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 
 func (fp *P4dFileParser) processErrorBlock(block *Block) {
 	var cmd *Command
+	var eventTime string
+	resourceTermination := false
 	for _, line := range block.lines {
+		if m := reErrorDate.FindStringSubmatch(line); len(m) > 0 {
+			eventTime = m[1]
+			continue
+		}
+		lowLine := strings.ToLower(line)
+		if strings.Contains(lowLine, "low on resources") && strings.Contains(lowLine, "command terminated") {
+			resourceTermination = true
+		}
 		m := rePid.FindStringSubmatch(line)
 		if len(m) > 0 {
 			pid := toInt64(m[1])
@@ -2276,8 +2292,14 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 					fp.trackRunning("t06", cmd, -1)
 				}
 			}
-			return
 		}
+	}
+	if resourceTermination {
+		fp.resourceTerminations++
+		if eventTime == "" {
+			eventTime = fp.currTime.Format(p4timeformat)
+		}
+		fp.outputSvrEvent(eventTime, block.lineNo)
 	}
 }
 

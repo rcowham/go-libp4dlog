@@ -1377,6 +1377,21 @@ Perforce server info:
 		cleanJSON(output[0]))
 }
 
+func TestResourceTerminationErrorBlock(t *testing.T) {
+	testInput := `
+Perforce server error:
+	Date 2026/06/01 19:02:07:
+	Pid 3571155
+	Operation: user-where
+	Ident: 01168AFD775C6DC84C1D285D1B69B255/none
+	Operation 'user-where' failed.
+	Server low on resources (memory), command terminated.
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.JSONEq(t, cleanJSON(`{"eventTime":"2026-06-01T19:02:07Z", "lineNo":2, "resourceTerminations":1}`), cleanJSON(output[0]))
+}
+
 func TestFileTotals(t *testing.T) {
 	// Note just for testing we set both snd/rcv values - normally you get either one or the other
 	testInput := `Perforce server info:

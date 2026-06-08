@@ -903,6 +903,29 @@ p4_prom_svr_events_processed{serverid="myserverid"} 1`, -1)
 	compareOutput(t, expected, output)
 }
 
+func TestServerEventsResourceTerminations(t *testing.T) {
+	cfg := &Config{
+		ServerID:         "myserverid",
+		UpdateInterval:   10 * time.Millisecond,
+		OutputCmdsByUser: true}
+	input := `
+Perforce server error:
+	Date 2026/06/01 19:02:07:
+	Pid 3571155
+	Operation: user-where
+	Ident: 01168AFD775C6DC84C1D285D1B69B255/none
+	Operation 'user-where' failed.
+	Server low on resources (memory), command terminated.
+`
+	historical := false
+	output := basicTest(cfg, input, historical)
+
+	expected := eol.Split(`p4_prom_log_lines_read{serverid="myserverid"} 9
+p4_prom_svr_events_processed{serverid="myserverid"} 1
+p4_resource_terminations{serverid="myserverid"} 1`, -1)
+	compareOutput(t, expected, output)
+}
+
 func TestServerEventsPausedCumulative(t *testing.T) {
 	cfg := &Config{
 		ServerID:         "myserverid",
