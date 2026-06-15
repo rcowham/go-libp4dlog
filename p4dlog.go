@@ -2159,6 +2159,21 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			cmd.IP = m[5]
 			cmd.App = m[6]
 			cmd.Cmd = m[7]
+			// Detect slightly strange Init() commands
+			if i := strings.Index(line, "' exited unexpectedly, removed from monitor table."); i >= 0 {
+				if fcmd, ok := fp.cmds[cmd.Pid]; ok {
+					fcmd.CmdError = true
+					fcmd.completed = true
+					if fcmd.EndTime.IsZero() {
+						fcmd.EndTime = fcmd.StartTime
+					}
+					if !fcmd.hasNoCompletionRecord() {
+						fp.trackRunning("t06", fcmd, -1)
+					}
+				}
+				return
+			}
+
 			// # following gsub required due to a 2009.2 P4V bug
 			// App = match.group(6).replace("\x00", "/")
 			if len(m) > 8 {

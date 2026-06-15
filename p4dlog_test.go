@@ -693,6 +693,32 @@ Perforce server info:
 	assert.Equal(t, 0, len(output))
 }
 
+func TestRemovedErrors(t *testing.T) {
+	// Test that Init commands don't get logged when they are removed from the monitor table.  This is a common error in standby servers.
+	testInput := `
+Perforce server info:
+	2026/06/15 08:02:04 pid 2280667 perforce@standby 127.0.0.1 [p4/2025.2/LINUX26X86_64/2882317] 'user-counters'
+--- ident cmd/group B3FC66DBCEE3F36250396DECCF03E72D/none
+server to client 127.0.0.1:1667 vs 127.0.0.1:1667
+Perforce server info:
+	2026/06/15 08:02:04 pid 2280667 completed .001s 1+0us 0+0io 0+0net 29200k 0pf
+Perforce server info:
+	2026/06/15 08:02:04 pid 2280667 perforce@standby 127.0.0.1 [p4/2025.2/LINUX26X86_64/2882317] 'user-counters'
+--- ident cmd/group B3FC66DBCEE3F36250396DECCF03E72D/none
+--- lapse .001s
+--- usage 1+0us 0+0io 0+0net 29200k 0pf
+--- memory cmd/proc 37mb/37mb
+--- rpc msgs/size in+out 2+13/0mb+0mb himarks 97604/97604 snd/rcv .000s/.000s
+
+server to client 127.0.0.1:1667 vs 127.0.0.1:1667
+Perforce server info:
+	2026/06/15 08:02:27 pid 2280667 unknown@unknown 127.0.0.1 [unknown] 'Init()' exited unexpectedly, removed from monitor table.
+--- ident cmd/group EBC62715A198B16164B7E15BE1C56420/none
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+}
+
 func TestServerActiveThreads(t *testing.T) {
 	testInput := `
 Perforce server info:
