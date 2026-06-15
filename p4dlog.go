@@ -132,7 +132,7 @@ type ServerEvent struct {
 	ActiveThreadsMax     int64     `json:"activeThreadsMax"`
 	PausedThreads        int64     `json:"pausedThreads"`
 	PausedThreadsMax     int64     `json:"pausedThreadsMax"`
-	FatalErrorCount      int64     `json:"pausedErrorCount"`
+	FatalErrorCount      int64     `json:"fatalErrorCount"`
 	ResourceTerminations int64     `json:"resourceTerminations"`
 	PauseRateCPU         int64     `json:"pauseRateCPU"`     // Percentage 1-100
 	PauseRateMem         int64     `json:"pauseRateMem"`     // Percentage 1-100
@@ -599,7 +599,7 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		ActiveThreadsMax     int64     `json:"activeThreadsMax"`
 		PausedThreads        int64     `json:"pausedThreads"`
 		PausedThreadsMax     int64     `json:"pausedThreadsMax"`
-		FatalErrorCount      int64     `json:"pausedErrorCount"`
+		FatalErrorCount      int64     `json:"fatalErrorCount"`
 		ResourceTerminations int64     `json:"resourceTerminations"`
 		PauseRateCPU         int64     `json:"pauseRateCPU"`     // Percentage 1-100
 		PauseRateMem         int64     `json:"pauseRateMem"`     // Percentage 1-100
