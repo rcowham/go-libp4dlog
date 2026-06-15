@@ -42,10 +42,7 @@ func parseLogLines(input string) []string {
 
 	output := []string{}
 	for cmd := range cmdChan {
-		switch cmd := cmd.(type) {
-		case ProxyCommand:
-			output = append(output, cmd.String())
-		}
+		output = append(output, cmd.String())
 	}
 	sort.Strings(output)
 	return output
