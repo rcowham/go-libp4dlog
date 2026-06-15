@@ -62,7 +62,7 @@ type P4DMetrics struct {
 	cmdsRunningMax            int64
 	cmdsPaused                int64 // Server Events
 	cmdsPausedMax             int64 // Server Events
-	cmdsPausedErrorCount      int64 // ditto
+	cmdsFatalErrorCount       int64 // ditto
 	resourceTerminations      int64 // ditto
 	pauseRateCPU              int64 // ditto
 	pauseRateMem              int64 // ditto
@@ -303,7 +303,7 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.outputMetric(metrics, "p4_cmds_running_max", "The max number of running commands at any one time since last metric", "gauge", fmt.Sprintf("%d", p4m.cmdsRunningMax), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_paused", "The number of (resource pressure) paused commands at any one time", "gauge", fmt.Sprintf("%d", p4m.cmdsPaused), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_paused_max", "The max number of (resource pressure) paused commands since last metric", "gauge", fmt.Sprintf("%d", p4m.cmdsPausedMax), fixedLabels)
-	p4m.outputMetric(metrics, "p4_cmds_paused_errors", "The number of commands exited with error due to resource pressure thresholds being exceeded", "counter", fmt.Sprintf("%d", p4m.cmdsPausedErrorCount), fixedLabels)
+	p4m.outputMetric(metrics, "p4_cmds_fatal_errors", "The number of commands exited with server fatal error", "counter", fmt.Sprintf("%d", p4m.cmdsFatalErrorCount), fixedLabels)
 	p4m.outputMetric(metrics, "p4_resource_terminations", "The number of commands terminated because the server was low on resources", "counter", fmt.Sprintf("%d", p4m.resourceTerminations), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_rate_cpu", "The (resource pressure) pause rate for CPU", "gauge", fmt.Sprintf("%d", p4m.pauseRateCPU), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_rate_mem", "The (resource pressure) pause rate for Mem", "gauge", fmt.Sprintf("%d", p4m.pauseRateMem), fixedLabels)
@@ -523,7 +523,7 @@ func (p4m *P4DMetrics) publishSvrEvent(evt p4dlog.ServerEvent) {
 	p4m.cmdsRunningMax = evt.ActiveThreadsMax
 	p4m.cmdsPaused = evt.PausedThreads
 	p4m.cmdsPausedMax = evt.PausedThreadsMax
-	p4m.cmdsPausedErrorCount = evt.PausedErrorCount
+	p4m.cmdsFatalErrorCount = evt.FatalErrorCount
 	p4m.resourceTerminations = evt.ResourceTerminations
 	p4m.pauseRateCPU = evt.PauseRateCPU
 	p4m.pauseRateMem = evt.PauseRateMem

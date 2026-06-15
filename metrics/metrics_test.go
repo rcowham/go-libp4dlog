@@ -891,7 +891,7 @@ p4_cmd_program_cumulative_seconds{serverid="myserverid",program="p4/2024.1.TEST-
 p4_cmd_running{serverid="myserverid"} 1
 p4_cmd_user_counter{serverid="myserverid",user="perforce"} 1
 p4_cmd_user_cumulative_seconds{serverid="myserverid",user="perforce"} 8.390
-p4_cmds_paused_errors{serverid="myserverid"} 1
+p4_cmds_fatal_errors{serverid="myserverid"} 1
 p4_cmds_running{serverid="myserverid"} 1
 p4_pause_rate_cpu{serverid="myserverid"} 59
 p4_pause_rate_mem{serverid="myserverid"} 20
