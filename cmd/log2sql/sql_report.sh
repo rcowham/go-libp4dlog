@@ -937,6 +937,12 @@ main() {
     # Parse command line arguments
     parse_args "$@"
 
+    # Check sqlite3 is installed
+    if ! command -v sqlite3 &>/dev/null; then
+        log_error "sqlite3 is not installed or not in PATH"
+        exit 1
+    fi
+
     # Validate database
     validate_database "$DB_FILE"
 
