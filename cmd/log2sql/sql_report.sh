@@ -269,6 +269,9 @@ declare -A QUERY_TITLES
 
 init_queries() {
     # Basic Information
+    QUERY_TITLES[basic_metadata]="Database metadata (log2sql version, log files processed)"
+    QUERIES[basic_metadata]="SELECT key, value FROM metadata ORDER BY key;"
+
     QUERY_TITLES[basic_timerange]="Start and end time for this log"
     QUERIES[basic_timerange]="SELECT MIN(starttime) as Start, MAX(starttime) as End
     FROM process;"
@@ -884,7 +887,7 @@ generate_report() {
         case "$section" in
             basic)
                 generate_section "basic" "Basic Information" \
-                    "basic_timerange" "basic_command_counts" "basic_commands_by_user" "basic_commands_by_app"
+                    "basic_metadata" "basic_timerange" "basic_command_counts" "basic_commands_by_user" "basic_commands_by_app"
                 ;;
             performance)
                 generate_section "performance" "Performance Analysis" \

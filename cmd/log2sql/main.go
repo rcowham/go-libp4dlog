@@ -99,7 +99,8 @@ func writeHeader(f io.Writer) {
 	activeThreadsMax int NULL, -- Active threads (max in last 10 secs)
 	pausedThreads int NULL, -- Paused threads
 	pausedThreadsMax int NULL, -- Paused threads (max in last 10 secs)
-	pausedErrorCount int NULL, -- Commands exited in error due to pause thresholds being exceeded
+	fatalErrorCount int NULL, -- Commands exited with server fatal error (will include resourceTerminations)
+	resourceTerminations int NULL, -- Commands terminated due to server resource pressure
 	pauseRateCPU int NULL, -- Pause rate CPU (percentage 0-100)
 	pauseRateMem int NULL, -- Pause rate Mem (percentage 0-100)
 	cpuPressureState int NULL, -- CPU pressure (0 low, 1 med, 2 high)
@@ -108,6 +109,10 @@ func writeHeader(f io.Writer) {
 `)
 	// Trade security for speed - easy to re-run if a problem (hopefully!)
 	fmt.Fprintf(f, "PRAGMA journal_mode = OFF;\nPRAGMA synchronous = OFF;\n")
+	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS metadata
+	(key TEXT NOT NULL PRIMARY KEY,
+	value TEXT NOT NULL);
+`)
 }
 
 func startTransaction(f io.Writer) {
@@ -163,10 +168,10 @@ func getProcessStatement() string {
 func getEventsStatement() string {
 	return `INSERT INTO events
 		(lineNumber, eventTime,
-		activeThreads, activeThreadsMax, pausedThreads, pausedThreadsMax, pausedErrorCount,
+		activeThreads, activeThreadsMax, pausedThreads, pausedThreadsMax, fatalErrorCount, resourceTerminations,
 		pauseRateCPU, pauseRateMem,
 		cpuPressureState, memPressureState)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
@@ -232,8 +237,8 @@ func preparedInsert(logger *logrus.Logger, stmtProcess, stmtTableuse *sqlite3.St
 func preparedInsertServerEvents(logger *logrus.Logger, stmtEvents *sqlite3.Stmt, evt *p4dlog.ServerEvent) int64 {
 	rows := 1
 	err := stmtEvents.Exec(
-		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.ActiveThreadsMax, evt.PausedThreads, evt.PausedThreadsMax, evt.PausedErrorCount,
-		evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
+		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.ActiveThreadsMax, evt.PausedThreads, evt.PausedThreadsMax, evt.FatalErrorCount,
+		evt.ResourceTerminations, evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
 	if err != nil {
 		logger.Errorf("Events insert: %v lineNo %d, %s",
 			err, evt.LineNo, dateStr(evt.EventTime))
@@ -243,9 +248,9 @@ func preparedInsertServerEvents(logger *logrus.Logger, stmtEvents *sqlite3.Stmt,
 
 func writeSQLServerEvents(f io.Writer, evt *p4dlog.ServerEvent) int64 {
 	rows := 1
-	fmt.Fprintf(f, `INSERT INTO events VALUES (%d,"%s",%d,%d,%d,%d,%d,%d,%d,%d,%d);`+"\n",
-		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.ActiveThreadsMax, evt.PausedThreads, evt.PausedThreadsMax, evt.PausedErrorCount,
-		evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
+	fmt.Fprintf(f, `INSERT INTO events VALUES (%d,"%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d);`+"\n",
+		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.ActiveThreadsMax, evt.PausedThreads, evt.PausedThreadsMax, evt.FatalErrorCount,
+		evt.ResourceTerminations, evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
 	return int64(rows)
 }
 
@@ -717,6 +722,9 @@ func main() {
 		var stmtProcess, stmtTableuse, stmtEvents *sqlite3.Stmt
 		if *sqlOutput {
 			writeHeader(fSQL)
+			fmt.Fprintf(fSQL, "INSERT OR REPLACE INTO metadata VALUES ('log2sql_version', '%s');\n", version.Print("log2sql"))
+			fmt.Fprintf(fSQL, "INSERT OR REPLACE INTO metadata VALUES ('created_at', '%s');\n", time.Now().Format(time.RFC3339))
+			fmt.Fprintf(fSQL, "INSERT OR REPLACE INTO metadata VALUES ('logfiles', '%s');\n", strings.Join(*logfiles, ","))
 			startTransaction(fSQL)
 		}
 		if writeDB {
@@ -727,6 +735,18 @@ func main() {
 			if err != nil {
 				logger.Fatalf("%q: %s", err, stmt)
 				return
+			}
+			err = db.Exec(fmt.Sprintf(`INSERT OR REPLACE INTO metadata VALUES ('log2sql_version', '%s');`, version.Print("log2sql")))
+			if err != nil {
+				logger.Errorf("metadata insert: %v", err)
+			}
+			err = db.Exec(fmt.Sprintf(`INSERT OR REPLACE INTO metadata VALUES ('created_at', '%s');`, time.Now().Format(time.RFC3339)))
+			if err != nil {
+				logger.Errorf("metadata insert: %v", err)
+			}
+			err = db.Exec(fmt.Sprintf(`INSERT OR REPLACE INTO metadata VALUES ('logfiles', '%s');`, strings.Join(*logfiles, ",")))
+			if err != nil {
+				logger.Errorf("metadata insert: %v", err)
 			}
 			stmtProcess, err = db.Prepare(getProcessStatement())
 			if err != nil {
