@@ -24,8 +24,10 @@ Please note, in the SQL statements below, there are sometimes 2 versions - this 
 Sqlite syntax needs "SUBSTR" not "SUBSTRING" (used by mysql and other DBMSs).
 
 - [log2sql example SQL statements](#log2sql-example-sql-statements)
-- [Locks Held for 10 seconds](#locks-held-for-10-seconds)
-- [Commands waiting for locks for over 30 seconds](#commands-waiting-for-locks-for-over-30-seconds)
+- [DB Table Locks Held for 10 seconds](#db-table-locks-held-for-10-seconds)
+- [Commands waiting for DB locks for over 30 seconds](#commands-waiting-for-db-locks-for-over-30-seconds)
+- [Individual locks taken on table between two times:](#individual-locks-taken-on-table-between-two-times)
+- [Held Locks for a period of time](#held-locks-for-a-period-of-time)
 - [Commands running per second (look for bottlenecks)](#commands-running-per-second-look-for-bottlenecks)
 - [25 Longest computes](#25-longest-computes)
 - [Consumed Most I/O Not working](#consumed-most-io-not-working)
@@ -60,12 +62,10 @@ Sqlite syntax needs "SUBSTR" not "SUBSTRING" (used by mysql and other DBMSs).
 - [Incoming Commands per user per minute](#incoming-commands-per-user-per-minute)
 - [Sync commands per 10 mins](#sync-commands-per-10-mins)
 - [All locks taken on a table](#all-locks-taken-on-a-table)
-- [Individual locks taken on table between two times:](#individual-locks-taken-on-table-between-two-times)
 - [Commands that were still running when server crashed](#commands-that-were-still-running-when-server-crashed)
 - [Commands at point in time with errors](#commands-at-point-in-time-with-errors)
 - [Commands per user](#commands-per-user)
 - [Commands per user per 10 mins](#commands-per-user-per-10-mins)
-- [Held Locks for a period of time](#held-locks-for-a-period-of-time)
 - [ADDITIONAL...](#additional)
 - [INTO CSV FILE - concurrent commands](#into-csv-file---concurrent-commands)
 - [INTO CSV FILE - incoming commands](#into-csv-file---incoming-commands)
@@ -77,23 +77,44 @@ Sqlite syntax needs "SUBSTR" not "SUBSTRING" (used by mysql and other DBMSs).
 - [Commands per user](#commands-per-user-1)
 - [Examples of analysing benchmark script runs](#examples-of-analysing-benchmark-script-runs)
 
-# Locks Held for 10 seconds
+# DB Table Locks Held for 10 seconds
 
 	SELECT startTime, endTime, computedLapse, running, 
 	  cmd, pid, tablename, maxReadHeld, 
 	  maxWriteHeld, totalReadWait, totalWriteWait 
 	FROM tableUse JOIN process USING (processKey)
 	WHERE (( totalReadHeld > 10000 or totalWriteHeld > 10000 )) 
+	AND tablename NOT LIKE "%\_%" ESCAPE '\'
 	ORDER BY startTime, endTime;
 
-# Commands waiting for locks for over 30 seconds
+# Commands waiting for DB locks for over 30 seconds
 
 	SELECT startTime, endTime, computedLapse, running, 
 	  cmd, pid, tablename, maxReadHeld,
 	  maxWriteHeld, totalReadWait, totalWriteWait 
 	FROM tableUse JOIN process USING (processKey)
 	WHERE (( totalReadWait > 30000 or totalWriteWait > 30000 )) 
+	AND tablename NOT LIKE "%\_%" ESCAPE '\'
 	ORDER BY startTime,endTime;
+
+# Individual locks taken on table between two times:
+
+	SELECT p.startTime, p.endTime, p.user, p.cmd, p.pid, p.lineNumber, t.tablename, t.totalReadHeld, t.totalWriteHeld
+	FROM process p, tableUse t 
+	WHERE p.processkey = t.processkey AND 
+	t.tablename = "locks") AND 
+	(DATE_FORMAT(p.startTime,'%H:%i:%s') BETWEEN '10:00:00' AND '12:00:00') 
+	AND totalReadHeld+TotalWriteHeld>0
+	ORDER BY p.startTime, p.endTime,p.processkey;
+
+	SELECT substr(startTime,12,8) AS time, p.pid, p.user, p.cmd, t.totalReadHeld, t.totalWriteHeld
+	FROM process p, tableUse t
+	WHERE  p.processkey = t.processkey 
+	AND tablename = "locks" AND
+	(substr(startTime,12,8) BETWEEN '10:00:00' AND '12:00:00')
+	AND totalReadHeld+TotalWriteHeld>0
+	ORDER BY p.startTime, p.endTime,p.processkey;;
+
 
 # Commands running per second (look for bottlenecks)
 
@@ -407,14 +428,7 @@ would record macro into register a so you can run by typing "@a"
 	WHERE p.processkey = t.processkey AND (( t.totalReadHeld > 1 or t.totalWriteHeld > 1 ) AND t.tablename = "revdx") 
 	ORDER BY p.startTime, p.endTime,p.processkey;
 
-# Individual locks taken on table between two times:
 
-	SELECT p.startTime, p.endTime, p.user, p.cmd, p.pid, p.lineNumber, t.tablename, t.totalReadHeld, t.totalWriteHeld
-	FROM process p, tableUse t 
-	WHERE p.processkey = t.processkey AND 
-	(( t.totalReadHeld > 10000 or t.totalWriteHeld > 10000 ) AND t.tablename = "locks") AND 
-	(DATE_FORMAT(p.startTime,'%H:%i:%s') BETWEEN '10:00:00' AND '12:00:00') 
-	ORDER BY p.startTime, p.endTime,p.processkey;
 
 
 # Commands that were still running when server crashed
