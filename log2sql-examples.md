@@ -80,8 +80,8 @@ Sqlite syntax needs "SUBSTR" not "SUBSTRING" (used by mysql and other DBMSs).
 # DB Table Locks Held for 10 seconds
 
 	SELECT startTime, endTime, computedLapse, running, 
-	  cmd, pid, tablename, maxReadHeld, 
-	  maxWriteHeld, totalReadWait, totalWriteWait 
+	  cmd, pid, tablename, totalReadHeld, 
+	  totalWriteHeld, totalReadWait, totalWriteWait 
 	FROM tableUse JOIN process USING (processKey)
 	WHERE (( totalReadHeld > 10000 or totalWriteHeld > 10000 )) 
 	AND tablename NOT LIKE "%\_%" ESCAPE '\'
@@ -90,8 +90,8 @@ Sqlite syntax needs "SUBSTR" not "SUBSTRING" (used by mysql and other DBMSs).
 # Commands waiting for DB locks for over 30 seconds
 
 	SELECT startTime, endTime, computedLapse, running, 
-	  cmd, pid, tablename, maxReadHeld,
-	  maxWriteHeld, totalReadWait, totalWriteWait 
+	  cmd, pid, tablename, totalReadHeld,
+	  totalWriteHeld, totalReadWait, totalWriteWait 
 	FROM tableUse JOIN process USING (processKey)
 	WHERE (( totalReadWait > 30000 or totalWriteWait > 30000 )) 
 	AND tablename NOT LIKE "%\_%" ESCAPE '\'
