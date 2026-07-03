@@ -704,13 +704,31 @@ func TestP4PromLabelValues(t *testing.T) {
 		{`c:\prog.exe`, "c:\\prog.exe"},
 		{`c:\\prog.exe`, "c:\\\\prog.exe"},
 		{`a+prog.exe`, "a+prog.exe"},
+		{"bob\nsmith", "bobsmith"},
+		{"bob\rsmith", "bobsmith"},
 	}
 
 	for _, v := range values {
-		actual := NotLabelValueRE.ReplaceAllLiteralString(v.input, "_")
+		actual := sanitizeLabelValue(v.input)
 		assert.Equal(t, v.expected, actual)
 	}
 
+}
+
+func TestFormatLabelsSanitizesAllLabelValues(t *testing.T) {
+	cfg := &Config{ServerID: "my server\r\nid", UpdateInterval: 10 * time.Millisecond}
+	version := &P4DMetricsVersion{Revision: "testrevision", GoVersion: runtime.Version(), Version: "test"}
+	p4m := NewP4DMetricsLogParser(cfg, version, logger, false)
+
+	labels := []labelStruct{
+		{name: "serverid", value: "my server\r\nid"},
+		{name: "user", value: "bob\nsmith"},
+		{name: "cmd", value: "user sync\r\n"},
+	}
+
+	got := p4m.formatLabels("p4_test_metric", labels)
+	want := `p4_test_metric{serverid="my_serverid",user="bobsmith",cmd="user_sync"}`
+	assert.Equal(t, want, got)
 }
 
 func TestP4PromTransmitCmds(t *testing.T) {

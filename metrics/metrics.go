@@ -203,6 +203,12 @@ type labelStruct struct {
 	value string
 }
 
+func sanitizeLabelValue(value string) string {
+	value = strings.ReplaceAll(value, "\r", "")
+	value = strings.ReplaceAll(value, "\n", "")
+	return NotLabelValueRE.ReplaceAllString(value, "_")
+}
+
 func (p4m *P4DMetrics) getMemoryUsage() uint64 {
 	// An approximation for process memory usage - https://pkg.go.dev/runtime/metrics#pkg-examples
 	// https://www.datadoghq.com/blog/go-memory-metrics/ - says (total-released)
@@ -233,6 +239,7 @@ func (p4m *P4DMetrics) formatLabels(mname string, labels []labelStruct) string {
 	nonBlankLabels := make([]labelStruct, 0)
 	for _, l := range labels {
 		if l.value != "" {
+			l.value = sanitizeLabelValue(l.value)
 			if !p4m.historical {
 				l.value = fmt.Sprintf("\"%s\"", l.value)
 			}
@@ -634,7 +641,7 @@ func (p4m *P4DMetrics) publishCmdEvent(cmd p4dlog.Command) {
 	}
 	// Various chars not allowed in label names - see comment for NotLabelValueRE
 	program := strings.ReplaceAll(cmd.App, " (brokered)", "")
-	program = NotLabelValueRE.ReplaceAllString(program, "_")
+	program = sanitizeLabelValue(program)
 	p4m.cmdByProgramCounter[program]++
 	p4m.cmdByProgramCumulative[program] += float64(cmd.CompletedLapse)
 	const triggerPrefix = "trigger_"
