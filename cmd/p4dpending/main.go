@@ -74,6 +74,7 @@ type P4Pending struct {
 	pendingCount       int
 	timeLatestStartCmd time.Time
 	latestStartCmdBuf  string
+	endTime            time.Time
 }
 
 // Parse single log file - output is sent via linesChan channel
@@ -231,6 +232,10 @@ func main() {
 			"debug.cmd",
 			"Set for debug output for specified command - requires debug.pid to be also specified.",
 		).Default("").String()
+		endTime = kingpin.Flag(
+			"end.time",
+			"Stop processing when encountering log entries after this time (format: 2006/01/02 15:04:05).",
+		).String()
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version(version.Print("p4dpending")).Author("Robert Cowham")
 	kingpin.CommandLine.Help = "Parses one or more p4d text log files (which may be gzipped) and lists pending commands.\n" +
@@ -251,6 +256,16 @@ func main() {
 	logger.Infof("%v", version.Print("p4dpending"))
 	logger.Infof("Starting %s, Logfiles: %v", startTime, *logfiles)
 	logger.Infof("Flags: debug %v, jsonfile %v, debugPid/cmd %d/%s", *debug, *jsonOutputFile, *debugPID, *debugCmd)
+
+	// Parse end time if provided
+	var endTimeValue time.Time
+	if *endTime != "" {
+		endTimeValue, err = time.Parse(p4timeformat, *endTime)
+		if err != nil {
+			logger.Fatalf("Invalid end.time format: %v. Expected format: %s", err, p4timeformat)
+		}
+		logger.Infof("End time specified: %s", endTimeValue.Format(p4timeformat))
+	}
 
 	linesChan := make(chan string, 10000)
 
@@ -278,6 +293,7 @@ func main() {
 		logger:    logger,
 		fp:        fp,
 		linesChan: linesChan,
+		endTime:   endTimeValue,
 	}
 	if *debug > 0 {
 		fp.SetDebugMode(*debug)
@@ -303,6 +319,13 @@ func main() {
 	for cmd := range cmdChan {
 		switch cmd := cmd.(type) {
 		case p4dlog.Command:
+			// Check if we've exceeded the end time
+			if !p4p.endTime.IsZero() && !cmd.StartTime.IsZero() && cmd.StartTime.After(p4p.endTime) {
+				logger.Infof("Reached end time %s, stopping processing at command with start time %s",
+					p4p.endTime.Format(p4timeformat), cmd.StartTime.Format(p4timeformat))
+				cancel() // Cancel context to stop processing
+				break
+			}
 			p4p.totalCount += 1
 			if cmd.EndTime.IsZero() {
 				p4p.pendingCount += 1
