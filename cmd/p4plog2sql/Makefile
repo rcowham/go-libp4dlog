@@ -29,10 +29,10 @@ build:
 # Temp workaround for problem with xgo docker on M3 not building Linux amd64 - use local version.
 # For details see: https://github.com/crazy-max/xgo/issues/124
 # So would like to use the following - but instead we use xgo:local for now until pull request processed
-#	~/go/bin/xgo -docker-image crazymax/xgo:latest -targets=linux/amd64,linux/arm64 -out bin/p4plog2sql ${LINUX_LDFLAGS} .
+#	~/go/bin/xgo -image crazymax/xgo:latest -targets=linux/amd64,linux/arm64 -out bin/p4plog2sql ${LINUX_LDFLAGS} .
 dist:
-	~/go/bin/xgo -docker-image xgo:local -targets=linux/amd64,linux/arm64 -out bin/${BINARY} ${LINUX_LDFLAGS} .
-	~/go/bin/xgo -docker-image xgo:local -targets=windows/amd64,windows/arm64,darwin/arm64,darwin/amd64 -out bin/${BINARY}  ${LDFLAGS} .
+	~/go/bin/xgo -image xgo:local -targets=linux/amd64,linux/arm64 -out bin/${BINARY} ${LINUX_LDFLAGS} .
+	~/go/bin/xgo -image xgo:local -targets=windows/amd64,windows/arm64,darwin/arm64,darwin/amd64 -out bin/${BINARY}  ${LDFLAGS} .
 	rm -f bin/${BINARY}*amd64*.gz bin/${BINARY}*arm64*.gz
 	-chmod +x bin/${BINARY}*amd64* bin/${BINARY}*arm64* 
 	gzip bin/${BINARY}*amd64* bin/${BINARY}*arm64*
