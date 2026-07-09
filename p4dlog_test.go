@@ -1801,3 +1801,78 @@ UserId: null'
 	assert.JSONEq(t, cleanJSON(`{"app":"Crio [PY3.13.0/P4PY2025.1/API2025.1/2761706]/v98", "args":" -d [AutoBuild] update XXX", "cmd":"user-submit", "cmdError":false, "completedLapse":0.156, "endTime":"2026/01/13 06:54:39", "ip":"10.36.48.223", "lineNo":2, "memMB":74, "memPeakMB":167, "pid":1032, "processKey":"e60d3d022cb80d534512c03844790e31", "running":1, "startTime":"2026/01/13 06:54:39", "tables":[{"getRows":4, "pagesCached":2, "pagesIn":5, "pagesOut":3, "putRows":1, "readLocks":3, "tableName":"counters", "writeLocks":1}, {"tableName":"trigger_swarm.changesave", "triggerLapse":0.141}], "user":"autobuild", "workspace":"test_ws"}`),
 		cleanJSON(output[0]))
 }
+
+
+func TestResetForNewFile(t *testing.T) {
+	// Simulate the accumulated state from orphaned commands across log rotations.
+	// In production, auth failures and rmt-FileFetch errors generate start records
+	// with no matching completion records, causing cmdsRunning to grow unboundedly
+	// across log rotations until it hits maxRunningCount (20000) and panics.
+	logger := logrus.New()
+	logger.Level = logrus.InfoLevel
+	fp := NewP4dFileParser(logger)
+
+	// Simulate 3 orphaned commands (started, never completed)
+	cmd1 := &Command{Pid: 100001}
+	cmd2 := &Command{Pid: 100002}
+	cmd3 := &Command{Pid: 100003}
+	fp.trackRunning("test", cmd1, 1)
+	fp.trackRunning("test", cmd2, 1)
+	fp.trackRunning("test", cmd3, 1)
+	fp.cmds[100001] = cmd1
+	fp.cmds[100002] = cmd2
+	fp.cmds[100003] = cmd3
+
+	assert.Equal(t, int64(3), fp.cmdsRunning, "cmdsRunning should reflect 3 orphaned commands")
+	assert.Equal(t, 3, fp.CmdsPendingCount(), "3 commands should be pending")
+
+	// Need a cmdChan for outputRemainingCommands to send to
+	fp.cmdChan = make(chan interface{}, 100)
+
+	// Simulate log rotation
+	fp.ResetForNewFile()
+
+	// Drain flushed commands
+	close(fp.cmdChan)
+	flushed := 0
+	for range fp.cmdChan {
+		flushed++
+	}
+
+	assert.Equal(t, 3, flushed, "orphaned commands should be flushed on reset")
+	assert.Equal(t, int64(0), fp.cmdsRunning, "cmdsRunning must be 0 after ResetForNewFile")
+	assert.Equal(t, int64(0), fp.cmdsRunningMax, "cmdsRunningMax must be 0 after ResetForNewFile")
+	assert.Equal(t, 0, fp.CmdsPendingCount(), "no commands should be pending after ResetForNewFile")
+	assert.Equal(t, int64(0), fp.lineNo, "lineNo should be reset to 0")
+	assert.Equal(t, false, fp.hadServerThreadsMsg, "hadServerThreadsMsg should be reset")
+
+	// Verify that a subsequent parse starts running count from zero, not 3.
+	// Without ResetForNewFile, the next command would have running=4 instead of running=1.
+	file2Input := `
+Perforce server info:
+	2026/04/01 06:00:10 pid 200001 alice@alice_ws 10.1.1.3 [p4/2024.1/LINUX26X86_64/1234567] 'user-sync //...'
+Perforce server info:
+	2026/04/01 06:00:10 pid 200001 completed .050s
+`
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	inchan := make(chan string, 100)
+	cmdChan := fp.LogParser(ctx, inchan)
+	scanner := bufio.NewScanner(strings.NewReader(file2Input))
+	for scanner.Scan() {
+		inchan <- scanner.Text()
+	}
+	close(inchan)
+
+	file2Output := []string{}
+	for cmd := range cmdChan {
+		if c, ok := cmd.(Command); ok {
+			file2Output = append(file2Output, c.String())
+		}
+	}
+	assert.Equal(t, 1, len(file2Output))
+	var result map[string]interface{}
+	json.Unmarshal([]byte(file2Output[0]), &result)
+	assert.Equal(t, float64(1), result["running"],
+		"running count must start from 1 after reset, not accumulate from previous file")
+}
