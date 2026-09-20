@@ -27,7 +27,7 @@ CONFIG["output_format"]="text"             # text, json, csv, html
 CONFIG["show_progress"]=true               # Show progress indicators
 CONFIG["parallel_queries"]=false           # Run queries in parallel (experimental)
 CONFIG["top_limit"]=25                     # Default limit for top N queries
-CONFIG["report_sections"]="all"            # all, performance, locks, users, system
+CONFIG["report_sections"]="all"            # all, performance, locks, compute, replication, events
 
 # Global variables
 TEMP_DIR=""
@@ -87,7 +87,7 @@ OPTIONS:
                               busy=N         (running commands threshold, default: 20)
                               locks=N        (lock threshold in ms, default: 10000)
                               limit=N        (top N results, default: 25)
-    -s, --sections SECTIONS    Report sections: all, performance, locks, users, system
+    -s, --sections SECTIONS    Report sections: all, performance, locks, compute, replication, events
                               (comma-separated, default: all)
     --parallel                 Enable parallel query execution (experimental)
     --no-progress             Disable progress indicators
@@ -374,6 +374,31 @@ init_queries() {
     ORDER BY rpcMsgsTotal DESC
     LIMIT ${CONFIG[top_limit]};"
 
+    QUERY_TITLES[perf_command_latency]="Command latency breakdown by command type"
+    QUERIES[perf_command_latency]="SELECT cmd,
+        COUNT(*) AS commands,
+        ROUND(AVG(completedLapse), 2) AS avg_seconds,
+        ROUND(MAX(completedLapse), 2) AS max_seconds,
+        ROUND(AVG(uCpu), 0) AS avg_user_cpu_ms,
+        ROUND(AVG(sCpu), 0) AS avg_system_cpu_ms,
+        ROUND(AVG(rpcRcv), 3) AS avg_rpc_receive_wait,
+        ROUND(AVG(rpcSnd), 3) AS avg_rpc_send_wait
+    FROM process
+    WHERE completedLapse IS NOT NULL
+    GROUP BY cmd
+    ORDER BY avg_seconds DESC;"
+
+    QUERY_TITLES[perf_rpc_wait_ratio]="Commands with the highest RPC wait ratio (top ${CONFIG[top_limit]})"
+    QUERIES[perf_rpc_wait_ratio]="SELECT startTime, endTime, pid, user, cmd, args,
+        completedLapse,
+        ROUND(COALESCE(rpcRcv, 0) + COALESCE(rpcSnd, 0), 3) AS rpc_wait_seconds,
+        ROUND(100.0 * (COALESCE(rpcRcv, 0) + COALESCE(rpcSnd, 0))
+           / NULLIF(completedLapse, 0), 1) AS rpc_wait_pct
+    FROM process
+    WHERE completedLapse > 0
+    ORDER BY rpc_wait_pct DESC
+    LIMIT ${CONFIG[top_limit]};"
+
     QUERY_TITLES[perf_read_write_pct]="Read / Write Percentage - Percentage of pages read and pages written"
     QUERIES[perf_read_write_pct]="SELECT round(TOTAL(pagesIn) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as readPct,
            round(TOTAL(pagesOut) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as writePct
@@ -386,6 +411,21 @@ init_queries() {
     JOIN process USING (processkey)
     WHERE tablename LIKE 'trigger_%'
     GROUP BY trigger, cmd;"
+
+    # Server event analysis
+    QUERY_TITLES[events_pressure]="Server pressure events"
+    QUERIES[events_pressure]="SELECT lineNumber, eventTime,
+        activeThreads, activeThreadsMax, pausedThreads, pausedThreadsMax,
+        fatalErrorCount, resourceTerminations, pauseRateCPU, pauseRateMem,
+        cpuPressureState, memPressureState
+    FROM events
+    WHERE pausedThreads > 0
+    OR resourceTerminations > 0
+    OR pauseRateCPU > 0
+    OR pauseRateMem > 0
+    OR cpuPressureState > 0
+    OR memPressureState > 0
+    ORDER BY eventTime, lineNumber;"
 
     # Lock Analysis
     QUERY_TITLES[locks_contention_summary]="DB CONTENTION - Average Locks Summary (with total locks > ${CONFIG[lock_threshold]} ms)\\n   NOTE - Does one table have high average or total wait (victims) or held (culprits)?"
@@ -406,6 +446,26 @@ init_queries() {
     WHERE \"Total Wait (ms)\" > ${CONFIG[lock_threshold]}
       AND \"Total Held (ms)\" > ${CONFIG[lock_threshold]}
     ORDER BY \"Total Wait (ms)\" DESC;"
+
+        QUERY_TITLES[locks_table_contention]="Lock wait and held time by table"
+        QUERIES[locks_table_contention]="SELECT tableName,
+            SUM(COALESCE(totalReadWait, 0) + COALESCE(totalWriteWait, 0)) AS wait_ms,
+            SUM(COALESCE(totalReadHeld, 0) + COALESCE(totalWriteHeld, 0)) AS held_ms,
+            COUNT(*) AS samples
+        FROM tableUse
+        GROUP BY tableName
+        HAVING wait_ms > 0 OR held_ms > 0
+        ORDER BY wait_ms + held_ms DESC;"
+
+        QUERY_TITLES[locks_commands_wait]="Commands with the most lock wait (top ${CONFIG[top_limit]})"
+        QUERIES[locks_commands_wait]="SELECT p.startTime, p.endTime, p.pid, p.user, p.cmd, p.args,
+            SUM(COALESCE(t.totalReadWait, 0) + COALESCE(t.totalWriteWait, 0)) AS wait_ms,
+            GROUP_CONCAT(t.tableName, ', ') AS tables
+        FROM process p
+        JOIN tableUse t USING (processKey)
+        GROUP BY p.processKey
+        ORDER BY wait_ms DESC
+        LIMIT ${CONFIG[top_limit]};"
 
     QUERY_TITLES[locks_blocking_commands]="Blocking Commands - Commands that blocked others (top 30 by time) - totals in ms"
     QUERIES[locks_blocking_commands]="SELECT startTime, endTime, running, user, cmd, pid, tablename,
@@ -886,7 +946,7 @@ generate_report() {
     # Determine which sections to include
     local sections
     if [[ "${CONFIG[report_sections]}" == "all" ]]; then
-        sections=("basic" "performance" "locks" "compute" "replication")
+        sections=("basic" "performance" "locks" "compute" "replication" "events")
     else
         IFS=',' read -ra sections <<< "${CONFIG[report_sections]}"
     fi
@@ -901,13 +961,15 @@ generate_report() {
             performance)
                 generate_section "performance" "Performance Analysis" \
                     "perf_long_commands" "perf_long_sync_commands" "perf_busy_periods" "perf_memory_usage" \
-                    "perf_cpu_system" "perf_cpu_user" "perf_cpu_consumers" "perf_io_usage" "perf_rpc_msgs" "perf_read_write_pct" \
+                    "perf_cpu_system" "perf_cpu_user" "perf_cpu_consumers" "perf_io_usage" "perf_rpc_msgs" \
+                    "perf_command_latency" "perf_rpc_wait_ratio" "perf_read_write_pct" \
                     "triggers"
                 ;;
             locks)
                 generate_section "locks" "Database Lock Analysis" \
                     "locks_contention_summary" "locks_blocking_commands" "locks_blocking_write_commands" "locks_blocking_read_commands" \
-                    "locks_blocked_commands" "locks_worst_offenders" "locks_avg_wait_time"
+                    "locks_blocked_commands" "locks_worst_offenders" "locks_avg_wait_time" \
+                    "locks_table_contention" "locks_commands_wait"
                 ;;
             compute)
                 generate_section "compute" "Compute Analysis" \
@@ -916,6 +978,10 @@ generate_report() {
             replication)
                 generate_section "replication" "Replication Analysis" \
                     "repl_avg_times"
+                ;;
+            events)
+                generate_section "events" "Server Event Analysis" \
+                    "events_pressure"
                 ;;
             *)
                 log_warn "Unknown section: $section"
