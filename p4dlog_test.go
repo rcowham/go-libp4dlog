@@ -1801,3 +1801,23 @@ UserId: null'
 	assert.JSONEq(t, cleanJSON(`{"app":"Crio [PY3.13.0/P4PY2025.1/API2025.1/2761706]/v98", "args":" -d [AutoBuild] update XXX", "cmd":"user-submit", "cmdError":false, "completedLapse":0.156, "endTime":"2026/01/13 06:54:39", "ip":"10.36.48.223", "lineNo":2, "memMB":74, "memPeakMB":167, "pid":1032, "processKey":"e60d3d022cb80d534512c03844790e31", "running":1, "startTime":"2026/01/13 06:54:39", "tables":[{"getRows":4, "pagesCached":2, "pagesIn":5, "pagesOut":3, "putRows":1, "readLocks":3, "tableName":"counters", "writeLocks":1}, {"tableName":"trigger_swarm.changesave", "triggerLapse":0.141}], "user":"autobuild", "workspace":"test_ws"}`),
 		cleanJSON(output[0]))
 }
+
+func TestTriggerAfterIdentRecord(t *testing.T) {
+	testInput := `
+Perforce server info:
+	2026/09/20 06:05:03 pid 2906648 p4user@test_ws 10.90.54.74 [goose:worker:p4force [PY3.14.0/P4PY2025.2/API2025.2/2852709/v99]] 'user-change -o'
+--- ident cmd/group B3FC66DBCEE3F36250396DECCF03E72D/none trigger swarm.changesave
+lapse .097s
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	var command struct {
+		Cmd    string  `json:"cmd"`
+		Tables []Table `json:"tables"`
+	}
+	assert.NoError(t, json.Unmarshal([]byte(output[0]), &command))
+	assert.Equal(t, "user-change", command.Cmd)
+	assert.Len(t, command.Tables, 1)
+	assert.Equal(t, "trigger_swarm.changesave", command.Tables[0].TableName)
+	assert.Equal(t, float32(0.097), command.Tables[0].TriggerLapse)
+}

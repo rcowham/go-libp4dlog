@@ -1418,6 +1418,7 @@ const trackLapse = "--- lapse "
 const trackPaused = "--- paused "
 const trackFatalError = "--- exited on fatal server error"
 const trackAuthenticationError = "--- failed authentication check"
+const trackIdent = "--- ident "
 const trackDB = "--- db."
 const trackRdbLbr = "--- rdb.lbr"
 const trackMeta = "--- meta"
@@ -1500,7 +1501,20 @@ func (fp *P4dFileParser) processTrackRecords(cmd *Command, lines []string) {
 	hasTableTrackInfo := false
 	var tableName string
 	var lbrAction string
-	for _, line := range lines {
+	for lineIndex, line := range lines {
+		if strings.HasPrefix(line, trackIdent) {
+			if tm := reCmdTrigger.FindStringSubmatch(line); len(tm) > 0 {
+				trigger := tm[1]
+				for _, lapseLine := range lines[lineIndex+1:] {
+					if strings.HasPrefix(lapseLine, trackIdent) {
+						continue
+					}
+					fp.processTriggerLapse(cmd, trigger, lapseLine)
+					break
+				}
+			}
+			continue
+		}
 		if strings.HasPrefix(line, trackLapse) {
 			val := line[len(trackLapse):]
 			j := strings.Index(val, "s")
@@ -2235,7 +2249,12 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 			// 	fp.logger.Debugf("Setting pid %d, processKey %s, '%s'", cmd.Pid, cmd.ProcessKey, line)
 			// }
 			if len(trigger) > 0 {
-				fp.processTriggerLapse(cmd, trigger, block.lines[ind])
+				for ind < len(block.lines) && strings.HasPrefix(block.lines[ind], trackIdent) {
+					ind++
+				}
+				if ind < len(block.lines) {
+					fp.processTriggerLapse(cmd, trigger, block.lines[ind])
+				}
 			}
 		}
 		if !matched {
