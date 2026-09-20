@@ -365,6 +365,15 @@ init_queries() {
     ORDER BY ioPages DESC
     LIMIT ${CONFIG[top_limit]};"
 
+    QUERY_TITLES[perf_rpc_msgs]="Highest RPC Msgs IO (top ${CONFIG[top_limit]}) - commands with most RPC messages sent or received"
+    QUERIES[perf_rpc_msgs]="SELECT startTime, pid, user, cmd,
+           rpcMsgsIn, rpcMsgsOut, (COALESCE(rpcMsgsIn,0) + COALESCE(rpcMsgsOut,0)) as rpcMsgsTotal,
+           rpcSizeIn, rpcSizeOut, round(completedLapse, 2) as 'lapse(s)', args
+    FROM process
+    WHERE rpcMsgsIn IS NOT NULL OR rpcMsgsOut IS NOT NULL
+    ORDER BY rpcMsgsTotal DESC
+    LIMIT ${CONFIG[top_limit]};"
+
     QUERY_TITLES[perf_read_write_pct]="Read / Write Percentage - Percentage of pages read and pages written"
     QUERIES[perf_read_write_pct]="SELECT round(TOTAL(pagesIn) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as readPct,
            round(TOTAL(pagesOut) * 100.0 / (TOTAL(pagesIn)+TOTAL(pagesOut)), 3) as writePct
@@ -892,7 +901,7 @@ generate_report() {
             performance)
                 generate_section "performance" "Performance Analysis" \
                     "perf_long_commands" "perf_long_sync_commands" "perf_busy_periods" "perf_memory_usage" \
-                    "perf_cpu_system" "perf_cpu_user" "perf_cpu_consumers" "perf_io_usage" "perf_read_write_pct" \
+                    "perf_cpu_system" "perf_cpu_user" "perf_cpu_consumers" "perf_io_usage" "perf_rpc_msgs" "perf_read_write_pct" \
                     "triggers"
                 ;;
             locks)
