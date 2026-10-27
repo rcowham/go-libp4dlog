@@ -297,6 +297,23 @@ init_queries() {
     ORDER BY NumCmds DESC
     LIMIT 30;"
 
+    QUERY_TITLES[basic_commands_by_referring_ip]="Commands by referring IP address"
+    QUERIES[basic_commands_by_referring_ip]="WITH commands AS (
+        SELECT CASE
+            WHEN instr(ip, '/') > 0 THEN substr(ip, 1, instr(ip, '/') - 1)
+            ELSE ip
+        END AS referring_ip
+        FROM process
+        WHERE ip IS NOT NULL
+          AND ip <> ''
+    )
+    SELECT
+        referring_ip,
+        count(*) AS command_count
+    FROM commands
+    GROUP BY referring_ip
+    ORDER BY command_count DESC, referring_ip;"
+
     # Performance Analysis
     QUERY_TITLES[perf_long_commands]="Commands (non-sync) over ${CONFIG[long_command_threshold]}s by endTime\\n   NOTE - Do lots of commands finish at the same time after a big command or lock?"
     QUERIES[perf_long_commands]="SELECT startTime, endTime, pid, user, round(completedLapse) as 'lapse(s)',
@@ -956,7 +973,8 @@ generate_report() {
         case "$section" in
             basic)
                 generate_section "basic" "Basic Information" \
-                    "basic_metadata" "basic_timerange" "basic_command_counts" "basic_commands_by_user" "basic_commands_by_app"
+                    "basic_metadata" "basic_timerange" "basic_command_counts" "basic_commands_by_user" "basic_commands_by_app" \
+                    "basic_commands_by_referring_ip"
                 ;;
             performance)
                 generate_section "performance" "Performance Analysis" \
