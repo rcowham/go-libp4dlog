@@ -2,6 +2,8 @@ module go-libp4dlog/cmd/log2sql
 
 go 1.25.0
 
+replace github.com/rcowham/go-libp4dlog => ../..
+
 require (
 	github.com/bvinc/go-sqlite-lite v0.6.1
 	github.com/machinebox/progress v0.2.0

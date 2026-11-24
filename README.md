@@ -219,3 +219,7 @@ The latter will cross compile with xgo (due to CGO Sqlite3 library in use). Befo
 
     docker pull crazymax/xgo:latest
     go install github.com/crazy-max/xgo@latest
+
+The `log2sql` module uses the parser in the repository root, so build it from a
+complete checkout. A standalone module build requires a released parser version
+and removal of the local replacement.
