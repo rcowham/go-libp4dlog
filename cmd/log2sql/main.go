@@ -107,6 +107,15 @@ func writeHeader(f io.Writer) {
 	memPressureState int NULL, -- Mem pressure (0 low, 1 med, 2 high)
 	PRIMARY KEY (lineNumber));
 `)
+	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS rateLimitErrors
+	(lineNumber INT NOT NULL,
+	errorType TEXT NOT NULL, -- rate_limit or max_cost
+	eventTime DATETIME NULL,
+	pid INT NULL,
+	user TEXT NULL, cmd TEXT NULL,
+	processkey CHAR(50) NULL, processLineNumber INT NULL,
+	PRIMARY KEY (lineNumber, errorType));
+`)
 	// Trade security for speed - easy to re-run if a problem (hopefully!)
 	fmt.Fprintf(f, "PRAGMA journal_mode = OFF;\nPRAGMA synchronous = OFF;\n")
 	fmt.Fprintf(f, `CREATE TABLE IF NOT EXISTS metadata
@@ -172,6 +181,12 @@ func getEventsStatement() string {
 		pauseRateCPU, pauseRateMem,
 		cpuPressureState, memPressureState)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+}
+
+func getRateLimitErrorsStatement() string {
+	return `INSERT INTO rateLimitErrors
+		(lineNumber, errorType, eventTime, pid, user, cmd, processkey, processLineNumber)
+		VALUES (?,?,?,?,?,?,?,?)`
 }
 
 func getTableUseStatement() string {
@@ -252,6 +267,51 @@ func writeSQLServerEvents(f io.Writer, evt *p4dlog.ServerEvent) int64 {
 		evt.LineNo, dateStr(evt.EventTime), evt.ActiveThreads, evt.ActiveThreadsMax, evt.PausedThreads, evt.PausedThreadsMax, evt.FatalErrorCount,
 		evt.ResourceTerminations, evt.PauseRateCPU, evt.PauseRateMem, evt.CPUPressureState, evt.MemPressureState)
 	return int64(rows)
+}
+
+func nullableString(value string) interface{} {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func nullableInt(value int64) interface{} {
+	if value == 0 {
+		return nil
+	}
+	return value
+}
+
+func preparedInsertRateLimitEvent(logger *logrus.Logger, stmt *sqlite3.Stmt, evt *p4dlog.RateLimitEvent) int64 {
+	err := stmt.Exec(evt.LineNo, string(evt.ErrorType), nullableString(dateStr(evt.EventTime)), nullableInt(evt.Pid),
+		nullableString(evt.User), nullableString(evt.Cmd), nullableString(evt.ProcessKey), nullableInt(evt.ProcessLineNo))
+	if err != nil {
+		logger.Errorf("Rate limit error insert: %v lineNo %d", err, evt.LineNo)
+	}
+	return 1
+}
+
+func sqlNullableString(value string) string {
+	if value == "" {
+		return "NULL"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func sqlNullableInt(value int64) string {
+	if value == 0 {
+		return "NULL"
+	}
+	return fmt.Sprintf("%d", value)
+}
+
+func writeSQLRateLimitEvent(f io.Writer, evt *p4dlog.RateLimitEvent) int64 {
+	fmt.Fprintf(f, "INSERT INTO rateLimitErrors VALUES (%d,%s,%s,%s,%s,%s,%s,%s);\n",
+		evt.LineNo, sqlNullableString(string(evt.ErrorType)), sqlNullableString(dateStr(evt.EventTime)),
+		sqlNullableInt(evt.Pid), sqlNullableString(evt.User), sqlNullableString(evt.Cmd),
+		sqlNullableString(evt.ProcessKey), sqlNullableInt(evt.ProcessLineNo))
+	return 1
 }
 
 func writeSQL(f io.Writer, cmd *p4dlog.Command) int64 {
@@ -535,6 +595,14 @@ func main() {
 			"output.cmds.by.user.regex",
 			"Specify a (golang) regex to match user ids in order to track cmds by user in one metric (e.g. '.*' or 'swarm|jenkins').",
 		).String()
+		outputRateLimitErrorsByUser = kingpin.Flag(
+			"output.rate.limit.errors.by.user",
+			"Output rate-limit error counters by user (may create many metric series).",
+		).Bool()
+		outputRateLimitErrorsByCmd = kingpin.Flag(
+			"output.rate.limit.errors.by.cmd",
+			"Output rate-limit error counters by command.",
+		).Bool()
 		noOutputCmdsByIP = kingpin.Flag(
 			"no.output.cmds.by.IP",
 			"Turns off the output of cmds_by_IP - can be useful for large sites with many thousands of IP addresses in logs.",
@@ -595,14 +663,16 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mconfig := &metrics.Config{
-		Debug:                 *debug,
-		ServerID:              *serverID,
-		SDPInstance:           *sdpInstance,
-		UpdateInterval:        *updateInterval,
-		OutputCmdsByUser:      !*noOutputCmdsByUser,
-		OutputCmdsByUserRegex: *outputCmdsByUserRegex,
-		OutputCmdsByIP:        !*noOutputCmdsByIP,
-		CaseSensitiveServer:   !*caseInsensitiveServer,
+		Debug:                       *debug,
+		ServerID:                    *serverID,
+		SDPInstance:                 *sdpInstance,
+		UpdateInterval:              *updateInterval,
+		OutputCmdsByUser:            !*noOutputCmdsByUser,
+		OutputCmdsByUserRegex:       *outputCmdsByUserRegex,
+		OutputCmdsByIP:              !*noOutputCmdsByIP,
+		CaseSensitiveServer:         !*caseInsensitiveServer,
+		OutputRateLimitErrorsByUser: *outputRateLimitErrorsByUser,
+		OutputRateLimitErrorsByCmd:  *outputRateLimitErrorsByCmd,
 	}
 
 	var fJSON, fSQL, fMetrics *bufio.Writer
@@ -719,7 +789,7 @@ func main() {
 	}()
 
 	if needCmdChan {
-		var stmtProcess, stmtTableuse, stmtEvents *sqlite3.Stmt
+		var stmtProcess, stmtTableuse, stmtEvents, stmtRateLimitErrors *sqlite3.Stmt
 		if *sqlOutput {
 			writeHeader(fSQL)
 			fmt.Fprintf(fSQL, "INSERT OR REPLACE INTO metadata VALUES ('log2sql_version', '%s');\n", version.Print("log2sql"))
@@ -760,6 +830,10 @@ func main() {
 			if err != nil {
 				logger.Fatalf("Error preparing statement: %v", err)
 			}
+			stmtRateLimitErrors, err = db.Prepare(getRateLimitErrorsStatement())
+			if err != nil {
+				logger.Fatalf("Error preparing statement: %v", err)
+			}
 			err = db.Begin()
 			if err != nil {
 				fmt.Println(err)
@@ -794,22 +868,6 @@ func main() {
 						i += j
 					}
 				}
-				if i >= statementsPerTransaction && (*sqlOutput || writeDB) {
-					if *sqlOutput {
-						writeTransaction(fSQL)
-					}
-					if writeDB {
-						err = db.Commit()
-						if err != nil {
-							logger.Errorf("commit error: %v", err)
-						}
-						err = db.Begin()
-						if err != nil {
-							fmt.Println(err)
-						}
-					}
-					i = 1
-				}
 			case p4dlog.ServerEvent:
 				if *jsonOutput {
 					if p4dlog.FlagSet(*debug, p4dlog.DebugJSON) {
@@ -832,6 +890,35 @@ func main() {
 						i += j
 					}
 				}
+			case p4dlog.RateLimitEvent:
+				if *jsonOutput {
+					fmt.Fprintf(fJSON, "%s\n", cmd.String())
+				}
+				if *sqlOutput {
+					i += writeSQLRateLimitEvent(fSQL, &cmd)
+				}
+				if writeDB {
+					j := preparedInsertRateLimitEvent(logger, stmtRateLimitErrors, &cmd)
+					if !*sqlOutput {
+						i += j
+					}
+				}
+			}
+			if i >= statementsPerTransaction && (*sqlOutput || writeDB) {
+				if *sqlOutput {
+					writeTransaction(fSQL)
+				}
+				if writeDB {
+					err = db.Commit()
+					if err != nil {
+						logger.Errorf("commit error: %v", err)
+					}
+					err = db.Begin()
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+				i = 1
 			}
 		}
 		if *sqlOutput {

@@ -962,6 +962,77 @@ Perforce server error:
 	}
 }
 
+func TestRateLimitErrorBreakdowns(t *testing.T) {
+	input := `Perforce server info:
+	2026/11/24 07:13:44 pid 1 Alice@workspace 127.0.0.1 [p4] 'user-info'
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 1
+	Operation: user-info
+	Command terminated by rate limit, try again in 5 seconds.
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 2
+	Operation: user-sync
+	Operation accumulated too much cost (over 500); see 'p4 help ratelimit'.
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 3
+	Command terminated by rate limit, try again in 20 seconds.
+`
+	for _, historical := range []bool{false, true} {
+		for _, enabled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("historical=%t/enabled=%t", historical, enabled), func(t *testing.T) {
+				cfg := &Config{
+					ServerID: "test", UpdateInterval: 10 * time.Millisecond,
+					OutputRateLimitErrorsByUser: enabled, OutputRateLimitErrorsByCmd: enabled,
+				}
+				output := basicTest(cfg, input, historical)
+				lines := strings.Join(output, "\n")
+				if !enabled {
+					assert.NotContains(t, lines, "p4_cmd_rate_limit_errors_by_")
+					assert.NotContains(t, lines, "p4_cmd_max_cost_errors_by_")
+					return
+				}
+				if historical {
+					assert.Contains(t, lines, "p4_cmd_rate_limit_errors_by_user;serverid=test;user=alice 1 ")
+					assert.Contains(t, lines, "p4_cmd_rate_limit_errors_by_user;serverid=test;user=(unknown) 1 ")
+					assert.Contains(t, lines, "p4_cmd_max_cost_errors_by_cmd;serverid=test;cmd=user-sync 1 ")
+				} else {
+					assert.Contains(t, lines, `p4_cmd_rate_limit_errors_by_user{serverid="test",user="alice"} 1`)
+					assert.Contains(t, lines, `p4_cmd_rate_limit_errors_by_user{serverid="test",user="(unknown)"} 1`)
+					assert.Contains(t, lines, `p4_cmd_rate_limit_errors_by_cmd{serverid="test",cmd="user-info"} 1`)
+					assert.Contains(t, lines, `p4_cmd_rate_limit_errors_by_cmd{serverid="test",cmd="(unknown)"} 1`)
+					assert.Contains(t, lines, `p4_cmd_max_cost_errors_by_user{serverid="test",user="(unknown)"} 1`)
+					assert.Contains(t, lines, `p4_cmd_max_cost_errors_by_cmd{serverid="test",cmd="user-sync"} 1`)
+				}
+			})
+		}
+	}
+}
+
+func TestRateLimitBreakdownOptions(t *testing.T) {
+	for _, cfg := range []Config{
+		{OutputRateLimitErrorsByUser: true, CaseSensitiveServer: true},
+		{OutputRateLimitErrorsByCmd: true, CaseSensitiveServer: true},
+	} {
+		p4m := NewP4DMetricsLogParser(&cfg, &P4DMetricsVersion{}, logger, false)
+		p4m.publishRateLimitEvent(p4dlog.RateLimitEvent{
+			ErrorType: p4dlog.RateLimitRefusal, User: "Alice", Cmd: "user-info",
+		})
+		output := p4m.getCumulativeMetrics()
+		if cfg.OutputRateLimitErrorsByUser {
+			assert.Contains(t, output, `p4_cmd_rate_limit_errors_by_user{user="Alice"} 1`)
+			assert.NotContains(t, output, "p4_cmd_rate_limit_errors_by_cmd")
+			assert.Empty(t, p4m.rateLimitErrorsByCmd)
+		} else {
+			assert.Contains(t, output, `p4_cmd_rate_limit_errors_by_cmd{cmd="user-info"} 1`)
+			assert.NotContains(t, output, "p4_cmd_rate_limit_errors_by_user")
+			assert.Empty(t, p4m.rateLimitErrorsByUser)
+		}
+	}
+}
+
 func TestServerEventsResourceTerminations(t *testing.T) {
 	cfg := &Config{
 		ServerID:         "myserverid",

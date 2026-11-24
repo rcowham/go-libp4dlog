@@ -148,6 +148,31 @@ func (s *ServerEvent) String() string {
 	return string(j)
 }
 
+// RateLimitErrorKind identifies the rate limit that caused an error.
+type RateLimitErrorKind string
+
+const (
+	RateLimitRefusal RateLimitErrorKind = "rate_limit"
+	MaxCostExceeded  RateLimitErrorKind = "max_cost"
+)
+
+// RateLimitEvent represents one rate-limit error block.
+type RateLimitEvent struct {
+	EventTime     time.Time          `json:"eventTime"`
+	LineNo        int64              `json:"lineNo"`
+	Pid           int64              `json:"pid"`
+	ErrorType     RateLimitErrorKind `json:"errorType"`
+	User          string             `json:"user"`
+	Cmd           string             `json:"cmd"`
+	ProcessKey    string             `json:"processKey"`
+	ProcessLineNo int64              `json:"processLineNo"`
+}
+
+func (e RateLimitEvent) String() string {
+	j, _ := json.Marshal(e)
+	return string(j)
+}
+
 // Command is a command found in the block
 type Command struct {
 	duplicateKey            bool
@@ -2334,6 +2359,8 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 func (fp *P4dFileParser) processErrorBlock(block *Block) {
 	var cmd *Command
 	var eventTime string
+	var pid int64
+	var operation string
 	resourceTermination := false
 	rateLimitError := false
 	maxCostError := false
@@ -2341,6 +2368,9 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 		if m := reErrorDate.FindStringSubmatch(line); len(m) > 0 {
 			eventTime = m[1]
 			continue
+		}
+		if value, ok := strings.CutPrefix(strings.TrimSpace(line), "Operation: "); ok {
+			operation = strings.TrimSpace(value)
 		}
 		lowLine := strings.ToLower(line)
 		if strings.Contains(lowLine, "low on resources") && strings.Contains(lowLine, "command terminated") {
@@ -2354,7 +2384,7 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 		}
 		m := rePid.FindStringSubmatch(line)
 		if len(m) > 0 {
-			pid := toInt64(m[1])
+			pid = toInt64(m[1])
 			ok := false
 			if cmd, ok = fp.cmds[pid]; ok {
 				cmd.CmdError = true
@@ -2380,6 +2410,29 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 			eventTime = fp.currTime.Format(p4timeformat)
 		}
 		fp.outputSvrEvent(eventTime, block.lineNo)
+		if rateLimitError || maxCostError {
+			t, _ := time.Parse(p4timeformat, eventTime)
+			event := RateLimitEvent{EventTime: t, LineNo: block.lineNo, Pid: pid, Cmd: operation}
+			if cmd != nil && (cmd.StartTime.IsZero() || !t.Before(cmd.StartTime)) &&
+				(operation == "" || cmd.Cmd == "" || operation == cmd.Cmd) {
+				event.User = cmd.User
+				if event.Cmd == "" {
+					event.Cmd = cmd.Cmd
+				}
+				if cmd.ProcessKey != "" {
+					event.ProcessKey = cmd.GetKey()
+					event.ProcessLineNo = cmd.LineNo
+				}
+			}
+			if rateLimitError {
+				event.ErrorType = RateLimitRefusal
+				fp.cmdChan <- event
+			}
+			if maxCostError {
+				event.ErrorType = MaxCostExceeded
+				fp.cmdChan <- event
+			}
+		}
 	}
 }
 

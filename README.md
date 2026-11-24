@@ -137,6 +137,29 @@ If you want to debug a particular test (and output debug info):
 
 The counters `p4_cmd_rate_limit_errors` and `p4_cmd_max_cost_errors` count error
 records for CostThreshold/MaxCommands refusals and MaxCost terminations, respectively.
+Optional per-user and per-command counters add `_by_user` or `_by_cmd` to those
+names. Enable them with `--output.rate.limit.errors.by.user` and
+`--output.rate.limit.errors.by.cmd` in `log2sql`. The shared metrics
+configuration exposes `output_rate_limit_errors_by_user` and
+`output_rate_limit_errors_by_cmd`; p4prometheus must update its parser dependency
+and forward its own configuration to enable them. Both are off by default;
+per-user metrics can create many time series.
+
+Each error is also written to the `rateLimitErrors` SQLite table and SQL/JSON
+output. The table contains `errorType` (`rate_limit` or `max_cost`), `eventTime`,
+`pid`, `user`, `cmd`, `processkey`, and `processLineNumber`. User and process
+identity are populated only when a matching command is available when the error
+is parsed; the operation in the error block can supply `cmd` independently.
+Unknown values are NULL in SQL and use `(unknown)` in metric labels. Counts are
+per error block, including retries. For example:
+
+```sql
+SELECT errorType, user, cmd, COUNT(*) AS errors
+FROM rateLimitErrors
+GROUP BY errorType, user, cmd;
+```
+
+When present, `processkey` and `processLineNumber` identify a row in `process`.
 
 Also contained within this project are a `docker-compose` environment so that you can run local docker containers, import the historical
 metrics, and then connect to Grafana dashboard in order to be able to view them.

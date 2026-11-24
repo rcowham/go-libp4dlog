@@ -1446,6 +1446,62 @@ Perforce server error:
 	assert.JSONEq(t, `{"eventTime":"2026-11-24T07:13:47Z","lineNo":14,"rateLimitErrors":1,"maxCostErrors":1,"resourceTerminations":1}`, cleanJSON(output[2]))
 }
 
+func TestRateLimitEvents(t *testing.T) {
+	input := `Perforce server info:
+	2026/11/24 07:13:44 pid 1 Alice@workspace 127.0.0.1 [p4] 'user-info'
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 1
+	Operation: user-info
+	Command terminated by rate limit, try again in 5 seconds.
+	Command terminated by rate limit, try again in 5 seconds.
+Perforce server error:
+	Date 2026/11/24 07:13:45:
+	Pid 2
+	Operation: user-sync
+	Operation accumulated too much cost (over 500); see 'p4 help ratelimit'.
+Perforce server error:
+	Date 2026/11/24 07:13:46:
+	Pid 1
+	Operation: user-print
+	Command terminated by rate limit, try again in 10 seconds.
+`
+	lines := make(chan string, 30)
+	scanner := bufio.NewScanner(strings.NewReader(input))
+	for scanner.Scan() {
+		lines <- scanner.Text()
+	}
+	close(lines)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fp := NewP4dFileParser(logrus.New())
+	var events []RateLimitEvent
+	var command Command
+	for value := range fp.LogParser(ctx, lines) {
+		switch v := value.(type) {
+		case RateLimitEvent:
+			events = append(events, v)
+		case Command:
+			command = v
+		}
+	}
+	if !assert.Len(t, events, 3) {
+		return
+	}
+	assert.Equal(t, RateLimitRefusal, events[0].ErrorType)
+	assert.Equal(t, "Alice", events[0].User)
+	assert.Equal(t, "user-info", events[0].Cmd)
+	assert.Equal(t, command.GetKey(), events[0].ProcessKey)
+	assert.Equal(t, command.LineNo, events[0].ProcessLineNo)
+	assert.Equal(t, MaxCostExceeded, events[1].ErrorType)
+	assert.Equal(t, "user-sync", events[1].Cmd)
+	assert.Empty(t, events[1].User)
+	assert.Empty(t, events[1].ProcessKey)
+	assert.Equal(t, "user-print", events[2].Cmd)
+	assert.Empty(t, events[2].User)
+	assert.Empty(t, events[2].ProcessKey)
+}
+
 func TestFileTotals(t *testing.T) {
 	// Note just for testing we set both snd/rcv values - normally you get either one or the other
 	testInput := `Perforce server info:

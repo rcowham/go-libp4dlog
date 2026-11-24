@@ -31,14 +31,16 @@ var NotLabelValueRE = regexp.MustCompile(`[^a-zA-Z0-9_/+:@{}&%<>*\\.,\(\)\[\]-]`
 
 // Config for metrics
 type Config struct {
-	Debug                 int           `yaml:"debug"`
-	ServerID              string        `yaml:"server_id"`
-	SDPInstance           string        `yaml:"sdp_instance"`
-	UpdateInterval        time.Duration `yaml:"update_interval"`
-	OutputCmdsByUser      bool          `yaml:"output_cmds_by_user"`
-	OutputCmdsByUserRegex string        `yaml:"output_cmds_by_user_regex"`
-	OutputCmdsByIP        bool          `yaml:"output_cmds_by_ip"`
-	CaseSensitiveServer   bool          `yaml:"case_sensitive_server"`
+	Debug                       int           `yaml:"debug"`
+	ServerID                    string        `yaml:"server_id"`
+	SDPInstance                 string        `yaml:"sdp_instance"`
+	UpdateInterval              time.Duration `yaml:"update_interval"`
+	OutputCmdsByUser            bool          `yaml:"output_cmds_by_user"`
+	OutputCmdsByUserRegex       string        `yaml:"output_cmds_by_user_regex"`
+	OutputCmdsByIP              bool          `yaml:"output_cmds_by_ip"`
+	CaseSensitiveServer         bool          `yaml:"case_sensitive_server"`
+	OutputRateLimitErrorsByUser bool          `yaml:"output_rate_limit_errors_by_user"`
+	OutputRateLimitErrorsByCmd  bool          `yaml:"output_rate_limit_errors_by_cmd"`
 }
 
 // P4DMetricsVersion - for version info
@@ -66,6 +68,8 @@ type P4DMetrics struct {
 	resourceTerminations      int64 // ditto
 	rateLimitErrors           int64 // ditto
 	maxCostErrors             int64 // ditto
+	rateLimitErrorsByUser     map[p4dlog.RateLimitErrorKind]map[string]int64
+	rateLimitErrorsByCmd      map[p4dlog.RateLimitErrorKind]map[string]int64
 	pauseRateCPU              int64 // ditto
 	pauseRateMem              int64 // ditto
 	cpuPressureState          int64 // ditto
@@ -162,6 +166,8 @@ func NewP4DMetricsLogParser(config *Config, version *P4DMetricsVersion, logger *
 		historical:                historical,
 		cmdCounter:                make(map[string]int64),
 		cmdErrorCounter:           make(map[string]int64),
+		rateLimitErrorsByUser:     make(map[p4dlog.RateLimitErrorKind]map[string]int64),
+		rateLimitErrorsByCmd:      make(map[p4dlog.RateLimitErrorKind]map[string]int64),
 		cmdCumulative:             make(map[string]float64),
 		cmduCPUCumulative:         make(map[string]float64),
 		cmdsCPUCumulative:         make(map[string]float64),
@@ -316,6 +322,12 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.outputMetric(metrics, "p4_resource_terminations", "The number of commands terminated because the server was low on resources", "counter", fmt.Sprintf("%d", p4m.resourceTerminations), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmd_rate_limit_errors", "The number of commands refused by CostThreshold or MaxCommands rate limits", "counter", fmt.Sprintf("%d", p4m.rateLimitErrors), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmd_max_cost_errors", "The number of commands terminated for exceeding MaxCost", "counter", fmt.Sprintf("%d", p4m.maxCostErrors), fixedLabels)
+	if p4m.config.OutputRateLimitErrorsByUser {
+		p4m.outputRateLimitBreakdown(metrics, fixedLabels, "user", p4m.rateLimitErrorsByUser)
+	}
+	if p4m.config.OutputRateLimitErrorsByCmd {
+		p4m.outputRateLimitBreakdown(metrics, fixedLabels, "cmd", p4m.rateLimitErrorsByCmd)
+	}
 	p4m.outputMetric(metrics, "p4_pause_rate_cpu", "The (resource pressure) pause rate for CPU", "gauge", fmt.Sprintf("%d", p4m.pauseRateCPU), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_rate_mem", "The (resource pressure) pause rate for Mem", "gauge", fmt.Sprintf("%d", p4m.pauseRateMem), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_state_cpu", "The (resource pressure) pause state for CPU (0-2)", "gauge", fmt.Sprintf("%d", p4m.cpuPressureState), fixedLabels)
@@ -527,6 +539,46 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 		}
 	}
 	return metrics.String()
+}
+
+func (p4m *P4DMetrics) outputRateLimitBreakdown(out *bytes.Buffer, fixedLabels []labelStruct, dimension string, counts map[p4dlog.RateLimitErrorKind]map[string]int64) {
+	for _, metric := range []struct {
+		kind p4dlog.RateLimitErrorKind
+		name string
+		help string
+	}{
+		{p4dlog.RateLimitRefusal, "p4_cmd_rate_limit_errors_by_", "Rate-limit refusals"},
+		{p4dlog.MaxCostExceeded, "p4_cmd_max_cost_errors_by_", "MaxCost terminations"},
+	} {
+		name := metric.name + dimension
+		p4m.printMetricHeader(out, name, metric.help+" by "+dimension, "counter")
+		for value, count := range counts[metric.kind] {
+			labels := append(fixedLabels, labelStruct{dimension, value})
+			p4m.printMetric(out, name, labels, fmt.Sprintf("%d", count))
+		}
+	}
+}
+
+func (p4m *P4DMetrics) publishRateLimitEvent(evt p4dlog.RateLimitEvent) {
+	increment := func(counts map[p4dlog.RateLimitErrorKind]map[string]int64, value string) {
+		if value == "" {
+			value = "(unknown)"
+		}
+		if counts[evt.ErrorType] == nil {
+			counts[evt.ErrorType] = make(map[string]int64)
+		}
+		counts[evt.ErrorType][value]++
+	}
+	if p4m.config.OutputRateLimitErrorsByUser {
+		user := evt.User
+		if !p4m.config.CaseSensitiveServer {
+			user = strings.ToLower(user)
+		}
+		increment(p4m.rateLimitErrorsByUser, user)
+	}
+	if p4m.config.OutputRateLimitErrorsByCmd {
+		increment(p4m.rateLimitErrorsByCmd, evt.Cmd)
+	}
 }
 
 func (p4m *P4DMetrics) publishSvrEvent(evt p4dlog.ServerEvent) {
@@ -764,6 +816,11 @@ func (p4m *P4DMetrics) ProcessEvents(ctx context.Context, linesInChan <-chan str
 						}
 						p4m.svrEventsProcessed++
 						p4m.publishSvrEvent(cmd)
+						if needCmdChan {
+							cmdsOutChan <- cmd
+						}
+					case p4dlog.RateLimitEvent:
+						p4m.publishRateLimitEvent(cmd)
 						if needCmdChan {
 							cmdsOutChan <- cmd
 						}
