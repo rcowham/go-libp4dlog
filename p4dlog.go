@@ -68,6 +68,7 @@ var reCmdNoarg = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid 
 var reCmdMultiLineDesc = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) ([^ @]*)@([^ ]*) ([^ ]*) \[(.*?)\] \'([\w-]+)([^\']*)`)
 var reCompute = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) compute end ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
 var reCompleted = regexp.MustCompile(`^\t(\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d) pid (\d+) completed ([0-9]+|[0-9]+\.[0-9]+|\.[0-9]+)s.*`)
+var reCmdCost = regexp.MustCompile(`(?:^| )(\d+)c(?:$| )`)
 var reJSONCmdargs = regexp.MustCompile(`^(.*) \{.*\}$`)
 
 var infoBlock = "Perforce server info:"
@@ -134,6 +135,8 @@ type ServerEvent struct {
 	PausedThreadsMax     int64     `json:"pausedThreadsMax"`
 	FatalErrorCount      int64     `json:"fatalErrorCount"`
 	ResourceTerminations int64     `json:"resourceTerminations"`
+	RateLimitErrors      int64     `json:"rateLimitErrors"`
+	MaxCostErrors        int64     `json:"maxCostErrors"`
 	PauseRateCPU         int64     `json:"pauseRateCPU"`     // Percentage 1-100
 	PauseRateMem         int64     `json:"pauseRateMem"`     // Percentage 1-100
 	CPUPressureState     int64     `json:"cpuPressureState"` // 0-2
@@ -163,6 +166,7 @@ type Command struct {
 	EndTime                 time.Time `json:"endTime"`
 	ComputeLapse            float32   `json:"computeLapse"`
 	CompletedLapse          float32   `json:"completedLapse"`
+	CmdCost                 int64     `json:"cmdCost"`
 	Paused                  float32   `json:"paused"` // How long command was paused
 	IP                      string    `json:"ip"`
 	App                     string    `json:"app"`
@@ -601,6 +605,8 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		PausedThreadsMax     int64     `json:"pausedThreadsMax"`
 		FatalErrorCount      int64     `json:"fatalErrorCount"`
 		ResourceTerminations int64     `json:"resourceTerminations"`
+		RateLimitErrors      int64     `json:"rateLimitErrors"`
+		MaxCostErrors        int64     `json:"maxCostErrors"`
 		PauseRateCPU         int64     `json:"pauseRateCPU"`     // Percentage 1-100
 		PauseRateMem         int64     `json:"pauseRateMem"`     // Percentage 1-100
 		CPUPressureState     int64     `json:"cpuPressureState"` // 0-2
@@ -614,6 +620,8 @@ func (s *ServerEvent) MarshalJSON() ([]byte, error) {
 		PausedThreadsMax:     s.PausedThreadsMax,
 		FatalErrorCount:      s.FatalErrorCount,
 		ResourceTerminations: s.ResourceTerminations,
+		RateLimitErrors:      s.RateLimitErrors,
+		MaxCostErrors:        s.MaxCostErrors,
 		PauseRateCPU:         s.PauseRateCPU,
 		PauseRateMem:         s.PauseRateMem,
 		CPUPressureState:     s.CPUPressureState,
@@ -641,6 +649,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Workspace               string  `json:"workspace"`
 		ComputeLapse            float32 `json:"computeLapse"`
 		CompletedLapse          float32 `json:"completedLapse"`
+		CmdCost                 int64   `json:"cmdCost"`
 		Paused                  float32 `json:"paused"`
 		IP                      string  `json:"ip"`
 		App                     string  `json:"app"`
@@ -734,6 +743,7 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 		Workspace:               c.Workspace,
 		ComputeLapse:            c.ComputeLapse,
 		CompletedLapse:          c.CompletedLapse,
+		CmdCost:                 c.CmdCost,
 		Paused:                  c.Paused,
 		IP:                      c.IP,
 		App:                     c.App,
@@ -862,6 +872,9 @@ func (c *Command) updateFrom(other *Command) {
 	}
 	if other.CompletedLapse > 0 {
 		c.CompletedLapse = other.CompletedLapse
+	}
+	if other.CmdCost > 0 {
+		c.CmdCost = other.CmdCost
 	}
 	if other.Paused > 0 {
 		c.Paused = other.Paused
@@ -1135,6 +1148,8 @@ type P4dFileParser struct {
 	cmdsPausedMax        int64           // Max no of paused threads
 	cmdsFatalErrorCount  int64           // Count of commands which encountered server fatal errors
 	resourceTerminations int64           // Count of commands terminated due to low server resources
+	rateLimitErrors      int64           // Count of CostThreshold or MaxCommands refusals
+	maxCostErrors        int64           // Count of MaxCost terminations
 	pauseRateCPU         int64           // Resource pressure
 	pauseRateMem         int64           // ditto
 	cpuPressureState     int64           // ditto
@@ -1925,6 +1940,8 @@ func (fp *P4dFileParser) outputSvrEvent(timeStr string, lineNo int64) {
 		PausedThreadsMax:     fp.cmdsPausedMax,
 		FatalErrorCount:      fp.cmdsFatalErrorCount,
 		ResourceTerminations: fp.resourceTerminations,
+		RateLimitErrors:      fp.rateLimitErrors,
+		MaxCostErrors:        fp.maxCostErrors,
 		PauseRateCPU:         fp.pauseRateCPU,
 		PauseRateMem:         fp.pauseRateMem,
 		CPUPressureState:     fp.cpuPressureState,
@@ -2068,6 +2085,13 @@ func (fp *P4dFileParser) updateComputeTime(pid int64, computeLapse string) {
 		if cmd.Cmd == "user-sync" {
 			fp.lastSyncPID = cmd.Pid
 		}
+	}
+}
+
+func (c *Command) setCmdCost(line string) {
+	m := reCmdCost.FindStringSubmatch(line)
+	if len(m) > 0 {
+		c.CmdCost, _ = strconv.ParseInt(m[1], 10, 64)
 	}
 }
 
@@ -2267,6 +2291,9 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				pid = toInt64(m[2])
 				completedLapse := m[3]
 				fp.updateCompletionTime(pid, block.lineNo, endTime, completedLapse)
+				if cmd, ok := fp.cmds[pid]; ok {
+					cmd.setCmdCost(line)
+				}
 			}
 			// Note cmd completion also has usage data potentially
 			if matched {
@@ -2283,6 +2310,9 @@ func (fp *P4dFileParser) processInfoBlock(block *Block) {
 				pid := toInt64(m[2])
 				computeLapse := m[3]
 				fp.updateComputeTime(pid, computeLapse)
+				if cmd, ok := fp.cmds[pid]; ok {
+					cmd.setCmdCost(line)
+				}
 			}
 		}
 		if !matched && FlagSet(fp.debug, DebugUnrecognised) {
@@ -2305,6 +2335,8 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 	var cmd *Command
 	var eventTime string
 	resourceTermination := false
+	rateLimitError := false
+	maxCostError := false
 	for _, line := range block.lines {
 		if m := reErrorDate.FindStringSubmatch(line); len(m) > 0 {
 			eventTime = m[1]
@@ -2313,6 +2345,12 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 		lowLine := strings.ToLower(line)
 		if strings.Contains(lowLine, "low on resources") && strings.Contains(lowLine, "command terminated") {
 			resourceTermination = true
+		}
+		if strings.Contains(lowLine, "command terminated by rate limit, try again in ") {
+			rateLimitError = true
+		}
+		if strings.Contains(lowLine, "operation accumulated too much cost") {
+			maxCostError = true
 		}
 		m := rePid.FindStringSubmatch(line)
 		if len(m) > 0 {
@@ -2328,8 +2366,16 @@ func (fp *P4dFileParser) processErrorBlock(block *Block) {
 			}
 		}
 	}
-	if resourceTermination {
-		fp.resourceTerminations++
+	if resourceTermination || rateLimitError || maxCostError {
+		if resourceTermination {
+			fp.resourceTerminations++
+		}
+		if rateLimitError {
+			fp.rateLimitErrors++
+		}
+		if maxCostError {
+			fp.maxCostErrors++
+		}
 		if eventTime == "" {
 			eventTime = fp.currTime.Format(p4timeformat)
 		}

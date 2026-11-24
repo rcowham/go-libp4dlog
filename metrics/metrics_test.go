@@ -921,6 +921,47 @@ p4_prom_svr_events_processed{serverid="myserverid"} 1`, -1)
 	compareOutput(t, expected, output)
 }
 
+func TestRateLimitErrorMetrics(t *testing.T) {
+	cfg := &Config{ServerID: "myserverid", UpdateInterval: 10 * time.Millisecond}
+	input := `Perforce server info:
+	2026/11/24 07:13:44 pid 1 user@workspace 127.0.0.1 [p4] 'user-info'
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 1
+	Command terminated by rate limit, try again in 5 seconds.
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 2
+	Command terminated by rate limit, try again in 30 seconds.
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 3
+	Operation accumulated too much cost (over 500); see 'p4 help ratelimit'.
+Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 4
+	Unrelated error.
+`
+	for _, historical := range []bool{false, true} {
+		t.Run(fmt.Sprintf("historical=%t", historical), func(t *testing.T) {
+			output := basicTest(cfg, input, historical)
+			values := make(map[string]string)
+			for _, line := range output {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					for _, name := range []string{"p4_cmd_rate_limit_errors", "p4_cmd_max_cost_errors"} {
+						if strings.HasPrefix(fields[0], name+"{") || strings.HasPrefix(fields[0], name+";") {
+							values[name] = fields[1]
+						}
+					}
+				}
+			}
+			assert.Equal(t, "2", values["p4_cmd_rate_limit_errors"])
+			assert.Equal(t, "1", values["p4_cmd_max_cost_errors"])
+		})
+	}
+}
+
 func TestServerEventsResourceTerminations(t *testing.T) {
 	cfg := &Config{
 		ServerID:         "myserverid",

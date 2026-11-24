@@ -1418,6 +1418,34 @@ Perforce server error:
 	assert.JSONEq(t, cleanJSON(`{"eventTime":"2026-06-01T19:02:07Z", "lineNo":2, "resourceTerminations":1}`), cleanJSON(output[0]))
 }
 
+func TestRateLimitErrorBlocks(t *testing.T) {
+	input := `Perforce server error:
+	Date 2026/11/24 07:13:44:
+	Pid 1
+	COMMAND TERMINATED BY RATE LIMIT, TRY AGAIN IN 5 SECONDS.
+	Command terminated by rate limit, try again in 5 seconds.
+Perforce server error:
+	Date 2026/11/24 07:13:45:
+	Pid 2
+	Operation accumulated too much cost (over 500); see 'p4 help ratelimit'.
+Perforce server error:
+	Date 2026/11/24 07:13:46:
+	Pid 3
+	Operation failed for another reason.
+Perforce server error:
+	Date 2026/11/24 07:13:47:
+	Pid 4
+	Server low on resources (memory), command terminated.
+`
+	output := parseLogLines(input)
+	if !assert.Len(t, output, 3) {
+		return
+	}
+	assert.JSONEq(t, `{"eventTime":"2026-11-24T07:13:44Z","lineNo":1,"rateLimitErrors":1}`, cleanJSON(output[0]))
+	assert.JSONEq(t, `{"eventTime":"2026-11-24T07:13:45Z","lineNo":6,"rateLimitErrors":1,"maxCostErrors":1}`, cleanJSON(output[1]))
+	assert.JSONEq(t, `{"eventTime":"2026-11-24T07:13:47Z","lineNo":14,"rateLimitErrors":1,"maxCostErrors":1,"resourceTerminations":1}`, cleanJSON(output[2]))
+}
+
 func TestFileTotals(t *testing.T) {
 	// Note just for testing we set both snd/rcv values - normally you get either one or the other
 	testInput := `Perforce server info:
@@ -1433,6 +1461,26 @@ func TestFileTotals(t *testing.T) {
 	// assert.Equal(t, "", output[0])
 	assert.JSONEq(t, cleanJSON(`{"app":"p4/2023.2/LINUX26X86_64/2605454", "args":"-f //depot/data/...", "cmd":"user-sync", "cmdError":false, "completedLapse":70.9, "diskIn":136024, "diskOut":176, "endTime":"2024/07/11 11:18:01", "fileTotalsRcv":1, "fileTotalsRcvMBytes":2, "fileTotalsSnd":25, "fileTotalsSndMBytes":1862, "ip":"127.0.0.1", "lineNo":1, "maxRss":15216, "memMB":5, "memPeakMB":5, "pid":3.433924e+06, "processKey":"06b672ec262cbfde8633bc759d498340", "rpcHimarkFwd":97604, "rpcHimarkRev":97604, "rpcMsgsIn":32, "rpcMsgsOut":29907, "rpcRcv":0.326, "rpcSizeOut":1863, "rpcSnd":58.5, "running":1, "sCpu":5907, "startTime":"2024/07/11 11:16:51", "tables":[], "uCpu":16270, "user":"bruno", "workspace":"bruno_ws"}`),
 		cleanJSON(output[0]))
+}
+
+func TestCommandCost(t *testing.T) {
+	testInput := `Perforce server info:
+	2026/11/24 07:13:44 pid 3195327 user@workspace 127.0.0.1 [p4/2025.2/LINUX26X86_64/123] 'user-status'
+Perforce server info:
+	2026/11/24 07:13:44 pid 3195327 completed .011s 11+0us 0+0io 0+0net 19616k 0pf 238c
+`
+	output := parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.Contains(t, cleanJSON(output[0]), `"cmdCost":238`)
+
+	testInput = `Perforce server info:
+	2026/11/24 07:13:44 pid 3195327 user@workspace 127.0.0.1 [p4/2025.2/LINUX26X86_64/123] 'user-status'
+Perforce server info:
+	2026/11/24 07:13:44 pid 3195327 compute end .011s 238c
+`
+	output = parseLogLines(testInput)
+	assert.Equal(t, 1, len(output))
+	assert.Contains(t, cleanJSON(output[0]), `"cmdCost":238`)
 }
 
 func TestClientStats(t *testing.T) {

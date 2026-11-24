@@ -64,6 +64,8 @@ type P4DMetrics struct {
 	cmdsPausedMax             int64 // Server Events
 	cmdsFatalErrorCount       int64 // ditto
 	resourceTerminations      int64 // ditto
+	rateLimitErrors           int64 // ditto
+	maxCostErrors             int64 // ditto
 	pauseRateCPU              int64 // ditto
 	pauseRateMem              int64 // ditto
 	cpuPressureState          int64 // ditto
@@ -312,6 +314,8 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	p4m.outputMetric(metrics, "p4_cmds_paused_max", "The max number of (resource pressure) paused commands since last metric", "gauge", fmt.Sprintf("%d", p4m.cmdsPausedMax), fixedLabels)
 	p4m.outputMetric(metrics, "p4_cmds_fatal_errors", "The number of commands exited with server fatal error", "counter", fmt.Sprintf("%d", p4m.cmdsFatalErrorCount), fixedLabels)
 	p4m.outputMetric(metrics, "p4_resource_terminations", "The number of commands terminated because the server was low on resources", "counter", fmt.Sprintf("%d", p4m.resourceTerminations), fixedLabels)
+	p4m.outputMetric(metrics, "p4_cmd_rate_limit_errors", "The number of commands refused by CostThreshold or MaxCommands rate limits", "counter", fmt.Sprintf("%d", p4m.rateLimitErrors), fixedLabels)
+	p4m.outputMetric(metrics, "p4_cmd_max_cost_errors", "The number of commands terminated for exceeding MaxCost", "counter", fmt.Sprintf("%d", p4m.maxCostErrors), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_rate_cpu", "The (resource pressure) pause rate for CPU", "gauge", fmt.Sprintf("%d", p4m.pauseRateCPU), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_rate_mem", "The (resource pressure) pause rate for Mem", "gauge", fmt.Sprintf("%d", p4m.pauseRateMem), fixedLabels)
 	p4m.outputMetric(metrics, "p4_pause_state_cpu", "The (resource pressure) pause state for CPU (0-2)", "gauge", fmt.Sprintf("%d", p4m.cpuPressureState), fixedLabels)
@@ -532,6 +536,8 @@ func (p4m *P4DMetrics) publishSvrEvent(evt p4dlog.ServerEvent) {
 	p4m.cmdsPausedMax = evt.PausedThreadsMax
 	p4m.cmdsFatalErrorCount = evt.FatalErrorCount
 	p4m.resourceTerminations = evt.ResourceTerminations
+	p4m.rateLimitErrors = evt.RateLimitErrors
+	p4m.maxCostErrors = evt.MaxCostErrors
 	p4m.pauseRateCPU = evt.PauseRateCPU
 	p4m.pauseRateMem = evt.PauseRateMem
 	p4m.cpuPressureState = evt.CPUPressureState

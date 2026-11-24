@@ -135,6 +135,9 @@ If you want to debug a particular test (and output debug info):
 
 ## Viewing historical metrics via Grafana/Prometheus/VictoriaMetrics
 
+The counters `p4_cmd_rate_limit_errors` and `p4_cmd_max_cost_errors` count error
+records for CostThreshold/MaxCommands refusals and MaxCost terminations, respectively.
+
 Also contained within this project are a `docker-compose` environment so that you can run local docker containers, import the historical
 metrics, and then connect to Grafana dashboard in order to be able to view them.
 
