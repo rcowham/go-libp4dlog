@@ -444,6 +444,28 @@ init_queries() {
     OR memPressureState > 0
     ORDER BY eventTime, lineNumber;"
 
+    QUERY_TITLES[events_rate_limit_totals]="Rate-limit errors by type"
+    QUERIES[events_rate_limit_totals]="SELECT errorType, COUNT(*) AS errors
+    FROM rateLimitErrors
+    GROUP BY errorType
+    ORDER BY errors DESC, errorType;"
+
+    QUERY_TITLES[events_rate_limit_users]="Rate-limit errors by type and user (top ${CONFIG[top_limit]})"
+    QUERIES[events_rate_limit_users]="SELECT errorType, COALESCE(NULLIF(user, ''), '(unknown)') AS user,
+        COUNT(*) AS errors
+    FROM rateLimitErrors
+    GROUP BY errorType, COALESCE(NULLIF(user, ''), '(unknown)')
+    ORDER BY errors DESC, errorType, user
+    LIMIT ${CONFIG[top_limit]};"
+
+    QUERY_TITLES[events_rate_limit_commands]="Rate-limit errors by type and command (top ${CONFIG[top_limit]})"
+    QUERIES[events_rate_limit_commands]="SELECT errorType, COALESCE(NULLIF(cmd, ''), '(unknown)') AS cmd,
+        COUNT(*) AS errors
+    FROM rateLimitErrors
+    GROUP BY errorType, COALESCE(NULLIF(cmd, ''), '(unknown)')
+    ORDER BY errors DESC, errorType, cmd
+    LIMIT ${CONFIG[top_limit]};"
+
     # Lock Analysis
     QUERY_TITLES[locks_contention_summary]="DB CONTENTION - Average Locks Summary (with total locks > ${CONFIG[lock_threshold]} ms)\\n   NOTE - Does one table have high average or total wait (victims) or held (culprits)?"
     QUERIES[locks_contention_summary]="SELECT * FROM (
@@ -998,8 +1020,17 @@ generate_report() {
                     "repl_avg_times"
                 ;;
             events)
+                local event_queries=("events_pressure")
+                local rate_limit_table rate_limit_data
+                rate_limit_table=$(sqlite3 "$DB_FILE" "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rateLimitErrors' COLLATE NOCASE);")
+                if [[ "$rate_limit_table" == "1" ]]; then
+                    rate_limit_data=$(sqlite3 "$DB_FILE" "SELECT EXISTS(SELECT 1 FROM rateLimitErrors);")
+                    if [[ "$rate_limit_data" == "1" ]]; then
+                        event_queries+=("events_rate_limit_totals" "events_rate_limit_users" "events_rate_limit_commands")
+                    fi
+                fi
                 generate_section "events" "Server Event Analysis" \
-                    "events_pressure"
+                    "${event_queries[@]}"
                 ;;
             *)
                 log_warn "Unknown section: $section"

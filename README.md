@@ -160,6 +160,8 @@ GROUP BY errorType, user, cmd;
 ```
 
 When present, `processkey` and `processLineNumber` identify a row in `process`.
+The default `sql_report.sh` server-events section summarizes rate-limit errors
+by type, user, and command when the table exists and contains data.
 
 Also contained within this project are a `docker-compose` environment so that you can run local docker containers, import the historical
 metrics, and then connect to Grafana dashboard in order to be able to view them.
