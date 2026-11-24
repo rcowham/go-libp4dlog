@@ -40,6 +40,8 @@ github.com/pkg/profile v1.7.0/go.mod h1:8Uer0jas47ZQMJ7VD+OHknK4YDY07LPUC6dEvqDj
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rcowham/go-libp4dlog v0.15.2 h1:8akuDhN2pbxKlwuF0Cz/gUuC6qCVD+vioTcAJMZcpRA=
 github.com/rcowham/go-libp4dlog v0.15.2/go.mod h1:kepIvsh9w2SU05Ph5Ufe1lXz0aZ4FGQL3mUunDgQUtY=
+github.com/rcowham/go-libp4dlog v0.15.3 h1:B4nY+bPL8n4QOOR6UiFWfTE5s9rL7Z0vAwKtEpRz8RQ=
+github.com/rcowham/go-libp4dlog v0.15.3/go.mod h1:kepIvsh9w2SU05Ph5Ufe1lXz0aZ4FGQL3mUunDgQUtY=
 github.com/rcowham/kingpin v0.0.0-20250417115600-e1d913e1a35e h1:PoPbZjpR51/eiyyf4leoRKHgQpKfB/1eioy1oJDnCm8=
 github.com/rcowham/kingpin v0.0.0-20250417115600-e1d913e1a35e/go.mod h1:IV3ILWPHeB2p2v6EkdrBqfvgCxjX1pLL4lusUU6HYJA=
 github.com/sirupsen/logrus v1.10.2 h1:G2SED73/qrAu6YwbdxOD6peLkCBI3z7L+ykJFTXJBBo=

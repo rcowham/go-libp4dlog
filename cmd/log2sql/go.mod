@@ -7,7 +7,7 @@ require (
 	github.com/machinebox/progress v0.2.0
 	github.com/perforce/p4prometheus v0.11.5
 	github.com/pkg/profile v1.7.0
-	github.com/rcowham/go-libp4dlog v0.15.2
+	github.com/rcowham/go-libp4dlog v0.15.3
 	github.com/rcowham/kingpin v0.0.0-20250417115600-e1d913e1a35e
 	github.com/sirupsen/logrus v1.10.2
 )
