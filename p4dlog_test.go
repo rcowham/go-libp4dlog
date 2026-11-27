@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"io"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -51,6 +53,72 @@ func parseLogLines(input string) []string {
 	}
 	sort.Strings(output)
 	return output
+}
+
+func TestPendingCommandsConcurrent(t *testing.T) {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	fp := NewP4dFileParser(logger)
+	fp.debug = int(DebugPending)
+	const numCommands = 2000
+	fp.cmdChan = make(chan interface{}, numCommands)
+	started := make(chan struct{})
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		close(started)
+		for {
+			select {
+			case <-done:
+				close(stopped)
+				return
+			default:
+				fp.CmdsPendingCount()
+				fp.debugOutputCommands()
+			}
+		}
+	}()
+	<-started
+	start := time.Date(2026, 11, 24, 7, 13, 44, 0, time.UTC)
+	for pid := int64(1); pid <= numCommands; pid++ {
+		fp.addCommand(&Command{Pid: pid, StartTime: start}, false)
+		fp.addCommand(&Command{Pid: pid, StartTime: start, Cmd: "user-info"}, true)
+	}
+	assert.Equal(t, numCommands, fp.CmdsPendingCount())
+	fp.outputRemainingCommands()
+	assert.Zero(t, fp.CmdsPendingCount())
+	close(done)
+	<-stopped
+	assert.Len(t, fp.cmdChan, numCommands)
+}
+
+func TestPendingCountWhileCommandOutputBlocked(t *testing.T) {
+	fp := NewP4dFileParser(logrus.New())
+	fp.cmdChan = make(chan interface{})
+	start := time.Date(2026, 11, 24, 7, 13, 44, 0, time.UTC)
+	fp.currTime = start
+	fp.setPendingCommand(&Command{Pid: 1, Cmd: "user-info", StartTime: start, completed: true, hasTrackInfo: true})
+	outputDone := make(chan struct{})
+	go func() {
+		fp.outputCompletedCommands()
+		close(outputDone)
+	}()
+
+	countDone := make(chan struct{})
+	go func() {
+		for fp.CmdsPendingCount() != 0 {
+			time.Sleep(time.Millisecond)
+		}
+		close(countDone)
+	}()
+	select {
+	case <-countDone:
+	case <-time.After(5 * time.Second):
+		go func() { <-fp.cmdChan }()
+		t.Fatal("pending count blocked while command output was blocked")
+	}
+	<-fp.cmdChan
+	<-outputDone
 }
 
 type lbrRegex struct {

@@ -1152,7 +1152,7 @@ type P4dFileParser struct {
 	debugDuration        time.Duration
 	cmdsMaxResetDuration time.Duration // Window after which CmdsRunningMax/CmdsPausedMax are reset
 	lineNo               int64
-	m                    sync.Mutex
+	m                    sync.Mutex // Protects cmds and command names read by debugOutputCommands.
 	cmds                 map[int64]*Command
 	CmdsCount            int //Count of commands processed
 	ServerEventsCount    int // Count of server event records processed
@@ -1303,7 +1303,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 					fp.logger.Infof("addCommand: outputting old since process key different pid %d", cmd.Pid)
 				}
 				fp.outputCmd(cmd)
-				fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+				fp.setPendingCommand(newCmd)
 				if !newCmd.hasNoCompletionRecord() {
 					fp.trackRunning("t01", newCmd, 1)
 				}
@@ -1320,7 +1320,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 			}
 			fp.outputCmd(cmd)
 			newCmd.duplicateKey = true
-			fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+			fp.setPendingCommand(newCmd)
 		} else {
 			// same cmd.ProcessKey for new and found cmd
 			// At this point do we have a new (duplicate) - with same timestamp as old, or an update to existing?
@@ -1338,12 +1338,12 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 					fp.outputCmd(cmd)
 					fp.trackRunning("t02", newCmd, 1)
 					newCmd.duplicateKey = true
-					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+					fp.setPendingCommand(newCmd)
 				} else { // !cmd.hasTrackInfo
 					if debugLog {
 						fp.logger.Infof("addCommand: updating pid %d", cmd.Pid)
 					}
-					cmd.updateFrom(newCmd)
+					fp.updatePendingCommand(cmd, newCmd)
 				}
 			} else { // !hasTrackInfo
 				if cmd.hasTrackInfo {
@@ -1354,12 +1354,12 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 					fp.outputCmd(cmd)
 					fp.trackRunning("t02", newCmd, 1)
 					newCmd.duplicateKey = true
-					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+					fp.setPendingCommand(newCmd)
 				} else if newCmd.hasTableTrackInfo || newCmd.hasRealTableTrackInfo() {
 					if debugLog {
 						fp.logger.Infof("addCommand: updating2 pid %d", cmd.Pid)
 					}
-					cmd.updateFrom(newCmd)
+					fp.updatePendingCommand(cmd, newCmd)
 				} else if newCmd.hasIgnoredTables {
 					if debugLog {
 						fp.logger.Infof("addCommand: ignoring pid %d", cmd.Pid)
@@ -1371,7 +1371,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 					fp.outputCmd(cmd)
 					fp.trackRunning("t02", newCmd, 1)
 					newCmd.duplicateKey = true
-					fp.cmds[newCmd.Pid] = newCmd // Replace previous cmd with same PID
+					fp.setPendingCommand(newCmd)
 				}
 			}
 
@@ -1386,7 +1386,7 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		if debugLog {
 			fp.logger.Infof("addCommand: remembering newCmd pid %d", newCmd.Pid)
 		}
-		fp.cmds[newCmd.Pid] = newCmd
+		fp.setPendingCommand(newCmd)
 		// Check if this is a pid seen with similar timestape - but ignore commands which update clientEntity locks for example
 		if _, ok := fp.pidsSeenThisSecond[newCmd.Pid]; ok {
 			if !newCmd.hasRealTableTrackInfo() {
@@ -1402,6 +1402,18 @@ func (fp *P4dFileParser) addCommand(newCmd *Command, hasTrackInfo bool) {
 		}
 	}
 	fp.outputCompletedCommands()
+}
+
+func (fp *P4dFileParser) setPendingCommand(cmd *Command) {
+	fp.m.Lock()
+	fp.cmds[cmd.Pid] = cmd
+	fp.m.Unlock()
+}
+
+func (fp *P4dFileParser) updatePendingCommand(cmd, update *Command) {
+	fp.m.Lock()
+	cmd.updateFrom(update)
+	fp.m.Unlock()
 }
 
 // tables are things like rdb.lbr or storage which can be updated multiple times
@@ -2017,7 +2029,6 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 		return
 	}
 	fp.m.Lock()
-	defer fp.m.Unlock()
 	fp.outputCmdsContinued++
 	cmdsToOutput := make([]*Command, 0)
 	startCount := len(fp.cmds)
@@ -2068,6 +2079,7 @@ func (fp *P4dFileParser) outputCompletedCommands() {
 			delete(fp.cmds, cmd.Pid)
 		}
 	}
+	fp.m.Unlock()
 	// Sort by line no in log and output
 	sort.Slice(cmdsToOutput[:], func(i, j int) bool {
 		return cmdsToOutput[i].LineNo < cmdsToOutput[j].LineNo
@@ -2095,7 +2107,9 @@ func (fp *P4dFileParser) outputRemainingCommands() {
 	for _, cmd := range fp.cmds {
 		fp.outputCmd(cmd)
 	}
+	fp.m.Lock()
 	fp.cmds = make(map[int64]*Command)
+	fp.m.Unlock()
 	if fp.logger != nil && fp.debug > 0 {
 		endCount := len(fp.cmds)
 		fp.logger.Debugf("outputRemainingCommands: start %d, end %d, count %d",
