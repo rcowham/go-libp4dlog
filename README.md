@@ -135,6 +135,14 @@ If you want to debug a particular test (and output debug info):
 
 ## Viewing historical metrics via Grafana/Prometheus/VictoriaMetrics
 
+The shared metrics collector can optionally sum logged command costs as
+`p4_cmd_cost_cumulative` (by command) and `p4_cmd_user_cost_cumulative` (by
+user). Enable these independently with `OutputCmdCostByCmd` and
+`OutputCmdCostByUser` in `metrics.Config`; both default to false. These
+counters sum positive costs observed since collection started. The parser
+represents a missing cost and a cost of zero identically, so neither creates
+a series. Per-user metrics can create many time series.
+
 The counters `p4_cmd_rate_limit_errors` and `p4_cmd_max_cost_errors` count error
 records for CostThreshold/MaxCommands refusals and MaxCost terminations, respectively.
 Optional per-user and per-command counters add `_by_user` or `_by_cmd` to those

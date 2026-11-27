@@ -921,6 +921,74 @@ p4_prom_svr_events_processed{serverid="myserverid"} 1`, -1)
 	compareOutput(t, expected, output)
 }
 
+func TestCommandCostMetrics(t *testing.T) {
+	input := `Perforce server info:
+	2026/11/24 07:13:44 pid 1 Alice@workspace 127.0.0.1 [p4] 'user-info'
+Perforce server info:
+	2026/11/24 07:13:44 pid 1 completed .011s 11+0us 0+0io 0+0net 19616k 0pf 238c
+Perforce server info:
+	2026/11/24 07:13:45 pid 2 ALICE@workspace 127.0.0.1 [p4] 'user-sync'
+Perforce server info:
+	2026/11/24 07:13:45 pid 2 completed .011s 11+0us 0+0io 0+0net 19616k 0pf 12c
+Perforce server info:
+	2026/11/24 07:13:46 pid 3 bob@workspace 127.0.0.1 [p4] 'user-info'
+Perforce server info:
+	2026/11/24 07:13:46 pid 3 compute end .011s 8c
+Perforce server info:
+	2026/11/24 07:13:46 pid 3 completed .011s 11+0us 0+0io 0+0net 19616k 0pf 8c
+Perforce server info:
+	2026/11/24 07:13:47 pid 4 bob@workspace 127.0.0.1 [p4] 'user-files'
+Perforce server info:
+	2026/11/24 07:13:47 pid 4 completed .011s 11+0us 0+0io 0+0net 19616k 0pf
+`
+	for _, historical := range []bool{false, true} {
+		for _, byCmd := range []bool{false, true} {
+			for _, byUser := range []bool{false, true} {
+				t.Run(fmt.Sprintf("historical=%t/cmd=%t/user=%t", historical, byCmd, byUser), func(t *testing.T) {
+					cfg := &Config{ServerID: "test", UpdateInterval: 10 * time.Millisecond,
+						OutputCmdCostByCmd: byCmd, OutputCmdCostByUser: byUser}
+					lines := strings.Join(basicTest(cfg, input, historical), "\n")
+					if byCmd {
+						if historical {
+							assert.Contains(t, lines, "p4_cmd_cost_cumulative;serverid=test;cmd=user-info 246 ")
+							assert.Contains(t, lines, "p4_cmd_cost_cumulative;serverid=test;cmd=user-sync 12 ")
+						} else {
+							assert.Contains(t, lines, `p4_cmd_cost_cumulative{serverid="test",cmd="user-info"} 246`)
+							assert.Contains(t, lines, `p4_cmd_cost_cumulative{serverid="test",cmd="user-sync"} 12`)
+						}
+						assert.NotContains(t, lines, "p4_cmd_cost_cumulative{serverid=\"test\",cmd=\"user-files\"}")
+						assert.NotContains(t, lines, "p4_cmd_cost_cumulative;serverid=test;cmd=user-files")
+					} else {
+						assert.NotContains(t, lines, "p4_cmd_cost_cumulative")
+					}
+					if byUser {
+						if historical {
+							assert.Contains(t, lines, "p4_cmd_user_cost_cumulative;serverid=test;user=alice 250 ")
+							assert.Contains(t, lines, "p4_cmd_user_cost_cumulative;serverid=test;user=bob 8 ")
+						} else {
+							assert.Contains(t, lines, `p4_cmd_user_cost_cumulative{serverid="test",user="alice"} 250`)
+							assert.Contains(t, lines, `p4_cmd_user_cost_cumulative{serverid="test",user="bob"} 8`)
+						}
+					} else {
+						assert.NotContains(t, lines, "p4_cmd_user_cost_cumulative")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestCommandCostUserCaseSensitivity(t *testing.T) {
+	cfg := &Config{OutputCmdCostByUser: true, CaseSensitiveServer: true}
+	p4m := NewP4DMetricsLogParser(cfg, &P4DMetricsVersion{}, logger, false)
+	p4m.publishCmdEvent(p4dlog.Command{User: "Alice", Cmd: "user-info", CmdCost: 10})
+	p4m.publishCmdEvent(p4dlog.Command{User: "alice", Cmd: "user-info", CmdCost: 2})
+	output := p4m.getCumulativeMetrics()
+	assert.Contains(t, output, `p4_cmd_user_cost_cumulative{user="Alice"} 10`)
+	assert.Contains(t, output, `p4_cmd_user_cost_cumulative{user="alice"} 2`)
+	assert.Empty(t, p4m.cmdCostByCmd)
+}
+
 func TestRateLimitErrorMetrics(t *testing.T) {
 	cfg := &Config{ServerID: "myserverid", UpdateInterval: 10 * time.Millisecond}
 	input := `Perforce server info:

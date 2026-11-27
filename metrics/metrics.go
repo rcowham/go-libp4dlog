@@ -41,6 +41,8 @@ type Config struct {
 	CaseSensitiveServer         bool          `yaml:"case_sensitive_server"`
 	OutputRateLimitErrorsByUser bool          `yaml:"output_rate_limit_errors_by_user"`
 	OutputRateLimitErrorsByCmd  bool          `yaml:"output_rate_limit_errors_by_cmd"`
+	OutputCmdCostByCmd          bool          `yaml:"output_cmd_cost_by_cmd"`
+	OutputCmdCostByUser         bool          `yaml:"output_cmd_cost_by_user"`
 }
 
 // P4DMetricsVersion - for version info
@@ -82,6 +84,8 @@ type P4DMetrics struct {
 	cmdsCPUCumulative         map[string]float64
 	cmdByUserCounter          map[string]int64
 	cmdByUserCumulative       map[string]float64
+	cmdCostByCmd              map[string]int64
+	cmdCostByUser             map[string]int64
 	cmdByIPCounter            map[string]int64
 	cmdByIPCumulative         map[string]float64
 	cmdByReplicaCounter       map[string]int64
@@ -173,6 +177,8 @@ func NewP4DMetricsLogParser(config *Config, version *P4DMetricsVersion, logger *
 		cmdsCPUCumulative:         make(map[string]float64),
 		cmdByUserCounter:          make(map[string]int64),
 		cmdByUserCumulative:       make(map[string]float64),
+		cmdCostByCmd:              make(map[string]int64),
+		cmdCostByUser:             make(map[string]int64),
 		cmdByIPCounter:            make(map[string]int64),
 		cmdByIPCumulative:         make(map[string]float64),
 		cmdByReplicaCounter:       make(map[string]int64),
@@ -407,6 +413,22 @@ func (p4m *P4DMetrics) getCumulativeMetrics() string {
 	for cmd, lapse := range p4m.cmdCumulative {
 		labels := append(fixedLabels, labelStruct{"cmd", cmd})
 		p4m.printMetric(metrics, mname, labels, fmt.Sprintf("%0.3f", lapse))
+	}
+	if p4m.config.OutputCmdCostByCmd {
+		mname = "p4_cmd_cost_cumulative"
+		p4m.printMetricHeader(metrics, mname, "Cumulative command cost (by cmd)", "counter")
+		for cmd, cost := range p4m.cmdCostByCmd {
+			labels := append(fixedLabels, labelStruct{"cmd", cmd})
+			p4m.printMetric(metrics, mname, labels, fmt.Sprintf("%d", cost))
+		}
+	}
+	if p4m.config.OutputCmdCostByUser {
+		mname = "p4_cmd_user_cost_cumulative"
+		p4m.printMetricHeader(metrics, mname, "Cumulative command cost (by user)", "counter")
+		for user, cost := range p4m.cmdCostByUser {
+			labels := append(fixedLabels, labelStruct{"user", user})
+			p4m.printMetric(metrics, mname, labels, fmt.Sprintf("%d", cost))
+		}
 	}
 	mname = "p4_cmd_cpu_user_cumulative_seconds"
 	p4m.printMetricHeader(metrics, mname, "The total in user CPU seconds (by cmd)", "counter")
@@ -666,6 +688,14 @@ func (p4m *P4DMetrics) publishCmdEvent(cmd p4dlog.Command) {
 	user := cmd.User
 	if !p4m.config.CaseSensitiveServer {
 		user = strings.ToLower(user)
+	}
+	if cmd.CmdCost > 0 {
+		if p4m.config.OutputCmdCostByCmd {
+			p4m.cmdCostByCmd[cmd.Cmd] += cmd.CmdCost
+		}
+		if p4m.config.OutputCmdCostByUser {
+			p4m.cmdCostByUser[user] += cmd.CmdCost
+		}
 	}
 	p4m.cmdByUserCounter[user]++
 	p4m.cmdByUserCumulative[user] += float64(cmd.CompletedLapse)
