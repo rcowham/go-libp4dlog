@@ -253,6 +253,16 @@ The latter will cross compile with xgo (due to CGO Sqlite3 library in use). Befo
     docker pull crazymax/xgo:latest
     go install github.com/crazy-max/xgo@latest
 
-The `log2sql` module uses the parser in the repository root, so build it from a
-complete checkout. A standalone module build requires a released parser version
-and removal of the local replacement.
+The `log2sql` and `p4plog2sql` modules use the parser version specified in
+their own `go.mod` files. Update those dependencies when required before building.
+
+To build the distribution assets and prepare a GitHub draft release:
+
+    scripts/github_draft_release.sh v0.15.6 --dry-run
+    scripts/github_draft_release.sh v0.15.6
+
+The script uses the four tools' `dist` targets and uploads their binaries and
+`sql_report.sh`. It requires xgo's `xgo:local` Docker image for the SQLite tools,
+a clean tracked worktree and a release commit pushed to `origin`. Use
+`--skip-build` only with assets already built for that commit and version.
+An existing draft's matching assets are replaced; published releases are not changed.
